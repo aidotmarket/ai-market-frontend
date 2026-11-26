@@ -206,13 +206,17 @@ describe('InquiryWidget', () => {
     expect(disclosure.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it.each([true, false])('offers a seller handoff after no qualifying answer, with public links only when available (%s)', async (hasPublicInfo) => {
+  it.each([
+    ['no_matches', true, 'allAI couldn’t find a reliable answer in the public listing information.'],
+    ['no_matches', false, 'allAI couldn’t find a reliable answer in the public listing information.'],
+    ['retrieval_unavailable', true, 'allAI couldn’t check the public listing information right now.'],
+  ])('offers a seller handoff for %s when public links are available (%s)', async (outcome, hasPublicInfo, copy) => {
     fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
-      .mockResolvedValueOnce(completedSseResponse('No matches', { type: 'safe_failure', outcome: 'no_matches' }));
+      .mockResolvedValueOnce(completedSseResponse('Safe failure', { type: 'safe_failure', outcome }));
     renderWidget(hasPublicInfo ? { schemaHref: '#listing-schema', documentationHref: '#listing-documentation' } : undefined);
     typeQuestion('What are the join keys?');
 
-    expect(await screen.findByText(/allAI couldn’t find a reliable answer/)).toBeTruthy();
+    expect(await screen.findByText(copy)).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'View field names and types' })?.getAttribute('href'))
       .toBe(hasPublicInfo ? '#listing-schema' : undefined);
     expect(screen.queryByRole('link', { name: 'View public documentation' })?.getAttribute('href'))

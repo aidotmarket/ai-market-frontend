@@ -703,19 +703,22 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
       license: 'ODC-BY-1.0',
       dataFormat: 'json_lines',
       fulfillmentType: 'file_download',
-      downloadDescription: 'one individual file',
+      downloadDescription: '1 file',
     }));
   });
 
   it.each([
-    [1, '.zip', 'single ZIP archive'],
-    [3, null, 'individual files'],
-  ] as const)('passes the package shape for a %s-file version to the purchase panel', async (count, format, delivery) => {
-    await renderPage(makeListing({data_format: format, fulfillment_type: 'file_download'}), [{
+    'csv',
+    '.zip',
+  ])('describes a single archive with seller format %s neutrally when the delivery type is unknown', async format => {
+    // A workspace ZIP has one object and no version-bound public file type.
+    const html = await renderPage(makeListing({data_format: format, fulfillment_type: 'file_download'}), [{
       version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z',
-      object_count: count, total_size_bytes: 7_520_000, status: 'active',
+      object_count: 1, total_size_bytes: 7_520_000, status: 'active',
     }]);
-    expect(buyButtonProps).toHaveBeenLastCalledWith(expect.objectContaining({downloadDescription: delivery}));
+    expect(html).toContain('1 download file, 7.52 MB total.');
+    expect(html).not.toMatch(/CSV file|single ZIP archive/);
+    expect(buyButtonProps).toHaveBeenLastCalledWith(expect.objectContaining({downloadDescription: '1 file'}));
   });
 
   it('shows the absent-findings advisory on a paid listing without disabling purchase', async () => {

@@ -32,6 +32,7 @@ interface AnonymousAllAIResources {
     support: string;
     signIn: string;
     noAnswer: string;
+    retrievalUnavailable: string;
     schema: string;
     documentation: string;
   };
@@ -68,6 +69,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       support: 'Contact support',
       signIn: 'Sign in to ask the seller.',
       noAnswer: 'allAI couldn’t find a reliable answer in the public listing information.',
+      retrievalUnavailable: 'allAI couldn’t check the public listing information right now.',
       schema: 'View field names and types',
       documentation: 'View public documentation',
     },
@@ -107,6 +109,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       support: 'Contactar con soporte',
       signIn: 'Inicia sesión para preguntar al vendedor.',
       noAnswer: 'allAI no pudo encontrar una respuesta fiable en la información pública del anuncio.',
+      retrievalUnavailable: 'allAI no pudo consultar la información pública del anuncio en este momento.',
       schema: 'Ver nombres y tipos de campos',
       documentation: 'Ver documentación pública',
     },
@@ -146,6 +149,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       support: '联系支持',
       signIn: '登录后向卖家提问。',
       noAnswer: 'allAI 未能从商品公开信息中找到可靠答案。',
+      retrievalUnavailable: 'allAI 暂时无法查看商品的公开信息。',
       schema: '查看字段名称和类型',
       documentation: '查看公开文档',
     },

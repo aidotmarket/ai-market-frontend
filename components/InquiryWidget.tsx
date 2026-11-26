@@ -562,7 +562,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
               if (message.safeOutcome === 'no_matches' || message.safeOutcome === 'answer_unverified'
                 || message.safeOutcome === 'retrieval_unavailable') {
                 return <>
-                  {recovery.noAnswer}
+                  {message.safeOutcome === 'retrieval_unavailable' ? recovery.retrievalUnavailable : recovery.noAnswer}
                   {publicInformationLinks}
                   {message.fallbackDestinations?.support && <Link href={message.fallbackDestinations.support} className="mt-2 inline-block underline">{recovery.support}</Link>}
                 </>;

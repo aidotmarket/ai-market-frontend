@@ -48,11 +48,11 @@ export default function ListingPurchasePanel({
   );
   const [selectedVersionId, setSelectedVersionId] = useState(defaultVersion?.version_id ?? '');
   const selectedVersion = visibleVersions.find((version) => version.version_id === selectedVersionId) ?? defaultVersion;
-  // Listing-level format and inventory describe the current active version only.
+  // The public inventory belongs to the current active version.
   const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
   const selectedIsCurrent = selectedVersion?.version_id === currentVersionId;
   const selectedFiles = selectedVersion && describeVersionFiles(
-    selectedVersion, selectedIsCurrent ? dataFormat : undefined, selectedIsCurrent ? fileBreakdown : undefined,
+    selectedVersion, selectedIsCurrent ? fileBreakdown : undefined,
   );
   const disabledReason = selectedVersion?.status === 'superseded'
     ? 'This version has been superseded and is shown for provenance only.'
@@ -65,7 +65,6 @@ export default function ListingPurchasePanel({
           versions={visibleVersions}
           selectedVersionId={selectedVersion?.version_id ?? ''}
           onSelectVersion={setSelectedVersionId}
-          dataFormat={dataFormat}
           fileBreakdown={fileBreakdown}
         />
       )}
@@ -100,13 +99,11 @@ export function VersionSelector({
   versions,
   selectedVersionId,
   onSelectVersion,
-  dataFormat,
   fileBreakdown,
 }: {
   versions: ListingVersion[];
   selectedVersionId: string;
   onSelectVersion: (versionId: string) => void;
-  dataFormat?: string | null;
   fileBreakdown?: FileBreakdownGroup[] | null;
 }) {
   const visibleVersions = sortVersions(versions);
@@ -136,7 +133,7 @@ export function VersionSelector({
           const selected = version.version_id === selectedVersionId;
           const isCurrent = version.version_id === currentVersionId;
           const groups = isCurrent ? fileBreakdown : undefined;
-          const files = describeVersionFiles(version, isCurrent ? dataFormat : undefined, groups);
+          const files = describeVersionFiles(version, groups);
           return (
             <div
               key={version.version_id}
@@ -157,7 +154,11 @@ export function VersionSelector({
                 Published {formatPublishedDate(version.published_at)}
               </p>
               <p className="mt-1 text-gray-700">{files.summary}</p>
-              {selected && <div className="mt-2"><FileBreakdown groups={groups} showUnavailable /></div>}
+              {selected && (
+                <div className="mt-2">
+                  <FileBreakdown groups={groups} totalFileCount={version.object_count} heading="h3" showUnavailable />
+                </div>
+              )}
               {version.status === 'superseded' && (
                 <p className="mt-1 text-gray-500">Visible for provenance. Not purchasable.</p>
               )}
@@ -169,33 +170,19 @@ export function VersionSelector({
   );
 }
 
-const archiveFormats: Record<string, string> = {
-  zip: 'ZIP', 'application/zip': 'ZIP',
-  '7z': '7Z', 'application/x-7z-compressed': '7Z',
-  rar: 'RAR', 'application/vnd.rar': 'RAR',
-  tar: 'TAR', 'application/x-tar': 'TAR',
-  tgz: 'TAR.GZ', 'tar.gz': 'TAR.GZ', 'tar.bz2': 'TAR.BZ2', 'tar.xz': 'TAR.XZ',
-};
-const individualFormats = new Set(['csv', 'tsv', 'json', 'jsonl', 'ndjson', 'json_lines', 'parquet', 'xlsx', 'xls', 'xml', 'pdf', 'txt']);
-
-function describeVersionFiles(version: ListingVersion, dataFormat?: string | null, groups?: FileBreakdownGroup[] | null) {
+function describeVersionFiles(version: ListingVersion, groups?: FileBreakdownGroup[] | null) {
   const count = version.object_count;
   const size = formatBytes(version.total_size_bytes);
-  const format = dataFormat?.trim().toLowerCase().replace(/^\./, '') ?? '';
-  const publicFormat = groups?.length === 1 && groups[0].format !== 'other' ? groups[0].format : undefined;
-  const archive = !groups?.length && Object.hasOwn(archiveFormats, format) ? archiveFormats[format] : undefined;
-  const individual = publicFormat ?? (!groups?.length && individualFormats.has(format) ? format : undefined);
   if (count > 1) {
     return { delivery: 'individual files', summary: `${count.toLocaleString('en-US')} individual files, ${size} total.` };
   }
-  if (count === 1 && archive) {
-    return { delivery: `single ${archive} archive`, summary: `1 download file, a single ${archive} archive, ${size} total.` };
-  }
-  if (count === 1 && individual) {
-    return { delivery: 'one individual file', summary: `1 ${individual.replace('json_lines', 'jsonl').toUpperCase()} file, ${size} total.` };
-  }
   if (count === 1) {
-    return { delivery: '1 file, format unspecified', summary: `1 download file, ${size} total. The file format is unspecified.` };
+    const group = groups?.length === 1 ? groups[0] : undefined;
+    const format = group?.count === 1 && group.format !== 'other' ? group.format.toUpperCase() : undefined;
+    return {
+      delivery: format ? `1 ${format} file` : '1 file',
+      summary: `1 ${format ?? 'download'} file, ${size} total.`,
+    };
   }
   return { delivery: undefined, summary: `Total download size ${size}. The file count is unspecified.` };
 }

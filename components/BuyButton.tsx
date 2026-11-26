@@ -532,7 +532,7 @@ export function SignedOutPurchase({
       ? 'One-time or subscription'
       : 'One-time purchase';
   const licenseLabel = license?.trim() || null;
-  const dataFormatLabel = formatPurchaseFact(dataFormat);
+  const dataFormatLabel = dataFormat?.trim().replace(/_/g, ' ').toUpperCase();
   const fulfillmentTypeLabel = formatPurchaseFact(fulfillmentType);
 
   return (
@@ -588,7 +588,7 @@ export function SignedOutPurchase({
           )}
           {dataFormatLabel && (
             <div className="flex justify-between gap-3">
-              <dt>Data format</dt>
+              <dt>Data format (as described by the seller)</dt>
               <dd className="font-medium text-gray-900">{dataFormatLabel}</dd>
             </div>
           )}
