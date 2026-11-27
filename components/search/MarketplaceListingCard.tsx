@@ -1,4 +1,4 @@
-import {readLicenseDisplay, CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
+import {readPublicLicenseDisplay, CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
@@ -12,7 +12,7 @@ export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
   if (generatedSampleState(listing) !== 'ordinary') return <GeneratedSampleCard listing={listing} />;
   let display;
   try {
-    display = readLicenseDisplay('license_display' in listing ? listing.license_display : null);
+    display = readPublicLicenseDisplay('license_display' in listing ? listing.license_display : null);
   } catch {
     // Contain invalid evidence to this card without emitting its licence line.
     display = null;

@@ -6,7 +6,7 @@ import { generatedSampleState, samplePresentation } from '@/lib/generatedSample'
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
-import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE} from '@/lib/publicPresentation';
+import {verifyCurrentListing, readPublicLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE} from '@/lib/publicPresentation';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -143,7 +143,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const approved = listing.approved_presentation;
   await verifyCurrentListing(listing as unknown as Record<string, unknown>);
   const corrected = approved?.presentation_kind === CORRECTION_KIND;
-  const currentDisplay = readLicenseDisplay(listing.license_display);
+  const currentDisplay = readPublicLicenseDisplay(listing.license_display);
   const schemaSummary = listing.schema_summary;
   const schemaColumns = Array.isArray(schemaSummary?.columns) ? schemaSummary.columns : [];
   const rowCount = listing.row_count;

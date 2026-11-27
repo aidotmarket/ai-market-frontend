@@ -58,12 +58,18 @@ export function refuseCorrectionFields(value: unknown): void {
 }
 export function readLicenseDisplay(value: unknown): LicenseDisplay | null {
   if (value == null) return null;
-  if (!record(value) || hasMisplacedField(value, licenseDisplayFields) || value.license_label !== CURRENT_LICENSE_LABEL ||
+  if (!record(value) || Object.keys(value).length !== licenseDisplayFields.length || value.license_label !== CURRENT_LICENSE_LABEL ||
       value.provenance !== 'platform_license_correction' || typeof value.correction_id !== 'string' || !UUID.test(value.correction_id) ||
       typeof value.correction_digest !== 'string' || !HASH.test(value.correction_digest))
     throw new Error('Current licence display could not be verified');
-  return {license_label: value.license_label, provenance: value.provenance,
-    correction_id: value.correction_id, correction_digest: value.correction_digest};
+  return value as unknown as LicenseDisplay;
+}
+export function readPublicLicenseDisplay(value: unknown): LicenseDisplay | null {
+  if (value == null) return null;
+  if (!record(value) || hasMisplacedField(value, licenseDisplayFields))
+    throw new Error('Current licence display could not be verified');
+  const projected = Object.fromEntries(licenseDisplayFields.map(key => [key, value[key]]));
+  return readLicenseDisplay(projected);
 }
 type PresentationIdentity = {
   listing_id: string; publication_id?: string; listing_version_id?: string; approval_id?: string;
@@ -101,7 +107,7 @@ export async function verifyPublicPresentation(value: unknown, identity?: Presen
 }
 /** Check every independent response binding actually supplied by this backend. */
 export async function verifyCurrentListing(listing: Record<string, unknown>): Promise<void> {
-  const display = readLicenseDisplay(listing.license_display);
+  const display = readPublicLicenseDisplay(listing.license_display);
   const value = listing.approved_presentation;
   if (value != null) {
     if (typeof listing.id !== 'string') throw new Error('Missing listing identity');

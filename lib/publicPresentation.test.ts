@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {createHash} from 'node:crypto';
 import wire from '@/tests/fixtures/s1922-backend-wire.json';
-import {verifyPresentation, verifyPublicPresentation, verifyCurrentListing, readLicenseDisplay, correctionFields, CORRECTION_KIND} from './publicPresentation';
+import {verifyPresentation, verifyPublicPresentation, verifyCurrentListing, readLicenseDisplay, readPublicLicenseDisplay, correctionFields, CORRECTION_KIND} from './publicPresentation';
 const digest=(html:string)=>createHash('sha256').update(html,'utf8').digest('hex');
 describe('actual backend19ff184 original and corrected presentation readers',()=>{
   it.each(wire.public)('rejects null HTML on public $original.presentation_version presentations',async fixture=>{
@@ -56,6 +56,9 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     const {corrected, license_display} = wire.public[2];
     const display = {...license_display, future_metadata: {enabled: true}};
     const listing = {id: corrected.listing_id, license: corrected.license_label, license_display: display};
+    expect(readLicenseDisplay(license_display)).toEqual(license_display);
+    expect(() => readLicenseDisplay(display)).toThrow('Current licence display could not be verified');
+    expect(readPublicLicenseDisplay(display)).toEqual(license_display);
     await expect(verifyCurrentListing(listing)).resolves.toBeUndefined();
     const misplaced = {
       ...Object.fromEntries(Object.entries(corrected).filter(([key]) => !(key in license_display))),
@@ -97,14 +100,14 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     const display={license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest};
     const listing={id:c.listing_id,publication_id:c.publication_id,listing_version_id:c.listing_version_id,approval_id:c.approval_id,
       approved_presentation:{...c,future_metadata:true},license:c.license_label,license_display:{...display,future_metadata:true}};
-    expect(readLicenseDisplay(listing.license_display)).toEqual(display);
+    expect(readPublicLicenseDisplay(listing.license_display)).toEqual(display);
     await expect(verifyCurrentListing(listing)).resolves.toBeUndefined();
     for(const key of ['id','publication_id','listing_version_id','approval_id'])await expect(verifyCurrentListing({...listing,[key]:'ffffffff-ffff-ffff-ffff-ffffffffffff'})).rejects.toThrow();
     for (const key of Object.keys(display)) {
       const missing: Record<string, unknown> = {...listing.license_display};
       delete missing[key];
-      expect(() => readLicenseDisplay(missing)).toThrow('Current licence display could not be verified');
-      expect(() => readLicenseDisplay({...listing.license_display, [key]: 'invalid'})).toThrow('Current licence display could not be verified');
+      expect(() => readPublicLicenseDisplay(missing)).toThrow('Current licence display could not be verified');
+      expect(() => readPublicLicenseDisplay({...listing.license_display, [key]: 'invalid'})).toThrow('Current licence display could not be verified');
     }
     await expect(verifyCurrentListing({...listing,license_display:{...listing.license_display,correction_digest:'a'.repeat(64)}})).rejects.toThrow('Inconsistent current licence display');
     await expect(verifyCurrentListing({...listing,license:'ai.market Standard Data Licence v1.0'})).rejects.toThrow('Inconsistent current licence label');
