@@ -60,6 +60,7 @@ const nextConfig: NextConfig = {
       return [
         { source: '/licenses/:path*', has:[{type:'query' as const,key:'download',value:'1'}], destination: `${devUrl}/api/v1/licenses/:path*` },
         { source: '/llms.txt', destination: `${devUrl}/llms.txt` },
+        { source: '/llms-full.txt', destination: `${devUrl}/llms-full.txt` },
         { source: '/requests.txt', destination: `${devUrl}/requests.txt` },
         { source: '/.well-known/requests.txt', destination: `${devUrl}/.well-known/requests.txt` },
         { source: '/.well-known/ai-agents.json', destination: `${devUrl}/.well-known/ai-agents.json` },
@@ -72,6 +73,7 @@ const nextConfig: NextConfig = {
       ...supportRecoveryRewrites(apiUrl),
       { source: '/licenses/:path*', has:[{type:'query' as const,key:'download',value:'1'}], destination: `${apiUrl}/api/v1/licenses/:path*` },
       { source: '/llms.txt', destination: `${apiUrl}/llms.txt` },
+      { source: '/llms-full.txt', destination: `${apiUrl}/llms-full.txt` },
       { source: '/requests.txt', destination: `${apiUrl}/requests.txt` },
       { source: '/.well-known/requests.txt', destination: `${apiUrl}/.well-known/requests.txt` },
       { source: '/.well-known/ai-agents.json', destination: `${apiUrl}/.well-known/ai-agents.json` },
