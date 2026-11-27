@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PricingPage from './page';
@@ -21,6 +21,8 @@ describe('PricingPage', () => {
     expect(screen.getByRole('heading', { name: 'One published fee schedule.' })).toBeTruthy();
     expect(screen.getByText('There are no listing fees.')).toBeTruthy();
     expect(screen.getByText(/deducts a 5% commission/)).toBeTruthy();
+    const buyerCard = screen.getByRole('heading', { name: 'Pay the listing price plus transaction costs.' }).closest('section')!;
+    expect(within(buyerCard).getAllByRole('listitem')[0].textContent).toBe('Listing prices are one-time payments.');
     expect(screen.getByText(/Stripe, stablecoin, or escrow fees/)).toBeTruthy();
     expect(screen.getByText(/sales tax, VAT, or similar tax/)).toBeTruthy();
     expect(screen.getByRole('link', { name: /Read Section 5/ }).getAttribute('href')).toBe(
@@ -53,6 +55,8 @@ it('adds the free-request guidance while keeping the served 1.1 fee copy', async
   const request = container.querySelector('a[href="/requests"]')!.closest('p')!;
   expect(request.textContent).toBe('Post a Data Request for free. Free account needed.');
   request.remove();
+  const oneTimePayment = within(container).getByText('Listing prices are one-time payments.');
+  oneTimePayment.closest('li')!.remove();
   const text = container.textContent!.replace(/\s+/gu, ' ').trim();
   expect(createHash('sha256').update(text).digest('hex')).toBe('78c3b2b6aec3ae1c8f09d753bcaddd1c0af99b794c8c5053fcc2babeac642457');
 });

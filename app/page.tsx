@@ -22,14 +22,17 @@ import type { DataRequestListItem } from '@/types';
 
 const marketplaceSummary =
   'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
-const homepageDescription = `${marketplaceSummary} Sellers can list from their own AWS S3 or Cloudflare R2 bucket, or host files on their own servers with the AIM Data Gateway. Buyers can search for data or post a request.`;
+const homepageTitle = 'ai.market — SEO for data';
+const heroSubhead = 'Where AI search finds data.';
+const heroFee = 'Free to list; 5% only when it sells.';
+const homepageDescription = `${heroSubhead} ${heroFee}`;
 
 export const metadata: Metadata = {
   alternates: { canonical: '/' },
-  title: { absolute: 'ai.market — Sell data without giving it away' },
+  title: { absolute: homepageTitle },
   description: homepageDescription,
   openGraph: {
-    title: 'ai.market — Sell data without giving it away',
+    title: homepageTitle,
     description: homepageDescription,
     url: 'https://ai.market',
     siteName: 'ai.market',
@@ -38,7 +41,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ai.market — Sell data without giving it away',
+    title: homepageTitle,
     description: homepageDescription,
     images: ['/og/home.png'],
   },
@@ -312,12 +315,14 @@ export default async function LandingPage() {
                   Data marketplace for businesses
                 </span>
                 <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-5xl lg:text-6xl">
-                  Sell data without{' '}
-                  <span className="text-[#3F51B5]">giving it away.</span>
+                  SEO{' '}
+                  <span className="text-[#3F51B5]">for data.</span>
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
-                  {marketplaceSummary}{' '}
-                  Buyers can search for data or post a request. AI agents can help search and draft requests.
+                  {heroSubhead}
+                </p>
+                <p className="mt-3 max-w-xl text-sm font-semibold text-[#0F6E56]">
+                  {heroFee}
                 </p>
                 <HeroSearch />
                 <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">
@@ -344,8 +349,7 @@ export default async function LandingPage() {
               {/* Right - trust visual card */}
               <div className="card-texture rounded-2xl border border-[#E8E8E8] bg-[#FAFAFA] p-8">
                 <p className="text-base leading-7 text-[#1A1A1A]">
-                  Your datasets become discoverable by AI agents and visible in AI-powered
-                  search, so buyers find you, not the other way around.
+                  Your listings are published in formats AI agents and AI search can read, so buyers can find you.
                 </p>
                 <div className="my-6 h-px bg-[#E8E8E8]" />
                 <ul className="space-y-5">
@@ -366,8 +370,11 @@ export default async function LandingPage() {
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Found everywhere.</p>
-                      <p className="text-sm text-[#666666]">Listings surface in AI search worldwide, and buyers&apos; agents can transact directly.</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Found in AI search.</p>
+                      <p className="text-sm text-[#666666]">
+                        Listings are open to AI search and agents. A buyer&apos;s agent can find data and start a purchase;
+                        the buyer confirms and pays in the browser.
+                      </p>
                     </div>
                   </li>
                 </ul>

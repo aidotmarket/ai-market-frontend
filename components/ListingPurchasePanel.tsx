@@ -52,7 +52,7 @@ export default function ListingPurchasePanel({
   const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
   const selectedIsCurrent = selectedVersion?.version_id === currentVersionId;
   const selectedFiles = selectedVersion && describeVersionFiles(
-    selectedVersion, selectedIsCurrent ? fileBreakdown : undefined,
+    selectedVersion, selectedIsCurrent ? fileBreakdown : undefined, selectedIsCurrent ? dataFormat : undefined,
   );
   const disabledReason = selectedVersion?.status === 'superseded'
     ? 'This version has been superseded and is shown for provenance only.'
@@ -66,6 +66,7 @@ export default function ListingPurchasePanel({
           selectedVersionId={selectedVersion?.version_id ?? ''}
           onSelectVersion={setSelectedVersionId}
           fileBreakdown={fileBreakdown}
+          dataFormat={dataFormat}
         />
       )}
       {accessWindowDays != null && (
@@ -100,11 +101,13 @@ export function VersionSelector({
   selectedVersionId,
   onSelectVersion,
   fileBreakdown,
+  dataFormat,
 }: {
   versions: ListingVersion[];
   selectedVersionId: string;
   onSelectVersion: (versionId: string) => void;
   fileBreakdown?: FileBreakdownGroup[] | null;
+  dataFormat?: string | null;
 }) {
   const visibleVersions = sortVersions(versions);
   const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
@@ -133,7 +136,7 @@ export function VersionSelector({
           const selected = version.version_id === selectedVersionId;
           const isCurrent = version.version_id === currentVersionId;
           const groups = isCurrent ? fileBreakdown : undefined;
-          const files = describeVersionFiles(version, groups);
+          const files = describeVersionFiles(version, groups, isCurrent ? dataFormat : undefined);
           return (
             <div
               key={version.version_id}
@@ -156,7 +159,7 @@ export function VersionSelector({
               <p className="mt-1 text-gray-700">{files.summary}</p>
               {selected && (
                 <div className="mt-2">
-                  <FileBreakdown groups={groups} totalFileCount={version.object_count} heading="h3" showUnavailable />
+                  <FileBreakdown groups={groups} totalFileCount={files.archive ? undefined : version.object_count} heading="h3" showUnavailable />
                 </div>
               )}
               {version.status === 'superseded' && (
@@ -170,21 +173,34 @@ export function VersionSelector({
   );
 }
 
-function describeVersionFiles(version: ListingVersion, groups?: FileBreakdownGroup[] | null) {
+function archiveFormat(dataFormat?: string | null) {
+  const format = dataFormat?.trim().toLowerCase();
+  if (!format) return undefined;
+  if (/^(?:\.?zip|application\/(?:x-zip-compressed|zip))$/.test(format)) return 'ZIP';
+  if (/^(?:\.?tar\.gz|\.?tgz)$/.test(format)) return 'TAR.GZ';
+  if (/^(?:\.?tar|application\/x-tar)$/.test(format)) return 'TAR';
+  if (/^(?:\.?7z|application\/x-7z-compressed)$/.test(format)) return '7Z';
+  return undefined;
+}
+
+function describeVersionFiles(version: ListingVersion, groups?: FileBreakdownGroup[] | null, dataFormat?: string | null) {
   const count = version.object_count;
-  const size = formatBytes(version.total_size_bytes);
-  if (count > 1) {
-    return { delivery: 'individual files', summary: `${count.toLocaleString('en-US')} individual files, ${size} total.` };
+  const bytes = version.total_size_bytes;
+  const size = bytes > 0 || (bytes === 0 && count > 0) ? formatBytes(bytes) : undefined;
+  const archive = count === 1 ? archiveFormat(dataFormat) : undefined;
+  if (archive) {
+    const details = size ? ` (${size})` : '';
+    return { archive, delivery: `one ${archive} archive${details}`, summary: `One ${archive} archive${details}` };
   }
-  if (count === 1) {
-    const group = groups?.length === 1 ? groups[0] : undefined;
-    const format = group?.count === 1 && group.format !== 'other' ? group.format.toUpperCase() : undefined;
-    return {
-      delivery: format ? `1 ${format} file` : '1 file',
-      summary: `1 ${format ?? 'download'} file, ${size} total.`,
-    };
-  }
-  return { delivery: undefined, summary: `Total download size ${size}. The file count is unspecified.` };
+
+  const formats = groups?.filter(group => group.format !== 'other')
+    .map(group => group.format === 'parquet' ? 'Parquet' : group.format.toUpperCase());
+  const details = [[...new Set(formats)].join(', '), size].filter(Boolean).join(' · ');
+  const sizeAndFormats = details ? ` (${details})` : '';
+  const delivery = count > 0
+    ? `${count.toLocaleString('en-US')} ${count === 1 ? 'file' : 'files'}${sizeAndFormats}`
+    : details || undefined;
+  return { archive, delivery, summary: delivery ?? 'Download details are unavailable for this version.' };
 }
 
 export function selectDefaultVersion(versions: ListingVersion[], initialVersionId?: string | null) {

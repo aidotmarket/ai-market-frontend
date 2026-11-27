@@ -83,6 +83,38 @@ export default function AimDataPage() {
           </section>
         </div>
 
+        <section id="gateway-setup" className="mt-10 scroll-mt-20 rounded-2xl bg-[#F7FCFA] p-6">
+          <h2 className="text-xl font-semibold text-gray-900">Set up your gateway</h2>
+          <h3 className="mt-4 font-semibold text-gray-900">Before you create an account</h3>
+          <p className="mt-2 leading-7 text-gray-600">
+            Prepare a Linux host with Docker and Docker Compose. Use a dedicated folder for the files
+            you intend to sell and mount it read-only. Provide a persistent writable state volume for
+            the gateway.
+          </p>
+          <p className="mt-3 leading-7 text-gray-600">
+            Check the <a href="#network-requirements" className="font-semibold text-[#0F6E56] underline">network requirements</a>{' '}
+            for public HTTPS delivery and restricted outbound access.
+          </p>
+
+          <h3 className="mt-4 font-semibold text-gray-900">Pair your gateway</h3>
+          <ol className="mt-2 list-decimal space-y-2 pl-5 leading-7 text-gray-600">
+            <li>Create a free ai.market account or sign in.</li>
+            <li>
+              If you’re new to selling, choose <strong>Start selling</strong> in <strong>Overview</strong>.
+              In the seller dashboard, select <strong>Gateways</strong>. If prompted, finish the seller
+              setup steps shown there. Then choose <strong>Add a gateway</strong>.
+            </li>
+            <li>
+              Use the one-time pairing code and generated Docker Compose snippet. Follow the install
+              guide shown there to start the gateway on your host.
+            </li>
+          </ol>
+          <SellDataCta variant="self-hosted" className="mt-6" />
+          <p className="mt-4 leading-7 text-gray-600">
+            Manage listings, prices, licences, and payouts on the website.
+          </p>
+        </section>
+
         <section id="network-requirements" className="mt-10 scroll-mt-20 rounded-2xl border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900">Network requirements</h2>
           <p className="mt-3 leading-7 text-gray-600">
@@ -99,15 +131,6 @@ export default function AimDataPage() {
             connections that must fail. If the canary reports open access, ai.market blocks
             publishing and new permissions.
           </p>
-        </section>
-
-        <section id="gateway-setup" className="mt-10 scroll-mt-20 rounded-2xl bg-[#F7FCFA] p-6">
-          <h2 className="text-xl font-semibold text-gray-900">Set up your gateway</h2>
-          <p className="mt-3 leading-7 text-gray-600">
-            In Sell Data, open Gateways and choose Add a gateway. You get a one-time pairing code
-            and a Docker Compose file. Manage listings, prices, licences, and payouts on the website.
-          </p>
-          <SellDataCta variant="self-hosted" className="mt-6" />
         </section>
 
         <p className="mt-8 text-sm leading-6 text-gray-600">

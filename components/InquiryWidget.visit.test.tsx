@@ -16,7 +16,7 @@ const detail = (id = 'a'): ConversationDetail => ({ id, listing_id: `listing-${i
 function deferred<T>() { let resolve!: (v: T) => void; let reject!: (e: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 function auth(id: string | null, token = id ? `synthetic-${id}` : null) { useAuthStore.setState({ user: id ? { id } as User : null, token, isAuthenticated: !!id, hydrated: true, isLoading: false }); }
 const widget = (id = 'a') => <InquiryWidget listingId={`listing-${id}`} listingSlug={id} listingTitle={`Listing ${id}`}/>;
-function submit() { fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Synthetic initial question' } }); fireEvent.click(screen.getByRole('button', { name: 'Submit Question' })); }
+function submit() { fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Synthetic initial question' } }); fireEvent.click(screen.getByRole('button', { name: useAuthStore.getState().isAuthenticated ? 'Submit Question' : 'Ask allAI' })); }
 beforeEach(() => { vi.resetAllMocks(); mock.pollConversation.mockResolvedValue({ new_messages: [], inquiry_status: 'awaiting_seller', has_more: false }); auth('buyer-a'); Element.prototype.scrollIntoView = vi.fn(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Network forbidden'); })); vi.stubGlobal('XMLHttpRequest', class {
     constructor() { throw new Error('Network forbidden'); }
 }); });
@@ -236,6 +236,28 @@ it('retires anonymous session creation and restores only the destination listing
     expect(anonymous.sendAnonymousMessage).not.toHaveBeenCalled();
     expect(screen.queryByText('Synthetic initial question', { selector: 'p' })).toBeNull();
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Recovered listing B draft');
+});
+it('retires a stalled anonymous handoff when sign-out and sign-in are batched', async () => {
+    vi.useFakeTimers();
+    auth(null);
+    anonymous.createAnonymousSession.mockResolvedValue('session-a');
+    anonymous.sendAnonymousMessage.mockResolvedValue({ ok: true, status: 200, body: {} });
+    anonymous.readAnonymousMessageStream.mockImplementation(async (_body, receive) => {
+        receive({ type: 'safe_failure', outcome: 'no_matches', text: 'Safe failure' });
+        await new Promise(() => {});
+    });
+    render(widget());
+    submit();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    act(() => auth('buyer-a'));
+    act(() => { auth(null); auth('buyer-a'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+    expect(screen.queryByRole('button', { name: 'Send to seller' })).toBeNull();
+    mock.createInquiry.mockReturnValue(deferred<ConversationDetail>().promise);
+    submit();
+    expect(mock.createInquiry).toHaveBeenCalledTimes(1);
+    expect(mock.createInquiry).toHaveBeenCalledWith('listing-a', 'Synthetic initial question');
 });
 it('starts a fresh anonymous session after completed public answers and listing A-B-A', async () => {
     auth(null);

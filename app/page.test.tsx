@@ -269,13 +269,18 @@ describe('homepage hero and descriptions', () => {
     fetchDataRequests.mockResolvedValue({ items: [] });
   });
 
-  it('explains how businesses buy and sell data in the hero and structured data', async () => {
+  it('renders the homepage hero copy and marketplace structured data', async () => {
     const { default: LandingPage } = await import('./page');
     const { container } = render(await LandingPage());
     const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
 
     expect(hero.getByText('Data marketplace for businesses')).toBeTruthy();
-    expect(hero.getByText(`${summary} Buyers can search for data or post a request. AI agents can help search and draft requests.`)).toBeTruthy();
+    expect(hero.getByRole('heading', { level: 1, name: 'SEO for data.' }).textContent).toBe('SEO for data.');
+    expect(hero.getByText('Where AI search finds data.')).toBeTruthy();
+    expect(hero.getByText('Free to list; 5% only when it sells.')).toBeTruthy();
+    expect(hero.getByText('Your listings are published in formats AI agents and AI search can read, so buyers can find you.')).toBeTruthy();
+    expect(hero.getByText('Found in AI search.')).toBeTruthy();
+    expect(hero.getByText("Listings are open to AI search and agents. A buyer's agent can find data and start a purchase; the buyer confirms and pays in the browser.")).toBeTruthy();
 
     const structuredData = container.querySelector('script[type="application/ld+json"]')!;
     expect(JSON.parse(structuredData.textContent!)).toEqual([
@@ -303,14 +308,17 @@ describe('homepage hero and descriptions', () => {
     expect(container.textContent).not.toMatch(/non-custodial B2B (?:data )?marketplace/i);
   });
 
-  it('uses a consistent, cloud-first description for search and social', async () => {
+  it('uses the homepage hero messaging for search and social metadata', async () => {
     const { metadata } = await import('./page');
-    const description = `${summary} Sellers can list from their own AWS S3 or Cloudflare R2 bucket, or host files on their own servers with the AIM Data Gateway. Buyers can search for data or post a request.`;
+    const title = 'ai.market — SEO for data';
+    const description = 'Where AI search finds data. Free to list; 5% only when it sells.';
 
     expect(metadata.description).toBe(description);
     expect(metadata.openGraph?.description).toBe(description);
     expect(metadata.twitter?.description).toBe(description);
-    expect(metadata.title).toEqual({ absolute: 'ai.market — Sell data without giving it away' });
+    expect(metadata.title).toEqual({ absolute: title });
+    expect(metadata.openGraph?.title).toBe(title);
+    expect(metadata.twitter?.title).toBe(title);
     expect(metadata.alternates?.canonical).toBe('/');
   });
 
@@ -319,7 +327,9 @@ describe('homepage hero and descriptions', () => {
     render(await LandingPage());
     const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
 
-    fireEvent.change(hero.getByRole('searchbox'), { target: { value: '  US retail sales  ' } });
+    const search = hero.getByRole('searchbox');
+    expect(search.getAttribute('placeholder')).toBe('Search datasets by topic, industry, or use case');
+    fireEvent.change(search, { target: { value: '  US retail sales  ' } });
     fireEvent.click(hero.getByRole('button', { name: 'Search' }));
     expect(push).toHaveBeenLastCalledWith('/find-data?q=US%20retail%20sales');
     expect(hero.getByRole('link', { name: 'Browse Data' }).getAttribute('href')).toBe('/listings');

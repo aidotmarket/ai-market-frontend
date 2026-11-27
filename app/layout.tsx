@@ -12,7 +12,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'ai.market - Sell data without giving it away',
+    default: 'ai.market - SEO for data',
     template: '%s | ai.market',
   },
   description: "Non-custodial B2B data marketplace. Data stays on the seller's infrastructure, only metadata is published. Search, post requests, and buy with peer-to-peer delivery. 5% commission, no listing fees.",
