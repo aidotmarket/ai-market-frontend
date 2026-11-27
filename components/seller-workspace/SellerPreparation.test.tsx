@@ -9,6 +9,10 @@ import {useAuthStore} from '@/store/auth';
 import {instrument,id,hash} from '@/tests/fixtures/seller-authority';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
 import type {User} from '@/types';
+vi.mock('next/navigation', () => ({
+  usePathname: () => window.location.pathname,
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 const row=instrument();
 const confirmedAt='2026-11-23T10:00:00.000Z';
 const approval={id:row.binding.approval_id,draft_id:row.binding.draft_id,draft_version:3,review_hash:hash,render_hash:hash,license_selection:row.license_selection,covenant_confirmed_at:confirmedAt} as ApprovalReceipt;
@@ -49,7 +53,10 @@ it('renders the preloaded panel on the workspace with real B3 hook and all publi
   expect(screen.queryByLabelText(/Listing preparation IDs/)).toBeNull();
   expect((screen.getByRole('button',{name:'Sign licence'}) as HTMLButtonElement).disabled).toBe(false);
   expect(screen.queryByRole('checkbox')).toBeNull();
-  expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches',{headers:nativeSession().headers});
+  expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches', {
+    headers: nativeSession().headers,
+    signal: expect.any(AbortSignal),
+  });
 });
 it.each([401,403,404,503])('hides signing with a neutral message for B3 HTTP %i even with an enabled-looking body',async status=>{
   mockReads(true,status);render(<SellerPreparation approval={approval} active onChange={vi.fn()} onLoaded={vi.fn()}/>);

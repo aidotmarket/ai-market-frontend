@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SellerAuthority from './SellerAuthority';
 import { useSellerSwitches } from '@/hooks/useSellerSwitches';
 import { useAuthStore } from '@/store/auth';
@@ -24,7 +24,7 @@ afterEach(() => {
   expect(screen.queryByRole('dialog', { name: 'Re-authenticate' })).toBeNull();
   expect(screen.queryByPlaceholderText('Enter code')).toBeNull();
 });
-afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, effects: false, bulk: true }])('keeps authenticated status and reviewed Stop visible while edits are hidden: %j', async report => {
   vi.mocked(useSellerSwitches).mockReturnValue(report); render(<SellerAuthority />);
   await screen.findByText(/Authority version 4/);
@@ -33,7 +33,10 @@ it.each([null, { seller: false, effects: true, bulk: true }, { seller: true, eff
   expect(headline.hasAttribute('role')).toBe(false);
   expect(screen.queryByText("Your AI assistant can't change your listings right now.")).toBeNull();
   expect(screen.getByText(/Authority version 4 · Active/)).toBeTruthy();
-  expect(screen.getByText('Editing permissions is unavailable on this page right now. You can still check status and stop the assistant here.')).toBeTruthy();
+  expect(screen.getByText(report
+    ? 'Editing AI assistant permissions is turned off.'
+    : 'Editing AI assistant permissions is unavailable right now.')).toBeTruthy();
+  expect(screen.getByText(/Review and confirm to stop all future automatic assistant changes/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Review permissions' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Review stopping assistant changes' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Stop all automatic assistant changes' }));
@@ -152,6 +155,45 @@ it.each([false, true])('shows the off status for disabled or expired permissions
   await screen.findByText("Your AI assistant can't change your listings right now.");
   expect(screen.getByText(/Authority version 4 · Off or expired/)).toBeTruthy();
   expect(screen.queryByText(/Authority version 4 · Active/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Review stopping assistant changes' })).toBeNull();
+  expect(screen.queryByText(/Review and confirm to stop all future automatic assistant changes/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Review permissions' })).toBeTruthy();
+});
+
+it('shows explicit edit switch off even when authority is off', async () => {
+  vi.mocked(useSellerSwitches).mockReturnValue({ seller: true, effects: false, bulk: true });
+  vi.mocked(readAuthority).mockResolvedValue({ ...authority, enabled: false });
+  render(<SellerAuthority />);
+  await screen.findByText(/Authority version 4 · Off or expired/);
+  expect(screen.getByText('Editing AI assistant permissions is turned off.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Review permissions' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Review stopping assistant changes' })).toBeNull();
+});
+
+it('leaves Stop and the editor hidden when the authority status is unknown', async () => {
+  vi.mocked(useSellerSwitches).mockReturnValue(null);
+  vi.mocked(readAuthority).mockRejectedValue(new Error('offline'));
+  render(<SellerAuthority />);
+  await screen.findByRole('alert');
+  expect(screen.getByText('Editing AI assistant permissions is unavailable right now.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Review permissions' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Review stopping assistant changes' })).toBeNull();
+  expect(screen.queryByText(/Review and confirm to stop all future automatic assistant changes/)).toBeNull();
+});
+
+it('removes both stopping controls when an active authority expires during review', async () => {
+  vi.useFakeTimers();
+  vi.mocked(readAuthority).mockResolvedValue({ ...authority, limits: { ...limits, expires_at: new Date(Date.now() + 1000).toISOString() } });
+  render(<SellerAuthority />);
+  await act(async () => {});
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Review stopping assistant changes' })));
+  expect(screen.getByRole('button', { name: 'Stop all automatic assistant changes' })).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(screen.getByText(/Authority version 4 · Off or expired/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Review stopping assistant changes' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Stop all automatic assistant changes' })).toBeNull();
+  expect(screen.queryByText(/Review and confirm to stop all future automatic assistant changes/)).toBeNull();
+  expect(stopAuthority).not.toHaveBeenCalled();
 });
 
 it.each([

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { getSellerCapability, sellerAdmissionEnabled } from '@/api/pending-actions';
 import { PENDING_ACTION_CONTINUATION } from '@/lib/redirect';
 import {nativeClient,nativeSession} from '@/api/connector-seller-settings';
@@ -28,39 +29,49 @@ export function sellerSwitchReport(value: unknown): SellerSwitchReport | null {
   return { seller: snapshot.seller_enabled, effects: value.effective, bulk: snapshot.seller_bulk_enabled };
 }
 export function useSellerSwitches(): SellerSwitchReport | null {
-  const { user, token } = useAuthStore();
+  const owner = useAuthStore(state => state.user?.id);
+  const token = useAuthStore(state => state.token);
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const search = query?.toString();
+  const path = pathname && query ? pathname + (search ? `?${search}` : '') : '';
   const [saved, setSaved] = useState<{ owner: string; token: string; path: string; report: SellerSwitchReport } | null>(null);
-  const [path, setPath] = useState('');
-  useEffect(() => {
-    const changed = () => {
-      const url = new URL(window.location.href);
-      setPath(url.pathname === '/dashboard/settings' ? url.searchParams.get('redirect') || '' : url.pathname + url.search);
-    };
-    changed(); window.addEventListener('popstate', changed); window.addEventListener('hashchange', changed);
-    return () => { window.removeEventListener('popstate', changed); window.removeEventListener('hashchange', changed); };
-  }, []);
   useEffect(() => {
     setSaved(null);
-    const match = PENDING_ACTION_CONTINUATION.exec(path);
-    const workspace = path.split('?')[0] === '/dashboard/seller-workspace';
-    if (!user || !token || (!match && !workspace)) return;
+    if (!owner || !token || !path) return;
+    const url = new URL(window.location.href);
+    if (url.pathname !== pathname || url.searchParams.toString() !== search) return;
+    const rawPath = url.pathname + url.search;
+    const settings = pathname === '/dashboard/settings';
+    const redirect = url.searchParams.get('redirect');
+    const match = PENDING_ACTION_CONTINUATION.exec(settings ? redirect ?? '' : rawPath);
+    if (!match && !settings && pathname !== '/dashboard/seller-workspace') return;
+    const controller = new AbortController();
     let active = true; let request = 0; let inFlight = false; let expiry: ReturnType<typeof setTimeout> | undefined;
+    const current = () => {
+      const auth = useAuthStore.getState();
+      return active && rawPath === window.location.pathname + window.location.search &&
+        auth.user?.id === owner && auth.token === token;
+    };
     const read = async () => {
-      if (inFlight) return;
+      if (inFlight || !current()) return;
       inFlight = true;
       const generation = ++request;
       // Fail closed if the request stalls, as well as on malformed/stale replies.
       const timeout = setTimeout(() => { if (active && request === generation) { ++request; inFlight = false; setSaved(null); } }, 5000);
       try {
-        const admission = workspace ? null : await getSellerCapability(match![1], match![2]);
+        const admission = match ? await getSellerCapability(match[1], match[2]) : null;
         let report: SellerSwitchReport | null = null;
-        if (workspace) {
-          const response = await nativeClient.get('/seller-workspace/connector-switches', {headers:nativeSession().headers});
+        if (match) report = sellerSwitchReport(admission);
+        else {
+          const response = await nativeClient.get('/seller-workspace/connector-switches', {
+            headers: nativeSession().headers, signal: controller.signal,
+          });
           if (response.status === 200) report = workspaceSellerSwitchReport(response.data);
-        } else report = sellerSwitchReport(admission);
-        if (active && request === generation && report) {
+        }
+        if (current() && request === generation && report) {
           clearTimeout(expiry);
-          setSaved({ owner: user.id, token, path, report });
+          setSaved({ owner, token, path, report });
           expiry = setTimeout(() => { if (active) setSaved(null); }, Math.max(0, (admission ? Date.parse(admission.checked_at) : Date.now()) + 15000 - Date.now()));
         } else if (active && request === generation) setSaved(null);
       } catch { if (active && request === generation) setSaved(null); }
@@ -68,7 +79,7 @@ export function useSellerSwitches(): SellerSwitchReport | null {
     };
     void read(); const timer = setInterval(() => void read(), 5000);
     const focus = () => void read(); window.addEventListener('focus', focus);
-    return () => { active = false; clearInterval(timer); clearTimeout(expiry); window.removeEventListener('focus', focus); };
-  }, [user, token, path]);
-  return saved && saved.owner === user?.id && saved.token === token && saved.path === path ? saved.report : null;
+    return () => { active = false; controller.abort(); clearInterval(timer); clearTimeout(expiry); window.removeEventListener('focus', focus); };
+  }, [owner, token, pathname, path, search]);
+  return saved && saved.owner === owner && saved.token === token && saved.path === path ? saved.report : null;
 }
