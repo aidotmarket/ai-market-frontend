@@ -33,6 +33,7 @@ export default function ConversationThread<Message extends ConversationMessage>(
         const style = isOwn
           ? { bg: 'bg-[#E8EAF6] border-[#C5CAE9]', label: 'You', align: 'ml-8' }
           : ROLE_STYLES[msg.role] || ROLE_STYLES.system;
+        const content = renderContent?.(msg);
 
         return (
           <div key={msg.id} className={`rounded-lg border p-3 ${style.bg} ${style.align}`}>
@@ -42,7 +43,11 @@ export default function ConversationThread<Message extends ConversationMessage>(
                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
-            <p className="text-sm text-gray-900 whitespace-pre-wrap">{renderContent ? renderContent(msg) : msg.content}</p>
+            {content == null ? (
+              <p className="text-sm text-gray-900 whitespace-pre-wrap">{msg.content}</p>
+            ) : (
+              <div className="text-sm text-gray-900 break-words">{content}</div>
+            )}
           </div>
         );
       })}

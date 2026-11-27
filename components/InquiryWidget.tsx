@@ -18,6 +18,7 @@ import { AxiosError } from 'axios';
 import { mergeConversationMessages } from '@/lib/conversationMessages';
 import { useAllAILocale } from '@/components/allai/AllAIContext';
 import { ListingRecoveryLinks } from '@/components/allai/AllAIFallback';
+import AllAIMarkdown from '@/components/allai/AllAIMarkdown';
 import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   anonymousAllAIResources,
@@ -559,6 +560,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
             viewerRole="buyer"
             showTypingIndicator={submitting && !anonymousAnswerStarted}
             renderContent={(message) => {
+              if (message.role !== 'allai') return;
               if (message.safeOutcome === 'no_matches' || message.safeOutcome === 'answer_unverified'
                 || message.safeOutcome === 'retrieval_unavailable') {
                 return <>
@@ -567,7 +569,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
                   {message.fallbackDestinations?.support && <Link href={message.fallbackDestinations.support} className="mt-2 inline-block underline">{recovery.support}</Link>}
                 </>;
               }
-              return message.safeOutcome ? resources.safeOutcomes[message.safeOutcome] : message.content;
+              if (message.safeOutcome) return resources.safeOutcomes[message.safeOutcome];
+              return <AllAIMarkdown theme="light">{message.content}</AllAIMarkdown>;
             }}
           />
         </div>
