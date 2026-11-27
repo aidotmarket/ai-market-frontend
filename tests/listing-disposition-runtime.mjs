@@ -72,74 +72,71 @@ test('next start preserves version disposition and forwards a 99,900-byte presen
   });
   t.after(() => new Promise((resolve, reject) => api.close(error => error ? reject(error) : resolve())));
 
-  for (const enabled of ['true', 'false']) {
-    await t.test(`disposition switch ${enabled}`, { timeout: 25_000 }, async state => {
-      const server = spawn('rtk', ['proxy', 'npm', 'run', 'start', '--', '--hostname', '127.0.0.1', '--port', String(base)], {
-        env: {
-          ...process.env,
-          API_URL: `http://127.0.0.1:${base + 1}`,
-          LISTING_DISPOSITION_MIDDLEWARE_ENABLED: enabled,
-        },
-        detached: true,
-        stdio: 'inherit',
-      });
-      const closed = once(server, 'close');
-      state.after(async () => {
-        if (server.exitCode === null && server.signalCode === null) process.kill(-server.pid, 'SIGTERM');
-        await closed;
-      });
-      await waitForNext(server, origin);
+  await t.test('versioned requests', { timeout: 25_000 }, async state => {
+    const server = spawn('rtk', ['proxy', 'npm', 'run', 'start', '--', '--hostname', '127.0.0.1', '--port', String(base)], {
+      env: {
+        ...process.env,
+        API_URL: `http://127.0.0.1:${base + 1}`,
+      },
+      detached: true,
+      stdio: 'inherit',
+    });
+    const closed = once(server, 'close');
+    state.after(async () => {
+      if (server.exitCode === null && server.signalCode === null) process.kill(-server.pid, 'SIGTERM');
+      await closed;
+    });
+    await waitForNext(server, origin);
 
-      for (const rsc of [false, true]) {
-        const headers = rsc ? { RSC: '1' } : {};
-        for (const version of versions) {
-          await state.test(`${rsc ? 'RSC' : 'HTML'} ${version.status}`, async () => {
-            const query = `?version=${version.version_id}`;
-            const start = requests.length;
-            const response = await fetch(origin + listingPath + query, { headers });
-            const body = await response.text();
-            assert.equal(response.headers.get('x-aim-listing-data'), null);
-            assert.equal(response.headers.get('x-middleware-request-x-aim-listing-data'), null);
-            if (visible.includes(version)) {
-              assert.equal(response.status, 200);
-              assert.match(response.headers.get('content-type'), rsc ? /text\/x-component/ : /text\/html/);
-              assert.ok(body.includes(listing.title));
-              assert.ok(body.includes(marker + padding + suffix), 'complete approved presentation renders');
-              assert.ok(body.includes(rsc
-                ? `"initialVersionId":"${version.version_id}"`
-                : `value="${version.version_id}" selected=""`), 'requested version is rendered');
-              assert.deepEqual(requests.slice(start).filter(path => path === fullReadPath || path.startsWith(dispositionPath)),
-                [dispositionPath + query, fullReadPath]);
-            } else {
-              assert.equal(response.status, 404);
-              assert.ok(!body.includes(listing.title) && !body.includes(marker), 'no listing metadata or presentation leaks');
-              assert.deepEqual(requests.slice(start), [dispositionPath + query]);
-            }
-          });
-        }
-
-        await state.test(`${rsc ? 'RSC' : 'HTML'} repeated superseded version`, async () => {
-          const [active, superseded] = visible;
-          const query = `?version=${superseded.version_id}`;
-          for (const second of [superseded, active]) {
-            const start = requests.length;
-            const response = await fetch(`${origin}${listingPath}${query}&version=${second.version_id}`, { headers });
-            const body = await response.text();
+    for (const rsc of [false, true]) {
+      const headers = rsc ? { RSC: '1' } : {};
+      for (const version of versions) {
+        await state.test(`${rsc ? 'RSC' : 'HTML'} ${version.status}`, async () => {
+          const query = `?version=${version.version_id}`;
+          const start = requests.length;
+          const response = await fetch(origin + listingPath + query, { headers });
+          const body = await response.text();
+          assert.equal(response.headers.get('x-aim-listing-data'), null);
+          assert.equal(response.headers.get('x-middleware-request-x-aim-listing-data'), null);
+          if (visible.includes(version)) {
             assert.equal(response.status, 200);
+            assert.match(response.headers.get('content-type'), rsc ? /text\/x-component/ : /text\/html/);
+            assert.ok(body.includes(listing.title));
+            assert.ok(body.includes(marker + padding + suffix), 'complete approved presentation renders');
             assert.ok(body.includes(rsc
-              ? `"initialVersionId":"${superseded.version_id}"`
-              : `value="${superseded.version_id}" selected=""`), 'the first version is selected');
+              ? `"initialVersionId":"${version.version_id}"`
+              : `value="${version.version_id}" selected=""`), 'requested version is rendered');
             assert.deepEqual(requests.slice(start).filter(path => path === fullReadPath || path.startsWith(dispositionPath)),
               [dispositionPath + query, fullReadPath]);
+          } else {
+            assert.equal(response.status, 404);
+            assert.ok(!body.includes(listing.title) && !body.includes(marker), 'no listing metadata or presentation leaks');
+            assert.deepEqual(requests.slice(start), [dispositionPath + query]);
           }
         });
-
-        const start = requests.length;
-        const malformed = await fetch(`${origin}/listings/%E0`, { headers });
-        assert.equal(malformed.status, 404);
-        await malformed.text();
-        assert.deepEqual(requests.slice(start), []);
       }
-    });
-  }
+
+      await state.test(`${rsc ? 'RSC' : 'HTML'} repeated superseded version`, async () => {
+        const [active, superseded] = visible;
+        const query = `?version=${superseded.version_id}`;
+        for (const second of [superseded, active]) {
+          const start = requests.length;
+          const response = await fetch(`${origin}${listingPath}${query}&version=${second.version_id}`, { headers });
+          const body = await response.text();
+          assert.equal(response.status, 200);
+          assert.ok(body.includes(rsc
+            ? `"initialVersionId":"${superseded.version_id}"`
+            : `value="${superseded.version_id}" selected=""`), 'the first version is selected');
+          assert.deepEqual(requests.slice(start).filter(path => path === fullReadPath || path.startsWith(dispositionPath)),
+            [dispositionPath + query, fullReadPath]);
+        }
+      });
+
+      const start = requests.length;
+      const malformed = await fetch(`${origin}/listings/%E0`, { headers });
+      assert.equal(malformed.status, 404);
+      await malformed.text();
+      assert.deepEqual(requests.slice(start), []);
+    }
+  });
 });

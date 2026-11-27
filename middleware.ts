@@ -95,8 +95,8 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     if (!apiBase) return listingUnavailableResponse(503);
     try {
       const version = request.nextUrl.searchParams.get('version');
-      if (version !== null || process.env.LISTING_DISPOSITION_MIDDLEWARE_ENABLED !== 'false') {
-        const query = version === null ? '' : `?${new URLSearchParams({version})}`;
+      if (version !== null) {
+        const query = `?${new URLSearchParams({version})}`;
         const {status, withdrawn} = await readListingWithRetry(deadline, async signal => {
           const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
             // Keep redirects fail-closed and let their HTTP status bypass the retry.
