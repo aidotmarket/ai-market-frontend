@@ -16,7 +16,7 @@ const detail = (id = 'a'): ConversationDetail => ({ id, listing_id: `listing-${i
 function deferred<T>() { let resolve!: (v: T) => void; let reject!: (e: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 function auth(id: string | null, token = id ? `synthetic-${id}` : null) { useAuthStore.setState({ user: id ? { id } as User : null, token, isAuthenticated: !!id, hydrated: true, isLoading: false }); }
 const widget = (id = 'a') => <InquiryWidget listingId={`listing-${id}`} listingSlug={id} listingTitle={`Listing ${id}`}/>;
-function submit() { fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Synthetic initial question' } }); fireEvent.click(screen.getByRole('button', { name: 'Submit Question' })); }
+function submit() { fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Synthetic initial question' } }); fireEvent.click(screen.getByRole('button', { name: useAuthStore.getState().isAuthenticated ? 'Submit Question' : 'Ask allAI' })); }
 beforeEach(() => { vi.resetAllMocks(); mock.pollConversation.mockResolvedValue({ new_messages: [], inquiry_status: 'awaiting_seller', has_more: false }); auth('buyer-a'); Element.prototype.scrollIntoView = vi.fn(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Network forbidden'); })); vi.stubGlobal('XMLHttpRequest', class {
     constructor() { throw new Error('Network forbidden'); }
 }); });
