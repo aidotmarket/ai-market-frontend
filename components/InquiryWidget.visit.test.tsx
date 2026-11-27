@@ -237,6 +237,28 @@ it('retires anonymous session creation and restores only the destination listing
     expect(screen.queryByText('Synthetic initial question', { selector: 'p' })).toBeNull();
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Recovered listing B draft');
 });
+it('retires a stalled anonymous handoff when sign-out and sign-in are batched', async () => {
+    vi.useFakeTimers();
+    auth(null);
+    anonymous.createAnonymousSession.mockResolvedValue('session-a');
+    anonymous.sendAnonymousMessage.mockResolvedValue({ ok: true, status: 200, body: {} });
+    anonymous.readAnonymousMessageStream.mockImplementation(async (_body, receive) => {
+        receive({ type: 'safe_failure', outcome: 'no_matches', text: 'Safe failure' });
+        await new Promise(() => {});
+    });
+    render(widget());
+    submit();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    act(() => auth('buyer-a'));
+    act(() => { auth(null); auth('buyer-a'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+    expect(screen.queryByRole('button', { name: 'Send to seller' })).toBeNull();
+    mock.createInquiry.mockReturnValue(deferred<ConversationDetail>().promise);
+    submit();
+    expect(mock.createInquiry).toHaveBeenCalledTimes(1);
+    expect(mock.createInquiry).toHaveBeenCalledWith('listing-a', 'Synthetic initial question');
+});
 it('starts a fresh anonymous session after completed public answers and listing A-B-A', async () => {
     auth(null);
     anonymous.createAnonymousSession.mockResolvedValueOnce('session-a').mockResolvedValueOnce('session-b').mockResolvedValueOnce('new-session-a');

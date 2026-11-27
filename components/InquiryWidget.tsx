@@ -79,10 +79,16 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
   const statusVersion = useRef(0);
   const owner = authSessionIdentity(useAuthStore.getState());
   const visitRef = useRef({ owner });
+  // Set whenever a signed-in owner leaves, even if a batched sign-out/sign-in
+  // returns to the same owner before React commits.
+  const signedInOwnerLeftRef = useRef(false);
   const [renderedVisit, setRenderedVisit] = useState(visitRef.current);
   const [, notifyOwnerChange] = useState(0);
   const creating = useRef(false);
-  if (visitRef.current.owner !== owner) visitRef.current = { owner };
+  if (visitRef.current.owner !== owner) {
+    if (visitRef.current.owner !== null) signedInOwnerLeftRef.current = true;
+    visitRef.current = { owner };
+  }
   const visit = visitRef.current;
 
   // Store notifications retire visits synchronously, including A -> B -> A
@@ -90,6 +96,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
   useEffect(() => useAuthStore.subscribe((state) => {
     const nextOwner = authSessionIdentity(state);
     if (visitRef.current.owner !== nextOwner) {
+      if (visitRef.current.owner !== null) signedInOwnerLeftRef.current = true;
       visitRef.current = { owner: nextOwner };
       notifyOwnerChange((version) => version + 1);
     }
@@ -176,11 +183,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
   // When a signed-in account leaves (sign-out or A -> B), retire any pending
   // anonymous attempt so its deadline or stream end cannot restore the earlier
   // question for the next account. Anonymous -> first sign-in keeps the handoff.
-  const previousVisitOwnerRef = useRef(renderedVisit.owner);
   useLayoutEffect(() => {
-    const previousOwner = previousVisitOwnerRef.current;
-    previousVisitOwnerRef.current = renderedVisit.owner;
-    if (previousOwner === null || previousOwner === renderedVisit.owner) return;
+    if (!signedInOwnerLeftRef.current) return;
+    signedInOwnerLeftRef.current = false;
     anonymousAttemptRef.current += 1;
     clearAnonymousAttemptTimers();
     anonymousAbortRef.current?.value.abort();

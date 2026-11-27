@@ -326,6 +326,8 @@ describe('InquiryWidget', () => {
     vi.useFakeTimers();
     const originalUser = mocks.auth.user;
     const originalToken = mocks.auth.token;
+    (mocks.auth as { user: { id: string } | null }).user = null;
+    (mocks.auth as { token: string | null }).token = null;
     try {
       let reads = 0;
       const reader = {
@@ -350,6 +352,8 @@ describe('InquiryWidget', () => {
 
       const rerender = () => view.rerender(<InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />);
       mocks.auth.isAuthenticated = true;
+      mocks.auth.user = { id: 'first-account' };
+      mocks.auth.token = 'synthetic-first';
       rerender();
       mocks.auth.user = { id: 'second-account' };
       mocks.auth.token = 'synthetic-second';
