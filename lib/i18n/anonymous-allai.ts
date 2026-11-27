@@ -36,6 +36,7 @@ interface AnonymousAllAIResources {
     retrievalUnavailable: string;
     schema: string;
     documentation: string;
+    sample: string;
   };
   recoveryLinks: {
     searchListings: string;
@@ -74,6 +75,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       retrievalUnavailable: 'allAI couldn’t check the public listing information right now.',
       schema: 'View field names and types',
       documentation: 'View public documentation',
+      sample: 'View the public sample',
     },
     recoveryLinks: {
       searchListings: 'Search listings directly',
@@ -115,6 +117,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       retrievalUnavailable: 'allAI no pudo consultar la información pública del anuncio en este momento.',
       schema: 'Ver nombres y tipos de campos',
       documentation: 'Ver documentación pública',
+      sample: 'Ver la muestra pública',
     },
     recoveryLinks: {
       searchListings: 'Buscar anuncios directamente',
@@ -156,6 +159,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
       retrievalUnavailable: 'allAI 暂时无法查看商品的公开信息。',
       schema: '查看字段名称和类型',
       documentation: '查看公开文档',
+      sample: '查看公开样本',
     },
     recoveryLinks: {
       searchListings: '直接搜索商品',

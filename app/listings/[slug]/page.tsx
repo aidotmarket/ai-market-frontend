@@ -198,7 +198,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
         <span className="text-gray-900">{listing.title}</span>
       </nav>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="group/listing grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
           <div>
@@ -385,6 +385,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             listingTitle={listing.title}
             schemaHref={schemaHref}
             documentationHref={documentationHref}
+            sampleHref={hasPublicSampleFiles ? '#listing-sample-files' : pendingSellerTerms ? undefined : '#listing-sample-preview'}
           />
 
           {/* Non-custodial trust strip */}
