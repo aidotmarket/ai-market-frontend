@@ -288,7 +288,16 @@ export default async function LandingPage() {
       fetchFeaturedFeed(),
       fetchDataRequests({ per_page: 3 }).catch(() => null),
     ]);
-  const featuredListings = listingsData?.items ?? [];
+  const seenFeaturedPairs = new Set<string>();
+  const featuredListings = (listingsData?.items ?? []).filter(({ publisher, title }) => {
+    const displayName = publisher?.display_name;
+    if (!displayName?.trim() || !title?.trim()) return true;
+
+    const pair = JSON.stringify([displayName, title]);
+    if (seenFeaturedPairs.has(pair)) return false;
+    seenFeaturedPairs.add(pair);
+    return true;
+  });
   const activityItems = featuredFeed?.items ?? [];
   const activityItemList = featuredFeed?.item_list ?? null;
   const buyerRequests: DataRequestListItem[] = Array.isArray(requestData)
