@@ -5,19 +5,31 @@ import { detectAiBot } from './lib/aiBot';
 import { isSupportPrivatePath, supportAccountCsp, SUPPORT_ACCOUNT_PATH } from './lib/support-private-policy';
 
 const LISTING_BACKEND_TIMEOUT_MS = 10_000;
+const LISTING_DEADLINE_MS = 15_000;
+const LISTING_RETRY_DELAY_MS = 250;
+const LISTING_MIN_RETRY_TIME_MS = 1_500;
 
-// At most 20.25 s per read (two 10 s attempts plus 250 ms), or 40.5 s for both reads.
-async function readListingWithRetry<T>(read: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function readListingWithRetry<T>(deadline: number, read: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const remaining = () => deadline - performance.now();
+  const attempt = async () => {
+    const timeout = Math.min(LISTING_BACKEND_TIMEOUT_MS, Math.ceil(remaining()));
+    if (timeout <= 0) throw new Error('Listing deadline exhausted');
+    const result = await read(AbortSignal.timeout(timeout));
+    if (remaining() <= 0) throw new Error('Listing deadline exhausted');
+    return result;
+  };
+
   try {
-    return await read(AbortSignal.timeout(LISTING_BACKEND_TIMEOUT_MS));
+    return await attempt();
   } catch (error) {
-    if (!(error instanceof TypeError) &&
-        !(error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError'))) {
-      throw error;
+    const name = (error as {name?: unknown} | null | undefined)?.name;
+    if ((name === 'TypeError' || name === 'TimeoutError' || name === 'AbortError') &&
+        remaining() >= LISTING_RETRY_DELAY_MS + LISTING_MIN_RETRY_TIME_MS) {
+      await new Promise(resolve => setTimeout(resolve, LISTING_RETRY_DELAY_MS));
+      if (remaining() >= LISTING_MIN_RETRY_TIME_MS) return attempt();
     }
+    throw error;
   }
-  await new Promise(resolve => setTimeout(resolve, 250));
-  return read(AbortSignal.timeout(LISTING_BACKEND_TIMEOUT_MS));
 }
 
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
@@ -72,6 +84,8 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   let listingStatus = 204;
   let listingData: string | undefined;
   if (listingRef) {
+    // Both reads, their response bodies, and any retries share a worst-case wait of about 15 s.
+    const deadline = performance.now() + LISTING_DEADLINE_MS;
     let decodedRef: string;
     try {
       decodedRef = decodeURIComponent(listingRef);
@@ -83,31 +97,35 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       const version = request.nextUrl.searchParams.get('version');
       if (version !== null || process.env.LISTING_DISPOSITION_MIDDLEWARE_ENABLED !== 'false') {
         const query = version === null ? '' : `?${new URLSearchParams({version})}`;
-        const response = await readListingWithRetry(signal =>
-          fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
+        const {status, withdrawn} = await readListingWithRetry(deadline, async signal => {
+          const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
             // Keep redirects fail-closed and let their HTTP status bypass the retry.
             cache: 'no-store', redirect: 'manual', signal,
-          }));
-        listingStatus = listingHttpStatus(response.status);
+          });
+          const status = listingHttpStatus(response.status);
+          return {status, withdrawn: status === 410 && await listingIsWithdrawn(response)};
+        });
+        listingStatus = status;
         if (listingStatus === 410 || listingStatus === 451 || listingStatus === 503) {
-          return listingUnavailableResponse(listingStatus, listingStatus === 410 && await listingIsWithdrawn(response));
+          return listingUnavailableResponse(listingStatus, withdrawn);
         }
       }
       if (listingStatus === 204) {
         // Resolve the page's full read before App Router can commit response headers.
         // Pass only a successful snapshot to the renderer so metadata uses the same read.
-        const {response, payload} = await readListingWithRetry(async signal => {
+        const {status, payload, withdrawn} = await readListingWithRetry(deadline, async signal => {
           const response = await requestPublicListing(apiBase, decodedRef, userAgent, signal);
-          const payload: unknown = response.status === 200 ? await response.json() : undefined;
-          return {response, payload};
+          const {status} = response;
+          const payload: unknown = status === 200 ? await response.json() : undefined;
+          return {status, payload, withdrawn: status === 410 && await listingIsWithdrawn(response)};
         });
-        if (response.status === 200) {
+        if (status === 200) {
           if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return listingUnavailableResponse(503);
           listingData = encodeURIComponent(JSON.stringify(payload));
         } else {
-          const status = listingHttpStatus(response.status);
-          if (status !== 404) {
-            return listingUnavailableResponse(status === 204 ? 503 : status, status === 410 && await listingIsWithdrawn(response));
+          const mappedStatus = listingHttpStatus(status);
+          if (mappedStatus !== 404) {
+            return listingUnavailableResponse(mappedStatus === 204 ? 503 : mappedStatus, withdrawn);
           }
           listingStatus = 404;
         }

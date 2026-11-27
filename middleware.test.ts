@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server';
 import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
@@ -149,7 +150,7 @@ describe('AI crawler middleware', () => {
   });
 
   const mockListingTimeouts = () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']});
     // Use fake timers for the native timeout signal as well as for the retry delay.
     return vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
       const controller = new AbortController();
@@ -162,6 +163,15 @@ describe('AI crawler middleware', () => {
     new Promise<never>((_, reject) => {
       signal.addEventListener('abort', () => reject(signal.reason), {once: true});
     });
+
+  const stallBodyUntilAborted = (response: Response) => {
+    const readBody = vi.spyOn(response, 'json');
+    fetchMock.mockImplementationOnce(async (url: string, options: {signal: AbortSignal}) => {
+      readBody.mockImplementation(() => stallUntilAborted(url, options));
+      return response;
+    });
+    return readBody;
+  };
 
   it('retries a timed-out disposition check before reading the listing', async () => {
     const timeout = mockListingTimeouts();
@@ -182,15 +192,23 @@ describe('AI crawler middleware', () => {
       'https://backend.example/api/v1/public/listing-disposition/some-slug',
       'https://backend.example/api/v1/public/listings/some-slug',
     ]);
-    expect(timeout.mock.calls).toEqual([[10_000], [10_000], [10_000]]);
+    expect(timeout.mock.calls).toEqual([[10_000], [4_750], [4_750]]);
   });
 
-  it('fails closed after both disposition attempts time out', async () => {
-    mockListingTimeouts();
+  it('fails closed at 15 seconds when every fetch stalls', async () => {
+    const timeout = mockListingTimeouts();
     fetchMock.mockImplementation(stallUntilAborted);
-    const pending = middleware(request('/listings/some-slug'), event);
+    const settled = vi.fn();
+    const pending = middleware(request('/listings/some-slug'), event).then(response => {
+      settled(response);
+      return response;
+    });
 
-    await vi.advanceTimersByTimeAsync(20_250);
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(settled).not.toHaveBeenCalled();
+    expect(timeout.mock.calls).toEqual([[10_000], [4_750]]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toHaveBeenCalledTimes(1);
 
     const response = await pending;
     expect(response.status).toBe(503);
@@ -201,6 +219,35 @@ describe('AI crawler middleware', () => {
       'https://backend.example/api/v1/public/listing-disposition/some-slug',
       'https://backend.example/api/v1/public/listing-disposition/some-slug',
     ]);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['disposition', 410, 'This listing was withdrawn.'],
+    ['disposition', 451, 'This listing is unavailable for legal reasons.'],
+    ['full read', 410, 'This listing was withdrawn.'],
+    ['full read', 451, 'This listing is unavailable for legal reasons.'],
+  ])('fails closed when the %s times out and then returns %i', async (read, status, message) => {
+    mockListingTimeouts();
+    const dispositionUrl = 'https://backend.example/api/v1/public/listing-disposition/some-slug';
+    const fullReadUrl = 'https://backend.example/api/v1/public/listings/some-slug';
+    if (read === 'full read') fetchMock.mockResolvedValueOnce(new Response(null, {status: 204}));
+    fetchMock.mockImplementationOnce(stallUntilAborted).mockResolvedValueOnce(
+      Response.json({detail: 'Listing has been withdrawn', title: 'private title'}, {status}),
+    );
+    const pending = middleware(request('/listings/some-slug'), event);
+    await vi.advanceTimersByTimeAsync(10_250);
+
+    const response = await pending;
+    expect(response.status).toBe(status);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('retry-after')).toBeNull();
+    expect(response.headers.get('x-middleware-next')).toBeNull();
+    expect(response.headers.get('x-middleware-request-x-aim-listing-data')).toBeNull();
+    expect(await response.text()).toBe(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Listing unavailable</title><h1>${message}</h1><a href="/">Back to ai.market</a></html>`);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(read === 'disposition'
+      ? [dispositionUrl, dispositionUrl]
+      : [dispositionUrl, fullReadUrl, fullReadUrl]);
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
@@ -223,6 +270,117 @@ describe('AI crawler middleware', () => {
       'https://backend.example/api/v1/public/listings/some-slug',
     ]);
     expect(timeout.mock.calls).toEqual([[10_000], [10_000], [10_000]]);
+  });
+
+  it.each(['TypeError', 'TimeoutError', 'AbortError'])('retries a %s from another realm', async name => {
+    mockListingTimeouts();
+    const error: unknown = runInNewContext('Object.assign(new Error("fetch failed"), {name})', {name});
+    expect(error).not.toBeInstanceOf(Error);
+    fetchMock.mockRejectedValueOnce(error);
+    const pending = middleware(request('/listings/some-slug', 'Chrome'), event);
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect((await pending).status).toBe(200);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
+  });
+
+  it('retries a full read when 200 headers arrive and the body stalls until abort', async () => {
+    const timeout = mockListingTimeouts();
+    fetchMock.mockResolvedValueOnce(new Response(null, {status: 204}));
+    const readBody = stallBodyUntilAborted(new Response(null, {status: 200}));
+    const pending = middleware(request('/listings/some-slug', 'Chrome'), event);
+    await vi.advanceTimersByTimeAsync(10_249);
+    expect(readBody).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-request-x-aim-listing-data')).toBe(
+      encodeURIComponent(JSON.stringify({title: 'Public listing'})),
+    );
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
+    expect(timeout.mock.calls).toEqual([[10_000], [10_000], [4_750]]);
+  });
+
+  it('fails closed when the deadline expires while reading a 410 detail body', async () => {
+    mockListingTimeouts();
+    fetchMock.mockImplementationOnce(stallUntilAborted);
+    const readBody = stallBodyUntilAborted(new Response(null, {status: 410}));
+    const pending = middleware(request('/listings/some-slug'), event);
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(readBody).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when both full reads fail', async () => {
+    mockListingTimeouts();
+    fetchMock.mockResolvedValueOnce(new Response(null, {status: 204}))
+      .mockRejectedValue(new TypeError('fetch failed'));
+    const pending = middleware(request('/listings/some-slug'), event);
+    await vi.advanceTimersByTimeAsync(250);
+
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without retrying malformed JSON in a full read', async () => {
+    mockListingTimeouts();
+    fetchMock.mockResolvedValueOnce(new Response(null, {status: 204}))
+      .mockResolvedValueOnce(new Response('{', {status: 200}));
+    const pending = middleware(request('/listings/some-slug'), event);
+    await vi.advanceTimersByTimeAsync(250);
+
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('shares the deadline across both reads and skips a full-read retry with too little time left', async () => {
+    const timeout = mockListingTimeouts();
+    fetchMock.mockImplementationOnce(stallUntilAborted)
+      .mockImplementationOnce(() => new Promise(resolve => {
+        setTimeout(() => resolve(new Response(null, {status: 204})), 3_350);
+      }))
+      .mockRejectedValue(new TypeError('fetch failed'));
+    const pending = middleware(request('/listings/some-slug'), event);
+    await vi.advanceTimersByTimeAsync(13_600);
+    expect(timeout.mock.calls).toEqual([[10_000], [4_750], [1_400]]);
+
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('60');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
   });
 
   it('sends missing and hidden requests to the same framework 404', async () => {
