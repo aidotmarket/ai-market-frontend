@@ -1056,9 +1056,9 @@ const accountNextSteps = [
 
 describe('signed-out gateway help', () => {
   const pages = ['/support', '/aim-data'];
-  const guideUrl = '/aim-data#network-requirements';
-  const setupQuestion = 'How do I install the gateway?';
-  const gatewayError = 'Unable to answer. [Set up your gateway](/aim-data#gateway-setup)';
+  const guideUrl = '/aim-data#gateway-setup';
+  const setupQuestion = 'Do I need Docker Compose before signing up, and where do I get the pairing code?';
+  const gatewayError = 'Unable to answer. [Network requirements](/aim-data#network-requirements)';
 
   function mount(path: string, reply: Response) {
     mocks.pathname = path;

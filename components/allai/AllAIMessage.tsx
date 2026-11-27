@@ -106,7 +106,7 @@ export default function AllAIMessage({
         )}
         {message.showAimDataSetupGuide && !user && page === '/aim-data' && (
           <div className="mt-2">
-            <Link href="/aim-data#network-requirements" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+            <Link href="/aim-data#gateway-setup" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
               {resources.aimDataSetupGuide}
             </Link>
           </div>
