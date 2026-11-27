@@ -13,6 +13,7 @@ const empty: StandingLimits = { grant_ids: [], client_ids: [], operations: [], c
   daily_items: {}, concurrent_operations: 1, price_min_cents: null, price_max_cents: null, max_price_delta_cents: null, currency: 'USD', sample_rule: 'none_or_unchanged_approved', expires_at: '' };
 const lists = ['grant_ids', 'client_ids', 'categories', 'connection_ids'] as const;
 const names = { grant_ids: 'Selected native grants (UUIDs)', client_ids: 'Selected native client IDs', categories: 'Categories', connection_ids: 'Owned connections (UUIDs)' };
+const MAX_DEADLINE_TIMEOUT_MS = 2_147_483_647;
 export default function SellerAuthority() {
   const switches = useSellerSwitches();
   const { user, token } = useAuthStore();
@@ -25,6 +26,9 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
   const effects = switches?.seller === true && switches.effects === true;
   const [stopReview, setStopReview] = useState<{ body: WebDecision; result: DecisionReview<WebDecision> } | null>(null);
   const [status, setStatus] = useState<AuthorityStatus | null>(null);
+  const [, setExpiryTick] = useState(0);
+  const expiresAt = status?.enabled ? Date.parse(status.limits?.expires_at ?? '') : NaN;
+  const active = expiresAt > Date.now();
   const [limits, setLimits] = useState<StandingLimits>(empty);
   const [review, setReview] = useState<{ body: AuthoritySet; result: DecisionReview<AuthoritySet> } | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -36,6 +40,17 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     stopping.current = null; pending.current = null;
     setStopReview(null); setReview(null);
   }, [token]);
+  useEffect(() => {
+    if (!active) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) setExpiryTick(tick => tick + 1);
+      else timer = setTimeout(schedule, Math.min(remaining, MAX_DEADLINE_TIMEOUT_MS));
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [active, expiresAt]);
   const readGeneration = useRef(0);
   const refresh = useCallback(async (active: () => boolean = () => true) => {
     const generation = ++readGeneration.current;
@@ -65,7 +80,7 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     catch(e) { if (mounted.current) { setError(e); setReview(null); } } finally { if (mounted.current) setBusy(false); }
   };
   const stop = async () => {
-    if (!status || busy) return;
+    if (!status || busy || !(expiresAt > Date.now())) return;
     setBusy(true); setError(null); setReview(null); pending.current = null; setStopReview(null);
     try {
       if (stopping.current?.expected_version !== status.version) stopping.current = null;
@@ -79,21 +94,25 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     finally { if (mounted.current) setBusy(false); }
   };
   const confirmStop = async () => {
-    if (!stopReview || busy) return;
+    if (!stopReview || busy || !(expiresAt > Date.now())) return;
     setBusy(true); setError(null);
     try { await stopAuthority({ ...stopReview.body, review_hash: stopReview.result.review_hash });
       if (mounted.current) { stopping.current = null; setMessage('Automatic assistant changes stopped. Changes already completed will stay in place.'); await refresh(); }
     } catch(e) { if (mounted.current) { setError(e); setStopReview(null); } }
     finally { if (mounted.current) setBusy(false); }
   };
-  const active = !!(status?.enabled && status.limits?.expires_at && Date.parse(status.limits.expires_at) > Date.now());
   return <section id="seller-authority" aria-label="AI assistant permissions" className="mt-6 space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-lg font-semibold">AI assistant permissions</h2>
-    <button type="button" disabled={!status || busy} onClick={() => void stop()} className={dangerButtonClass}>Review stopping assistant changes</button>
-    <p>Review and confirm to stop all future automatic assistant changes. Changes already completed will stay in place.</p>
+    {active && <>
+      <button type="button" disabled={busy} onClick={() => void stop()} className={dangerButtonClass}>Review stopping assistant changes</button>
+      <p>Review and confirm to stop all future automatic assistant changes. Changes already completed will stay in place.</p>
+    </>}
     <button type="button" onClick={() => { stopping.current = null; retry(); }} className={secondaryButtonClass}>Refresh permissions</button>
-    {stopReview && <section aria-label="Exact server Stop review"><h3>Review stopping assistant changes</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()} className={dangerButtonClass}>Stop all automatic assistant changes</button></section>}
+    {active && stopReview && <section aria-label="Exact server Stop review"><h3>Review stopping assistant changes</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()} className={dangerButtonClass}>Stop all automatic assistant changes</button></section>}
     {message && <p role="status">{message}</p>}
+    {!effects && <p>{switches
+      ? 'Editing AI assistant permissions is turned off.'
+      : 'Editing AI assistant permissions is unavailable right now.'}</p>}
     {status && <><p>{active && status.limits
       ? <>Your AI assistant can {status.limits.operations?.map(v => ({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]).join(', ').replace(/, (?=[^,]*$)/, ' and ')} some of your listings, within the limits below, until {new Date(status.limits.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.</>
       : "Your AI assistant can't change your listings right now."}</p>
@@ -102,7 +121,6 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
         const remaining = Math.max(0, (status.limits?.daily_items?.[v] ?? 0) - (used?.reserved ?? 0) - (used?.success ?? 0));
         return remaining === 0 && <p key={v}>Today’s {({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]} limit has been reached.</p>;
       })}
-      {!effects && <p>Editing permissions is unavailable on this page right now. You can still check status and stop the assistant here.</p>}
       <details className="rounded-lg border p-4"><summary className="min-h-11 cursor-pointer font-medium">Limits and usage details</summary>
       <p>Authority version {status.version} · {active ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
       <p>Each request can change up to 50 listings. Single and bulk changes share these daily limits across all connected assistants.</p>

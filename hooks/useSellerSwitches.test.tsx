@@ -8,20 +8,107 @@ import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 import { id } from '@/tests/fixtures/seller-authority';
 vi.mock('@/api/pending-actions', async original => ({ ...await original<typeof import('@/api/pending-actions')>(), getSellerCapability: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => window.location.pathname,
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 const linkToken = 'A'.repeat(43);
 const admission = () => ({ effective: true, reason: null, checked_at: new Date().toISOString(), switch_snapshot: { connector_enabled: true, action_path_enabled: true, seller_enabled: true, seller_bulk_enabled: true, global_enabled: true, profile_enabled: true, tool_enabled: true } });
+const switchRequest = () => ({ headers: nativeSession().headers, signal: expect.any(AbortSignal) });
 beforeEach(() => { vi.resetAllMocks(); useAuthStore.setState({ user: { id: id(99) } as User, token: 'session' }); window.history.replaceState({}, '', '/dashboard/settings'); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
-it('fails closed without a link scoped native status contract', () => {
-  const { result } = renderHook(useSellerSwitches); expect(result.current).toBeNull(); expect(getSellerCapability).not.toHaveBeenCalled();
+it.each(['/dashboard/settings', '/dashboard/settings?redirect=%2Fconfirm%2Finvalid'])('reads the authenticated switch report on ordinary Settings (%s)', async route => {
+  window.history.replaceState({}, '', route);
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data: { seller: true, floors: true, bulk: false } });
+  const { result } = renderHook(useSellerSwitches);
+  await waitFor(() => expect(result.current).toEqual({ seller: true, effects: true, bulk: false, profiles: {} }));
+  expect(get).toHaveBeenCalledExactlyOnceWith('/seller-workspace/connector-switches', switchRequest());
+  expect(getSellerCapability).not.toHaveBeenCalled();
 });
 it('reads the real Chunk 3 capability for the retained settings continuation', async () => {
   window.history.replaceState({}, '', `/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${id(1)}?t=${linkToken}`)}`);
+  const get = vi.spyOn(nativeClient, 'get').mockRejectedValue(new Error('Unexpected switch read'));
   vi.mocked(getSellerCapability).mockResolvedValue(admission());
   const { result } = renderHook(useSellerSwitches);
   await waitFor(() => expect(result.current).toEqual({ seller: true, effects: true, bulk: true }));
   expect(getSellerCapability).toHaveBeenCalledWith(id(1), linkToken);
+  expect(get).not.toHaveBeenCalled();
   act(() => useAuthStore.setState({ token: null })); expect(result.current).toBeNull();
+});
+it('clears the ordinary Settings report on a qualifying continuation without falling back on failure', async () => {
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data: { seller: true, floors: true, bulk: true } });
+  const { result, rerender } = renderHook(useSellerSwitches);
+  await waitFor(() => expect(result.current?.effects).toBe(true));
+
+  vi.mocked(getSellerCapability).mockRejectedValue(new Error('Unavailable continuation'));
+  window.history.pushState({}, '', `/dashboard/settings?redirect=${encodeURIComponent(`/confirm/${id(1)}?t=${linkToken}`)}`);
+  rerender();
+  await act(async () => {});
+  expect(result.current).toBeNull();
+  expect(getSellerCapability).toHaveBeenCalledExactlyOnceWith(id(1), linkToken);
+  expect(get).toHaveBeenCalledTimes(1);
+});
+it('retires the Settings report on client navigation and reads Workspace independently', async () => {
+  const data = { seller: true, floors: true, bulk: false };
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data });
+  const { result, rerender } = renderHook(useSellerSwitches);
+  await waitFor(() => expect(result.current?.effects).toBe(true));
+
+  window.history.pushState({}, '', '/dashboard/orders?redirect=%2Fdashboard%2Fsettings');
+  rerender();
+  expect(result.current).toBeNull();
+  expect(get.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(getSellerCapability).not.toHaveBeenCalled();
+
+  get.mockResolvedValue({ status: 200, data: { ...data, floors: false } });
+  window.history.pushState({}, '', '/dashboard/seller-workspace');
+  rerender();
+  expect(result.current).toBeNull();
+  await waitFor(() => expect(result.current?.effects).toBe(false));
+  expect(get).toHaveBeenCalledTimes(2);
+});
+it.each([{ token: 'rotated-session' }, { user: { id: id(98) } as User }])('drops old Settings data and late replies on auth changes (%j)', async auth => {
+  vi.useFakeTimers();
+  const data = { seller: true, floors: true, bulk: true };
+  let resolveOld!: (reply: { status: number; data: typeof data }) => void;
+  const old = new Promise<{ status: number; data: typeof data }>(resolve => { resolveOld = resolve; });
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValueOnce({ status: 200, data })
+    .mockReturnValueOnce(old).mockReturnValue(new Promise(() => {}));
+  const { result } = renderHook(useSellerSwitches);
+  await act(async () => {});
+  expect(result.current?.effects).toBe(true);
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  act(() => useAuthStore.setState(auth));
+  expect(result.current).toBeNull();
+  expect(get).toHaveBeenCalledTimes(3);
+  expect(get).toHaveBeenLastCalledWith('/seller-workspace/connector-switches', switchRequest());
+  await act(async () => resolveOld({ status: 200, data }));
+  expect(result.current).toBeNull();
+});
+it('keeps explicit off distinct from malformed, failed or stalled Settings reads', async () => {
+  vi.useFakeTimers();
+  const data = { seller: true, floors: false, bulk: true };
+  const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data });
+  const { result } = renderHook(useSellerSwitches);
+  const poll = () => act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  await act(async () => {});
+  expect(result.current?.effects).toBe(false);
+  get.mockResolvedValueOnce({ status: 200, data: { ...data, floors: 'true' } });
+  await poll();
+  expect(result.current).toBeNull();
+  await poll();
+  expect(result.current?.effects).toBe(false);
+  get.mockRejectedValueOnce(new Error('offline'));
+  await poll();
+  expect(result.current).toBeNull();
+  await poll();
+  expect(result.current?.effects).toBe(false);
+  get.mockReturnValue(new Promise(() => {}));
+  await poll();
+  await poll();
+  expect(result.current).toBeNull();
 });
 it.each(['missing', 'stale', 'disabled', 'malformed'])('refuses %s status', reason => {
   const data = admission();
@@ -65,7 +152,7 @@ it.each([
   const get = vi.spyOn(nativeClient, 'get').mockResolvedValue({ status: 200, data: { ...workspaceSwitches, floors: true, profiles: value } });
   const { result } = renderHook(useSellerSwitches);
   await waitFor(() => expect(result.current).toEqual({ seller: true, bulk: true, effects: true, profiles: {} }));
-  expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches', { headers: nativeSession().headers });
+  expect(get).toHaveBeenCalledWith('/seller-workspace/connector-switches', switchRequest());
   expect(getSellerCapability).not.toHaveBeenCalled();
 });
 it('retains both profile modes and floors without replacing the legacy Claude floors', async () => {
