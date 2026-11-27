@@ -4,6 +4,22 @@ import { requestPublicListing } from './lib/public-listing-read';
 import { detectAiBot } from './lib/aiBot';
 import { isSupportPrivatePath, supportAccountCsp, SUPPORT_ACCOUNT_PATH } from './lib/support-private-policy';
 
+const LISTING_BACKEND_TIMEOUT_MS = 10_000;
+
+// At most 20.25 s per read (two 10 s attempts plus 250 ms), or 40.5 s for both reads.
+async function readListingWithRetry<T>(read: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  try {
+    return await read(AbortSignal.timeout(LISTING_BACKEND_TIMEOUT_MS));
+  } catch (error) {
+    if (!(error instanceof TypeError) &&
+        !(error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError'))) {
+      throw error;
+    }
+  }
+  await new Promise(resolve => setTimeout(resolve, 250));
+  return read(AbortSignal.timeout(LISTING_BACKEND_TIMEOUT_MS));
+}
+
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (/^\/dashboard(?:\/|$)/.test(request.nextUrl.pathname)) {
     const response = NextResponse.next();
@@ -67,9 +83,11 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       const version = request.nextUrl.searchParams.get('version');
       if (version !== null || process.env.LISTING_DISPOSITION_MIDDLEWARE_ENABLED !== 'false') {
         const query = version === null ? '' : `?${new URLSearchParams({version})}`;
-        const response = await fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
-          cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000),
-        });
+        const response = await readListingWithRetry(signal =>
+          fetch(`${apiBase}/api/v1/public/listing-disposition/${listingRef}${query}`, {
+            // Keep redirects fail-closed and let their HTTP status bypass the retry.
+            cache: 'no-store', redirect: 'manual', signal,
+          }));
         listingStatus = listingHttpStatus(response.status);
         if (listingStatus === 410 || listingStatus === 451 || listingStatus === 503) {
           return listingUnavailableResponse(listingStatus, listingStatus === 410 && await listingIsWithdrawn(response));
@@ -78,9 +96,12 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       if (listingStatus === 204) {
         // Resolve the page's full read before App Router can commit response headers.
         // Pass only a successful snapshot to the renderer so metadata uses the same read.
-        const response = await requestPublicListing(apiBase, decodedRef, userAgent, AbortSignal.timeout(5000));
+        const {response, payload} = await readListingWithRetry(async signal => {
+          const response = await requestPublicListing(apiBase, decodedRef, userAgent, signal);
+          const payload: unknown = response.status === 200 ? await response.json() : undefined;
+          return {response, payload};
+        });
         if (response.status === 200) {
-          const payload: unknown = await response.json();
           if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return listingUnavailableResponse(503);
           listingData = encodeURIComponent(JSON.stringify(payload));
         } else {

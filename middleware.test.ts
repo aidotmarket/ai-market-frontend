@@ -30,6 +30,8 @@ describe('AI crawler middleware', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -127,12 +129,100 @@ describe('AI crawler middleware', () => {
     const response = await middleware(original, event);
     expect(response.status).toBe(status);
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('retry-after')).toBe(status === 503 ? '60' : null);
     expect(await response.text()).not.toContain('private title');
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
       `https://backend.example/api/v1/public/listing-disposition/some-slug?version=${version}`,
       expect.objectContaining({cache: 'no-store'}),
     );
     expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on a disposition redirect without following or retrying it', async () => {
+    fetchMock.mockResolvedValueOnce(Response.redirect('https://backend.example/elsewhere', 302));
+    const response = await middleware(request('/listings/some-slug'), event);
+    expect(response.status).toBe(503);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      expect.objectContaining({redirect: 'manual'}),
+    );
+  });
+
+  const mockListingTimeouts = () => {
+    vi.useFakeTimers();
+    // Use fake timers for the native timeout signal as well as for the retry delay.
+    return vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), ms);
+      return controller.signal;
+    });
+  };
+
+  const stallUntilAborted = (_url: string, {signal}: {signal: AbortSignal}) =>
+    new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), {once: true});
+    });
+
+  it('retries a timed-out disposition check before reading the listing', async () => {
+    const timeout = mockListingTimeouts();
+    fetchMock.mockImplementationOnce(stallUntilAborted);
+    const pending = middleware(request('/listings/some-slug', 'Chrome'), event);
+
+    await vi.advanceTimersByTimeAsync(10_249);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-request-x-aim-listing-data')).toBe(
+      encodeURIComponent(JSON.stringify({title: 'Public listing'})),
+    );
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
+    expect(timeout.mock.calls).toEqual([[10_000], [10_000], [10_000]]);
+  });
+
+  it('fails closed after both disposition attempts time out', async () => {
+    mockListingTimeouts();
+    fetchMock.mockImplementation(stallUntilAborted);
+    const pending = middleware(request('/listings/some-slug'), event);
+
+    await vi.advanceTimersByTimeAsync(20_250);
+
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.text()).toContain('This listing is temporarily unavailable.');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+    ]);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('retries a full listing read after a network error without rechecking disposition', async () => {
+    const timeout = mockListingTimeouts();
+    fetchMock.mockResolvedValueOnce(new Response(null, {status: 204}))
+      .mockRejectedValueOnce(new TypeError('fetch failed'));
+    const pending = middleware(request('/listings/some-slug', 'Chrome'), event);
+
+    await vi.advanceTimersByTimeAsync(250);
+
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-request-x-aim-listing-data')).toBe(
+      encodeURIComponent(JSON.stringify({title: 'Public listing'})),
+    );
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://backend.example/api/v1/public/listing-disposition/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+      'https://backend.example/api/v1/public/listings/some-slug',
+    ]);
+    expect(timeout.mock.calls).toEqual([[10_000], [10_000], [10_000]]);
   });
 
   it('sends missing and hidden requests to the same framework 404', async () => {
