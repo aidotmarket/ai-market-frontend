@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {AxiosError,type AxiosAdapter} from 'axios';
 import {api} from '@/api/client';
@@ -11,6 +11,7 @@ import {categoryRows,guidedCapabilities,guidedConnection,guidedObjects} from '@/
 import {SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from './SellerListingDraftStore';
 import SavedWorkspaceData from './SavedWorkspaceData';
 import {GuidedListingFlow} from './GuidedListingFlow';
+import {RecoverableWorkspacePanel} from './WorkspacePanel';
 vi.mock('@/api/capabilities',()=>({getCapabilities:vi.fn(async()=>({}))}));
 
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<typeof import('@/api/sellerWorkspace')>(),
@@ -30,7 +31,7 @@ function backend(){
   const sources=new Map<string,SourceRead>();
   const receipts=new Map<string,{source:SourceRead;current_draft_id:string}>();
   let loseResponse=false;let draftReads=0;
-  let beforeSourceRead:((id:string|null)=>void)|undefined;
+  let beforeSourceRead:((id:string|null)=>void|Promise<void>)|undefined;
   let afterSourceSave:(()=>void)|undefined;
   let readDraft:(()=>Promise<SavedListingDraft|null>)|undefined;
   const sourceReads:Array<string|null>=[];
@@ -47,9 +48,10 @@ function backend(){
       if(config.url?.endsWith('/listing-draft')){draftReads++;data={draft:readDraft?await readDraft():current?drafts.get(current):null};}
       else if(config.url?.endsWith('/categories'))data=categoryRows;
       else if(config.url?.endsWith('/listing-source')){
-        const requested=config.params?.draft_id??null;sourceReads.push(requested);beforeSourceRead?.(requested);
+        const requested=config.params?.draft_id??null;sourceReads.push(requested);const delay=beforeSourceRead?.(requested);
         const target=requested??current;
         data={source:target?sources.get(target)??null:null,current_draft_id:current};
+        if(delay)await delay;
       }
       else throw new Error(`Unexpected GET ${config.url}`);
     }else{
@@ -81,12 +83,12 @@ function backend(){
     return {data,status:200,statusText:'OK',headers:{},config};
   };
   api.defaults.adapter=adapter;nativeClient.defaults.adapter=adapter;
-  return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
+  return {drafts,sources,writes,sourceReads,createOrdinary,onSourceSave:(callback:()=>void)=>{afterSourceSave=callback;},onDraftRead:(callback:()=>Promise<SavedListingDraft|null>)=>{readDraft=callback;},onSourceRead:(callback:(id:string|null)=>void|Promise<void>)=>{beforeSourceRead=callback;},get draftReads(){return draftReads;},loseNextResponse:()=>{loseResponse=true;}};
 }
 function DraftStatus(){const {draft,sampleIndices,selectionSavePending,selectionSaveFailed}=useSellerListingDraft();return <output data-testid="draft-id" data-sample-decision={draft?.content.sample_decision} data-sample-indices={JSON.stringify(sampleIndices)} data-samples-blocked={selectionSavePending||selectionSaveFailed}>{draft?.draft_id??"empty"}</output>;}
-function mount(enabled=true,guided=false,sampleCapability=false){
+function mount(enabled=true,guided=false,sampleCapability=false,navigate=vi.fn()){
   const editor=<><DraftStatus/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>;
-  return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
+  return render(<SellerListingDraftProvider enabled={enabled} sampleCapability={sampleCapability}>{guided?<GuidedListingFlow capabilities={{...guidedCapabilities,review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={navigate}>{editor}</GuidedListingFlow>:editor}</SellerListingDraftProvider>);
 }
 async function select(){fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}));}
 function save(){fireEvent.click(screen.getByRole('button',{name:'Save selected files'}));fireEvent.click(screen.getByRole('button',{name:'Confirm selection'}));}
@@ -113,6 +115,83 @@ it('handles a draft created after the empty GET without touching it and offers a
   expect(model.drafts.size).toBe(1);expect(model.drafts.get(b)).toEqual(before);
   expect(model.sources.size).toBe(0);
   expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(true);
+});
+
+function RecoverableDataStep({fail}:{fail:boolean}){
+  if(fail)throw new Error('Synthetic data-step render failure');
+  return <SavedWorkspaceData enabled connections={[guidedConnection]}/>;
+}
+
+it.each(['enabled','initially disabled','disabled after loading A'] as const)('keeps a guided source-save refusal across panel retry and only shows the current source after reload (drafts %s)',async mode=>{
+  const model=backend();
+  const startsEnabled=mode!=='initially disabled';
+  const staysEnabled=mode==='enabled';
+  if(!startsEnabled)model.onDraftRead(async()=>{throw new Error('Saved drafts are unavailable');});
+  model.createOrdinary(a);
+  const source:SourceRead={version:1,connection_current:true,content:{
+    connection_id:guidedConnection.id,connection_version:1,version_mode:'current',objects:guidedObjects}};
+  model.sources.set(a,source);
+  const workspace=(fail:boolean,draftsEnabled:boolean)=><SellerListingDraftProvider enabled={draftsEnabled} sampleCapability={false}>
+    <GuidedListingFlow capabilities={{...guidedCapabilities,
+      drafts:draftsEnabled?guidedCapabilities.drafts:{enabled:false,status:'unavailable',reason:'disabled'},
+      review:{enabled:false,status:'unavailable',reason:'disabled'},listing_licenses:false}} connections={[guidedConnection]} view="data" navigate={vi.fn()}>
+      <DraftStatus/>
+      <RecoverableWorkspacePanel active><RecoverableDataStep fail={fail}/></RecoverableWorkspacePanel>
+    </GuidedListingFlow>
+  </SellerListingDraftProvider>;
+  const {rerender}=render(workspace(false,startsEnabled),{onCaughtError:vi.fn()});
+  await screen.findByText(/File selection saved to your account/);
+  expect(screen.getByTestId('draft-id').textContent).toBe(startsEnabled?a:'empty');
+  const draftReadsBeforeDisable=model.draftReads;
+  const sourceReadsBeforeDisable=startsEnabled?model.sourceReads.length:0;
+  if(startsEnabled&&!staysEnabled){
+    model.onDraftRead(async()=>{throw new Error('Saved drafts are unavailable');});
+    rerender(workspace(false,false));
+  }
+  await screen.findByText(/File selection saved to your account/);
+  fireEvent.click(await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}));
+  model.createOrdinary(b);
+  model.sources.set(b,{...source,content:{...source.content,objects:[{...guidedObjects[0],key:'weekly/extra.csv'}]}});
+  save();
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(model.writes).toHaveLength(1);
+  expect(model.writes[0].expected_current_draft_id).toBe(a);
+  const readsBeforeRetry=model.sourceReads.slice();
+  const draftReadsBeforeRetry=model.draftReads;
+
+  rerender(workspace(true,staysEnabled));
+  await screen.findByRole('button',{name:'Retry this step'});
+  rerender(workspace(false,staysEnabled));
+  fireEvent.click(screen.getByRole('button',{name:'Retry this step'}));
+  await screen.findByRole('button',{name:'Reload current draft'});
+  expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
+  expect(screen.queryByText(/File selection saved to your account/)).toBeNull();
+  expect(model.sourceReads).toEqual(readsBeforeRetry);
+  expect(model.draftReads).toBe(draftReadsBeforeRetry);
+  expect(model.writes).toHaveLength(1);
+
+  let finishSourceRead!:()=>void;
+  const response=new Promise<void>(resolve=>{finishSourceRead=resolve;});
+  model.onSourceRead(()=>response);
+  fireEvent.click(screen.getByRole('button',{name:'Reload current draft'}));
+  await waitFor(()=>expect(model.sourceReads.at(-1)).toBe(staysEnabled?b:null));
+  await waitFor(()=>expect(model.sourceReads.length).toBeGreaterThan(readsBeforeRetry.length));
+  if(!staysEnabled)expect(screen.getByRole('alert').textContent).toContain('Your listing draft changed.');
+  await act(async()=>{finishSourceRead();});
+  const extra=await screen.findByRole('checkbox',{name:'Select weekly/extra.csv'}) as HTMLInputElement;
+  expect(extra.checked).toBe(true);
+  expect((screen.getByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement).checked).toBe(false);
+  expect(screen.queryByRole('button',{name:'Reload current draft'})).toBeNull();
+  expect(screen.getByTestId('draft-id').textContent).toBe(staysEnabled?b:'empty');
+  if(staysEnabled){
+    expect(model.sourceReads).toContain(b);
+    expect(model.draftReads).toBe(draftReadsBeforeRetry+1);
+  }else{
+    expect(model.sourceReads).toEqual([...readsBeforeRetry,null]);
+    expect(model.sourceReads.slice(sourceReadsBeforeDisable).every(id=>id===null)).toBe(true);
+    expect(model.draftReads).toBe(draftReadsBeforeDisable);
+  }
+  expect(model.writes).toHaveLength(1);
 });
 
 it('reloads an ordinary draft created without an organization and saves its source in an org-scoped session',async()=>{
@@ -210,6 +289,42 @@ it.each([false,true])('fences A while the successful PUT reports B and the draft
   expect((sales as HTMLInputElement).checked).toBe(false);
   expect(screen.getByTestId('draft-id').textContent).toBe(b);
   expect(model.sourceReads).toContain(b);expect(model.sources.has(b)).toBe(false);expect(model.writes).toHaveLength(1);
+});
+
+it.each(['same draft','first save','replacement'] as const)('advances Next only when the deferred draft reload confirms its target: %s',async outcome=>{
+  const model=backend();
+  const initialId=outcome==='first save'?null:a;
+  if(initialId)model.createOrdinary(initialId);
+  const navigate=vi.fn();
+  mount(true,true,true,navigate);
+  await select();
+  expect(screen.getByTestId('draft-id').textContent).toBe(initialId??'empty');
+  const readsBeforeNext=model.draftReads;
+  let finishReload!:(draft:SavedListingDraft)=>void;
+  const draftRead=new Promise<SavedListingDraft>(resolve=>{finishReload=resolve;});
+  model.onDraftRead(()=>draftRead);
+  fireEvent.click(screen.getByRole('button',{name:'Next: Describe and price →'}));
+  await waitFor(()=>expect(model.draftReads).toBe(readsBeforeNext+1));
+  expect(model.writes).toHaveLength(1);
+  expect(model.writes[0]).toMatchObject({expected_current_draft_id:initialId,expected_version:0});
+  expect(model.sources.get(a)?.version).toBe(1);
+  expect(navigate).not.toHaveBeenCalled();
+
+  const current=outcome==='replacement'?model.createOrdinary(b):model.drafts.get(a)!;
+  await act(async()=>finishReload(current));
+  const sales=await screen.findByRole('checkbox',{name:'Select weekly/sales.csv'}) as HTMLInputElement;
+  expect(screen.getByTestId('draft-id').textContent).toBe(current.draft_id);
+  expect(model.writes).toHaveLength(1);
+  if(outcome==='replacement'){
+    expect(model.sourceReads).toContain(b);
+    expect(model.sources.has(b)).toBe(false);
+    expect(model.drafts.get(b)).toEqual(current);
+    expect(sales.checked).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+  }else{
+    expect(sales.checked).toBe(true);
+    expect(navigate.mock.calls).toEqual([['listing']]);
+  }
 });
 
 

@@ -19,7 +19,8 @@ import {SellerListingDraftProvider} from '@/components/seller-workspace/SellerLi
 import { GuidedListingFlow, StepNext } from '@/components/seller-workspace/GuidedListingFlow';
 import SavedLicenseStep from '@/components/seller-workspace/SavedLicenseStep';
 import GuidedPublishStep from '@/components/seller-workspace/GuidedPublishStep';
-import { WorkspaceConfirmation, WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
+import { RecoverableWorkspacePanel, WorkspaceConfirmation, WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
+import { pausePendingPolishAccept } from '@/components/seller-workspace/pendingPolishAccept';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
 import {
   type AWSAuthorization,
@@ -621,10 +622,10 @@ export default function SellerWorkspacePage() {
     <GuidedListingFlow connections={currentConnections} capabilities={capabilities} view={view} navigate={navigate}>
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={navigate} />
-      <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'license'}><SavedLicenseStep /></WorkspacePanel>
+      <RecoverableWorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</RecoverableWorkspacePanel>
+      <RecoverableWorkspacePanel active={view === 'license'}><SavedLicenseStep /></RecoverableWorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
+      <RecoverableWorkspacePanel active={view === 'listing'} onRecovery={pausePendingPolishAccept}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</RecoverableWorkspacePanel>
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} refresh={publicationsRefresh}
         onRefreshOwnerListings={() => setOwnerListingsRefresh(value => value + 1)}
         enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>

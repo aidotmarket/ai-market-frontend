@@ -10,6 +10,7 @@ type PendingAccept = {
   body: AcceptPolishBody;
   publicationTitle?: string;
   sent: boolean;
+  paused: boolean;
   sameSession: () => boolean;
 };
 
@@ -40,9 +41,28 @@ export function usePendingPolishAccept(enabled: boolean) {
   return useSyncExternalStore(enabled ? subscribe : noSubscription, enabled ? pendingPolishAccept : empty, empty);
 }
 
+const notPaused = () => false;
+const isPaused = () => pendingPolishAccept()?.paused ?? false;
+export function usePolishAcceptPaused(enabled: boolean) {
+  return useSyncExternalStore(enabled ? subscribe : noSubscription, enabled ? isPaused : notPaused, notPaused);
+}
+
+export function pausePendingPolishAccept() {
+  const action = pendingPolishAccept();
+  if (!action || action.paused) return;
+  action.paused = true;
+  notify();
+}
+
+export function resumePolishAccept(action: PendingAccept) {
+  if (pendingPolishAccept() !== action || !action.paused) return;
+  action.paused = false;
+  notify();
+}
+
 export function queuePolishAccept(runId: string, body: AcceptPolishBody, publicationTitle?: string) {
   if (pendingPolishAccept()) return;
-  pending = { runId, body, publicationTitle, sent: false, sameSession: sessionLifecycle() };
+  pending = { runId, body, publicationTitle, sent: false, paused: false, sameSession: sessionLifecycle() };
   notify();
 }
 
