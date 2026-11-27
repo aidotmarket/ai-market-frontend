@@ -53,6 +53,8 @@ export default function AllAIMessage({
   const hasRecoveryLinks = !message.fallbackDestinations && (message.safeOutcome === 'answer_unverified' ||
     message.safeOutcome === 'retrieval_unavailable' ||
     message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited');
+  const showPricingRecovery = hasRecoveryLinks && !user && page === '/pricing' &&
+    (message.safeOutcome === 'answer_unverified' || message.safeOutcome === 'retrieval_unavailable');
   // Use the maintained customer copy even when a safe-failure event supplies older wording.
   // Re-localise length errors too, without adding recovery links.
   // Rate-limit copy is account-neutral: signing in does not lift limits.
@@ -78,6 +80,7 @@ export default function AllAIMessage({
         ) : content.trim() && (
           <AllAIMarkdown>{content}</AllAIMarkdown>
         )}
+        {showPricingRecovery && <p className="mt-2">{resources.pricingRecoveryGuidance}</p>}
         {message.listingFailure && (
           <div role="alert" className={content.trim() ? 'mt-2 text-amber-200' : undefined}>
             <p>{resources.listingRecovery[message.listingFailure]} {resources.listingRecovery.guidance}</p>

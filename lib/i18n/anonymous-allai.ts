@@ -24,6 +24,7 @@ interface AnonymousAllAIResources {
   accountRequired: string;
   genericError: string;
   homepageFallbackGuidance: string;
+  pricingRecoveryGuidance: string;
   aimDataSetupGuide: string;
   listingRecovery: {
     error: string;
@@ -63,6 +64,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: 'An account is required for this step.',
     genericError: 'Sorry, something went wrong. Please try again.',
     homepageFallbackGuidance: "I couldn't verify that answer against current listings. Try asking about a specific sector.",
+    pricingRecoveryGuidance: 'General guidance for forecasting seasonal demand. Look for historical weather data, holiday or local event calendars, and weekly sales data or public retail sales indices. Listing prices are one-time payments. Check the individual listing for its displayed price and terms.',
     aimDataSetupGuide: 'AIM Data setup guide',
     listingRecovery: {
       error: "We couldn't get an answer.",
@@ -105,6 +107,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: 'Necesitas una cuenta para realizar este paso.',
     genericError: 'Ha ocurrido un error. Inténtalo de nuevo.',
     homepageFallbackGuidance: 'No pude contrastar esa respuesta con los anuncios actuales. Prueba a preguntar por un sector concreto.',
+    pricingRecoveryGuidance: 'Orientación general para prever la demanda estacional. Busca datos históricos del tiempo, calendarios de festivos o eventos locales y datos de ventas semanales o índices públicos de ventas minoristas. Los precios de los anuncios se abonan en un único pago. Consulta el precio indicado y las condiciones en la ficha de cada anuncio.',
     aimDataSetupGuide: 'Guía de configuración de AIM Data',
     listingRecovery: {
       error: 'No pudimos obtener una respuesta.',
@@ -147,6 +150,7 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     accountRequired: '此步骤需要账户。',
     genericError: '抱歉，出现了问题。请重试。',
     homepageFallbackGuidance: '无法根据当前商品核实该回答。请尝试询问具体行业。',
+    pricingRecoveryGuidance: '预测季节性需求的一般建议。可以查找历史天气数据、节假日或本地活动日历，以及每周销售数据或公开的零售销售指数。商品标价为一次性付款。请在具体商品页面查看所显示的价格和条款。',
     aimDataSetupGuide: 'AIM Data 设置指南',
     listingRecovery: {
       error: '暂时无法获取答案。',
