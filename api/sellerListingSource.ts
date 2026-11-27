@@ -1,6 +1,6 @@
 import { api } from './client';
 import {nativeWrite} from './connector-seller-settings';
-import { checkSellerWorkspaceCrashDraft, clearSellerWorkspaceCrashDraft } from '@/lib/seller-workspace-crash-access';
+import { beginSellerWorkspaceCrashSourceRead, clearSellerWorkspaceCrashDraft } from '@/lib/seller-workspace-crash-access';
 export interface SourceContent {
   connection_id: string; connection_version: number; version_mode: 'current' | 'versions';
   objects: Array<{key: string; version_id: string | null; etag: string; size: number}>;
@@ -9,10 +9,15 @@ export interface SourceRead { version: number; content: SourceContent; connectio
 export interface SourceResponse { source: SourceRead | null; current_draft_id: string | null }
 export interface SourceSaveResponse extends SourceResponse { source: SourceRead }
 export async function readListingSource(draft_id?: string | null): Promise<SourceResponse> {
-  const checkDraft = checkSellerWorkspaceCrashDraft();
-  const { data } = await api.get<SourceResponse>('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined);
-  checkDraft(data?.current_draft_id, draft_id);
-  return data;
+  const finishSourceRead = beginSellerWorkspaceCrashSourceRead(draft_id);
+  let response: SourceResponse | undefined;
+  try {
+    const { data } = await api.get<SourceResponse>('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined);
+    response = data;
+    return data;
+  } finally {
+    finishSourceRead?.(response);
+  }
 }
 export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, expected_current_draft_id: string | null, draft_id?: string | null): Promise<SourceSaveResponse> {
   clearSellerWorkspaceCrashDraft();

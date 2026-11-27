@@ -17,6 +17,7 @@ type CrashObservation = {
   getProof: SellerWorkspaceCrashProof;
   dispose: () => void;
   draftRevision: number;
+  pendingSourceReads: number;
   draft?: { uuid: string };
 };
 let rootAccess: CrashObservation | undefined;
@@ -33,9 +34,10 @@ export function discardRootSellerCrashAccessOutside(pathname: string | null) {
 }
 
 export function getSellerWorkspaceCrashProof(session: SellerSession) {
+  if (invalidatedObservations.has(session)) return null;
   const token = getCurrentSellerSessionToken(session);
   if (!token) return null;
-  const draft = rootAccess?.session === session && isSellerWorkspacePath(rootAccess.pathname)
+  const draft = rootAccess?.session === session && rootAccess.pendingSourceReads === 0 && isSellerWorkspacePath(rootAccess.pathname)
     ? rootAccess.draft : undefined;
   return { token, draft };
 }
@@ -58,14 +60,27 @@ export function beginSellerWorkspaceDraftObservation() {
   };
 }
 
-// A conflicting response invalidates the optional pointer within the same
-// capability observation. Only the current draft store can establish it again.
 export function checkSellerWorkspaceCrashDraft() {
   const access = rootAccess;
-  return (currentDraftId: unknown, expectedDraftId?: string | null) => {
-    const proof = access?.getProof();
-    const previous = proof?.draft?.uuid ?? expectedDraftId;
-    if (proof && isCanonicalDraftUuid(previous) && currentDraftId !== previous) {
+  return (currentDraftId: unknown) => {
+    if (access?.getProof() && access.draft && currentDraftId !== access.draft.uuid) {
+      clearSellerWorkspaceCrashDraft();
+    }
+  };
+}
+
+export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | null) {
+  const access = rootAccess;
+  if (!access?.getProof()) return;
+  // Either read can finish first. Withhold the pointer until they agree.
+  access.pendingSourceReads++;
+  return (response?: { current_draft_id: unknown }) => {
+    access.pendingSourceReads--;
+    if (!response || !access.getProof()) return;
+    const current = response.current_draft_id;
+    if (!access.draft || current !== access.draft.uuid || (expectedDraftId && current !== expectedDraftId)) {
+      // A source read cannot prove a pointer. When it finishes before any
+      // draft is proven, retire overlapping current-draft reads as well.
       clearSellerWorkspaceCrashDraft();
     }
   };
@@ -87,7 +102,7 @@ export function observeRootSellerCrashAccess(pathname: string | null, session: S
   const unsubscribeOwner = subscribeAuthSessionOwner(invalidate);
   window.addEventListener('capabilities:changed', invalidate);
   const observation: CrashObservation = {
-    pathname, session, draftRevision: 0,
+    pathname, session, draftRevision: 0, pendingSourceReads: 0,
     getProof: () => rootAccess === observation && isSellerWorkspacePath(pathname) ? getSellerWorkspaceCrashProof(session) : null,
     dispose: () => {
       unsubscribeAuth();

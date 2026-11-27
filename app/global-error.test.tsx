@@ -1,20 +1,26 @@
 // @vitest-environment jsdom
-import { StrictMode } from 'react';
+import { StrictMode, useState, type ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
-import DashboardLayout from './dashboard/layout';
-import GlobalError from './global-error';
-import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
-import { checkSellerWorkspaceCrashDraft, clearRootSellerCrashAccess, getRootSellerCrashAccess } from '@/lib/seller-workspace-crash-access';
-import { SellerListingDraftProvider, useSellerListingDraft } from '@/components/seller-workspace/SellerListingDraftStore';
-import { useAuthStore } from '@/store/auth';
 
-const { getCapabilities, logout, push, readListingDraft } = vi.hoisted(() => ({
+let DashboardLayout: typeof import('./dashboard/layout').default;
+let GlobalError: typeof import('./global-error').default;
+let advanceAuthSessionOwner: typeof import('@/lib/auth-session-owner').advanceAuthSessionOwner;
+let clearRootSellerCrashAccess: typeof import('@/lib/seller-workspace-crash-access').clearRootSellerCrashAccess;
+let getRootSellerCrashAccess: typeof import('@/lib/seller-workspace-crash-access').getRootSellerCrashAccess;
+let SellerListingDraftProvider: typeof import('@/components/seller-workspace/SellerListingDraftStore').SellerListingDraftProvider;
+let useSellerListingDraft: typeof import('@/components/seller-workspace/SellerListingDraftStore').useSellerListingDraft;
+let WorkspacePanel: typeof import('@/components/seller-workspace/WorkspacePanel').WorkspacePanel;
+let readListingSource: typeof import('@/api/sellerListingSource').readListingSource;
+let useAuthStore: typeof import('@/store/auth').useAuthStore;
+
+const { getCapabilities, logout, push, readListingDraft, sourceGet } = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
   logout: vi.fn(async () => {}),
   push: vi.fn(),
   readListingDraft: vi.fn(),
+  sourceGet: vi.fn(),
 }));
 vi.mock('next/navigation', async importOriginal => ({
   ...await importOriginal<typeof import('next/navigation')>(),
@@ -23,6 +29,8 @@ vi.mock('next/navigation', async importOriginal => ({
 vi.mock('@/api/capabilities', () => ({ getCapabilities }));
 vi.mock('@/api/auth', () => ({ logout }));
 vi.mock('@/api/sellerListingDraft', () => ({ readListingDraft }));
+vi.mock('@/api/client', () => ({ api: { get: sourceGet } }));
+vi.mock('@/api/connector-seller-settings', () => ({ nativeWrite: vi.fn() }));
 vi.mock('@/api/sellerGateways', () => ({ listSellerGateways: async () => [] }));
 vi.mock('@/api/sellerWorkspace', () => ({
   getSellerWorkspaceCapabilities: async () => null,
@@ -53,16 +61,29 @@ function DraftProbe() {
   return <button type="button" disabled={!loaded} onClick={() => void reload()}>Read draft again</button>;
 }
 
-async function observeActiveSeller(draftEnabled?: boolean) {
+function BrokenPanel(): never { throw new Error('synthetic panel failure'); }
+
+function CrashPanelProbe({ label }: { label: string }) {
+  const [broken, setBroken] = useState(false);
+  return <>
+    <button type="button" onClick={() => setBroken(true)}>Crash {label}</button>
+    <WorkspacePanel active showReloadOnError crashPanel="WorkspaceData">
+      {broken ? <BrokenPanel /> : <p>{label} ready</p>}
+    </WorkspacePanel>
+  </>;
+}
+
+async function observeActiveSeller(draftEnabled?: boolean, panels?: ReactNode) {
   signIn();
   const layout = (pathname: string, enabled = draftEnabled) => (
     <PathnameContext.Provider value={pathname}>
       <DashboardLayout><p>Workspace ready</p>
         {enabled !== undefined && <SellerListingDraftProvider enabled={enabled} sampleCapability={false}><DraftProbe /></SellerListingDraftProvider>}
+        {panels}
       </DashboardLayout>
     </PathnameContext.Provider>
   );
-  const dashboard = render(layout(workspace));
+  const dashboard = render(layout(workspace), { onCaughtError: vi.fn() });
   await screen.findByText('Workspace ready');
   return {
     ...dashboard,
@@ -92,12 +113,35 @@ function renderFallback(pathname: string | null = workspace) {
   };
 }
 
-beforeEach(() => {
+function expectBuiltInFallback(container: Document) {
+  expect(container.documentElement.id).toBe('__next_error__');
+  expect(container.querySelector('h2')?.textContent).toContain('Application error: a client-side exception');
+  expect(container.querySelector('button')).toBeNull();
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(settle => { resolve = settle; });
+  return { promise, resolve };
+}
+
+beforeEach(async () => {
+  // Each case represents a fresh page with its own three-report budget.
+  vi.resetModules();
+  ({ default: DashboardLayout } = await import('./dashboard/layout'));
+  ({ default: GlobalError } = await import('./global-error'));
+  ({ advanceAuthSessionOwner } = await import('@/lib/auth-session-owner'));
+  ({ clearRootSellerCrashAccess, getRootSellerCrashAccess } = await import('@/lib/seller-workspace-crash-access'));
+  ({ SellerListingDraftProvider, useSellerListingDraft } = await import('@/components/seller-workspace/SellerListingDraftStore'));
+  ({ WorkspacePanel } = await import('@/components/seller-workspace/WorkspacePanel'));
+  ({ readListingSource } = await import('@/api/sellerListingSource'));
+  ({ useAuthStore } = await import('@/store/auth'));
   window.history.replaceState(null, '', workspace);
   useAuthStore.setState({ user: null, token: null, isAuthenticated: false, hydrated: false,
     isLoading: false, pendingTwoFactor: null, hydrate: hydrate.mockClear() });
   getCapabilities.mockReset().mockResolvedValue(capability('active'));
   readListingDraft.mockReset().mockResolvedValue({ draft_id: draftUuid, version: 1, content: { title: 'synthetic private title' } });
+  sourceGet.mockReset();
   vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
   vi.stubGlobal('fetch', fetchMock.mockReset().mockResolvedValue(new Response(null, { status: 204 })));
@@ -115,8 +159,7 @@ it('reports once after the established dashboard observation outlives its provid
   await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
   dashboard.unmount();
   const fallback = renderFallback();
-  expect(fallback.container.querySelector('h1')?.textContent).toBe('Something went wrong in Seller Workspace');
-  expect(fallback.container.querySelector('button')?.textContent).toBe('Reload page');
+  expectBuiltInFallback(fallback.container);
   fallback.changeError();
   await Promise.resolve();
   expect(fetchMock).toHaveBeenCalledOnce();
@@ -190,12 +233,127 @@ it('discards a draft response from before active capability was re-established',
 it('clears conflicting pointers from normal source observations without adopting the source ID', async () => {
   await observeActiveSeller(true);
   await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
-  const checkDraft = checkSellerWorkspaceCrashDraft();
-  checkDraft(draftUuid);
+  sourceGet.mockResolvedValueOnce({ data: { source: null, current_draft_id: draftUuid } });
+  await readListingSource(draftUuid);
   expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
-  checkDraft(replacementUuid, draftUuid);
+  sourceGet.mockResolvedValueOnce({ data: { source: null, current_draft_id: replacementUuid } });
+  await readListingSource(draftUuid);
   expect(getRootSellerCrashAccess(workspace)?.()?.draft).toBeUndefined();
   expect(readListingDraft).toHaveBeenCalledOnce();
+});
+
+it.each(['source first', 'draft first'] as const)('omits an ambiguous draft UUID from both fallbacks when the %s response wins', async order => {
+  const currentDraft = deferred<unknown>();
+  const source = deferred<unknown>();
+  readListingDraft.mockReturnValueOnce(currentDraft.promise);
+  sourceGet.mockReturnValueOnce(source.promise);
+  await observeActiveSeller(true, <><CrashPanelProbe label="ambiguous" /><CrashPanelProbe label="fresh" /></>);
+  await waitFor(() => expect(readListingDraft).toHaveBeenCalledOnce());
+  const sourceRead = readListingSource();
+  expect(sourceGet).toHaveBeenCalledExactlyOnceWith('/seller-workspace/listing-source', undefined);
+
+  const finishSource = () => source.resolve({ data: { source: null, current_draft_id: replacementUuid } });
+  const finishDraft = () => currentDraft.resolve({ draft_id: draftUuid, version: 1, content: {} });
+  await act(async () => { if (order === 'source first') finishSource(); else finishDraft(); });
+  expect(getRootSellerCrashAccess(workspace)?.()?.draft).toBeUndefined();
+  await act(async () => { if (order === 'source first') finishDraft(); else finishSource(); });
+  await sourceRead;
+  expect(getRootSellerCrashAccess(workspace)?.()?.draft).toBeUndefined();
+
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Crash ambiguous' })); });
+  expect(screen.getByRole('alert').textContent).toContain('Reload the page');
+  const fallback = renderFallback();
+  await Promise.resolve();
+  expect(fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string))).toEqual([
+    expect.objectContaining({ step: 'data' }), expect.objectContaining({ step: 'root' }),
+  ]);
+  for (const [, request] of fetchMock.mock.calls) {
+    expect(JSON.parse(request!.body as string)).not.toHaveProperty('draft_uuid');
+  }
+  fallback.unmount();
+  expect(getCapabilities).toHaveBeenCalledOnce();
+  expect(readListingDraft).toHaveBeenCalledOnce();
+  expect(sourceGet).toHaveBeenCalledOnce();
+
+  readListingDraft.mockResolvedValueOnce({ draft_id: replacementUuid, version: 1, content: {} });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+  expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(replacementUuid);
+  if (order === 'source first') {
+    renderFallback();
+    await Promise.resolve();
+  } else {
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Crash fresh' })); });
+  }
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(JSON.parse(fetchMock.mock.calls[2][1]!.body as string)).toMatchObject({
+    step: order === 'source first' ? 'root' : 'data', draft_uuid: replacementUuid,
+  });
+  expect(getCapabilities).toHaveBeenCalledOnce();
+  expect(readListingDraft).toHaveBeenCalledTimes(2);
+  expect(sourceGet).toHaveBeenCalledOnce();
+});
+
+it('keeps mounted panels and the root silent after a batched token clear and restore until active capability is observed again', async () => {
+  await observeActiveSeller(undefined, <>
+    <CrashPanelProbe label="revoked" /><CrashPanelProbe label="pending" /><CrashPanelProbe label="revalidated" />
+  </>);
+  const stillMounted = screen.getByText('revalidated ready');
+  expect(getRootSellerCrashAccess(workspace)?.()?.token).toBe('synthetic-token');
+  act(() => {
+    useAuthStore.setState({ token: null });
+    useAuthStore.setState({ token: 'synthetic-token' });
+    fireEvent.click(screen.getByRole('button', { name: 'Crash revoked' }));
+  });
+  expect(screen.getByRole('alert').textContent).toContain('Reload the page');
+  const revoked = renderFallback();
+  await Promise.resolve();
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(getCapabilities).toHaveBeenCalledOnce();
+  revoked.unmount();
+
+  const revalidation = deferred<ReturnType<typeof capability>>();
+  getCapabilities.mockReturnValueOnce(revalidation.promise);
+  act(() => window.dispatchEvent(new Event('capabilities:changed')));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Crash pending' })); });
+  const pending = renderFallback();
+  await Promise.resolve();
+  expect(screen.getAllByRole('alert')).toHaveLength(2);
+  expect(fetchMock).not.toHaveBeenCalled();
+  pending.unmount();
+
+  await act(async () => { revalidation.resolve(capability('active')); });
+  expect(screen.getByText('revalidated ready')).toBe(stillMounted);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Crash revalidated' })); });
+  renderFallback();
+  await Promise.resolve();
+  expect(fetchMock.mock.calls.map(([, request]) => ({
+    step: JSON.parse(request!.body as string).step, headers: request?.headers,
+  }))).toEqual(['data', 'root'].map(step => ({
+    step, headers: expect.objectContaining({ Authorization: 'Bearer synthetic-token' }),
+  })));
+  expect(getCapabilities).toHaveBeenCalledTimes(2);
+  expect(readListingDraft).not.toHaveBeenCalled();
+  expect(sourceGet).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['FRONTEND_BUILD_REVISION', undefined],
+  ['FRONTEND_BUILD_REVISION', 'invalid-build-revision'],
+  ['NEXT_PUBLIC_API_URL', undefined],
+  ['NEXT_PUBLIC_API_URL', 'https://invalid.example'],
+] as const)('renders the built-in root fallback and sends zero posts with %s set to %s', async (name, value) => {
+  vi.stubEnv(name, value);
+  await observeActiveSeller(undefined, <CrashPanelProbe label="unconfigured" />);
+  expect(getRootSellerCrashAccess(workspace)?.()?.token).toBe('synthetic-token');
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Crash unconfigured' })); });
+  expect(screen.getByRole('alert').textContent).toContain('Reload the page');
+  const fallback = renderFallback();
+  expectBuiltInFallback(fallback.container);
+  await Promise.resolve();
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(getCapabilities).toHaveBeenCalledOnce();
+  expect(readListingDraft).not.toHaveBeenCalled();
+  expect(sourceGet).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -208,8 +366,7 @@ it.each([
   (await observeActiveSeller()).unmount();
   window.history.replaceState(null, '', browserPath);
   const fallback = renderFallback(routerPath);
-  expect(fallback.container.querySelector('h2')?.textContent).toContain('Application error');
-  expect(fallback.container.querySelector('button')).toBeNull();
+  expectBuiltInFallback(fallback.container);
   fallback.unmount();
   window.history.replaceState(null, '', workspace);
   renderFallback();
@@ -230,7 +387,7 @@ it.each(['logout', 'account', 'generation', 'token', 'pre-auth', 'capability'] a
     if (change === 'capability') window.dispatchEvent(new Event('capabilities:changed'));
     signIn();
     const fallback = renderFallback();
-    expect(fallback.container.querySelector('button')?.textContent).toBe('Reload page');
+    expectBuiltInFallback(fallback.container);
     await Promise.resolve();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(getCapabilities).toHaveBeenCalledOnce();
@@ -270,7 +427,7 @@ it('does not reattach a revoked observation when the same dashboard returns to W
 it('never starts a read for a raw seller role or reports an old fallback when proof appears', async () => {
   signIn('seller');
   const fallback = renderFallback();
-  expect(fallback.container.querySelector('button')?.textContent).toBe('Reload page');
+  expectBuiltInFallback(fallback.container);
   expect(getCapabilities).not.toHaveBeenCalled();
   await observeActiveSeller();
   fallback.changeError();
