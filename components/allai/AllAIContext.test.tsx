@@ -61,12 +61,14 @@ function RenderedMessages() {
 
 function renderProvider(storedSessionId = 'stale-session', showMessages = false) {
   sessionStorage.setItem(SESSION_KEY, storedSessionId);
-  return render(
+  const provider = () => (
     <AllAIProvider>
       <Probe />
       {showMessages && <RenderedMessages />}
     </AllAIProvider>
   );
+  const view = render(provider());
+  return { ...view, rerenderProvider: () => view.rerender(provider()) };
 }
 
 function response(status: number, data: unknown = {}) {
@@ -1134,7 +1136,7 @@ describe('static Pricing recovery', () => {
   const question = 'What data could help me forecast seasonal demand?';
   const recoveryOutcomes = ['answer_unverified', 'retrieval_unavailable'] as const;
 
-  async function mountRecovery(page: string, reply: Response, signedIn = false) {
+  async function mountRecovery(page: string, reply: Response | Promise<Response>, signedIn = false) {
     mocks.pathname = page;
     if (signedIn) {
       mocks.auth.user = { role: 'buyer' };
@@ -1149,10 +1151,11 @@ describe('static Pricing recovery', () => {
       if (url === MESSAGE_URL) return reply;
       throw new Error(`Unexpected request: ${url}`);
     });
-    renderProvider('stale-session', true);
+    const view = renderProvider('stale-session', true);
     if (context().anonymousSurfaceActive) {
       await waitFor(() => expect(context().anonymousAvailable).toBe(true));
     }
+    return view;
   }
 
   it.each(recoveryOutcomes.flatMap(outcome =>
@@ -1193,6 +1196,85 @@ describe('static Pricing recovery', () => {
         .toBe(signedIn ? '/requests/new' : '/register?redirect=%2Frequests%2Fnew');
     }
   );
+
+  it.each([
+    { page: '/find-data', signedIn: false, outcome: 'answer_unverified' },
+    { page: '/pricing', signedIn: true, outcome: 'retrieval_unavailable' },
+  ] as const)('omits advice after moving from $page (signed in: $signedIn) to signed-out Pricing', async ({
+    page, signedIn, outcome,
+  }) => {
+    const view = await mountRecovery(page, sseEvents({ type: 'safe_failure', outcome }), signedIn);
+    act(() => context().setLocale('en'));
+    await send(question);
+
+    const expectedCopy = anonymousAllAIResources('en').safeOutcomes[outcome];
+    expect(screen.getByText(expectedCopy)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    const failureId = context().messages.at(-1)?.id;
+    const calls = fetchMock.mock.calls.length;
+    mocks.pathname = '/pricing';
+    mocks.auth.user = null;
+    mocks.auth.token = null;
+    view.rerenderProvider();
+
+    expect(context().page).toBe('/pricing');
+    expect(context().isSignedIn).toBe(false);
+    expect(context().messages.at(-1)).toMatchObject({ id: failureId, safeOutcome: outcome });
+    expect(screen.getByText(expectedCopy)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it('omits advice when navigation into Pricing precedes a non-Pricing failure', async () => {
+    const reply = deferred<Response>();
+    const view = await mountRecovery('/pricing/details', reply.promise);
+    act(() => context().setLocale('en'));
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage(question); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+
+    mocks.pathname = '/pricing';
+    view.rerenderProvider();
+    await act(async () => {
+      reply.resolve(sseEvents({ type: 'safe_failure', outcome: 'answer_unverified' }));
+      await sending;
+    });
+
+    expect(messagePayload(messageCalls()[0]).context).toEqual({ page: '/pricing/details' });
+    expect(context().page).toBe('/pricing');
+    expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes.answer_unverified)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
+  });
+
+  it('retains Pricing eligibility across a pending response and checks live route and auth', async () => {
+    const reply = deferred<Response>();
+    const view = await mountRecovery('/pricing', reply.promise);
+    act(() => context().setLocale('en'));
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage(question); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+
+    mocks.pathname = '/pricing/details';
+    view.rerenderProvider();
+    await act(async () => {
+      reply.resolve(sseEvents({ type: 'safe_failure', outcome: 'retrieval_unavailable' }));
+      await sending;
+    });
+    expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes.retrieval_unavailable)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+
+    mocks.pathname = '/pricing';
+    view.rerenderProvider();
+    expect(screen.getByText(adviceCopy.en)).toBeTruthy();
+
+    mocks.auth.user = { role: 'buyer' };
+    mocks.auth.token = 'signed-in-token';
+    view.rerenderProvider();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
+    expect(sessionStorage.getItem(SESSION_KEY)).toBe('stale-session');
+  });
 
   it.each(['no_matches', 'surface_disabled', 'rate_limited', 'message_too_long', 'unsupported_language'] as const)(
     'omits advice on signed-out Pricing after %s', async (outcome) => {
