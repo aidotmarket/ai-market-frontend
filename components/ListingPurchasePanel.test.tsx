@@ -41,7 +41,7 @@ describe('VersionSelector', () => {
     expect(html).toContain('v2');
     expect(html).toContain('Jun 2, 2026');
     expect(html).toContain('2.05 KB');
-    expect(html).toContain('20 individual files, 2.05 KB total.');
+    expect(html).toContain('20 files (2.05 KB)');
     expect(html).toContain('published a file list for this version.');
   });
 
@@ -52,7 +52,7 @@ describe('VersionSelector', () => {
         fileBreakdown={[{ format: 'parquet', count: 1, size_bytes: 7_520_000 }]} />,
     );
 
-    expect(html).toContain('1 PARQUET file, 7.52 MB total.');
+    expect(html).toContain('1 file (Parquet · 7.52 MB)');
   });
 
   it('shows the public inventory only for the current version', () => {
@@ -66,6 +66,7 @@ describe('VersionSelector', () => {
     );
 
     expect(render('v2-id')).toContain('CSV tables: 2 files · 1.2 KB');
+    expect(render('v2-id')).toContain('20 files (CSV, JSONL · 2.05 KB)');
     expect(render('v2-id')).toContain('JSONL tables: 1 file · 800 B');
     expect(render('v2-id')).toContain('Other files: 1 file · 48 B');
     expect(render('v2-id')).toContain('This list covers 4 of 20 download files.');
@@ -79,8 +80,20 @@ describe('VersionSelector', () => {
       <VersionSelector versions={[version]} selectedVersionId={version.version_id} onSelectVersion={() => undefined} />,
     );
 
-    expect(html).toContain('1 download file, 2.05 KB total.');
+    expect(html).toContain('1 file (2.05 KB)');
     expect(html).toContain('The seller hasn&#x27;t published a file list for this version.');
+  });
+
+  it.each([['application/zip', 'ZIP'], ['.tar.gz', 'TAR.GZ']])('describes an explicitly published %s archive and lists its contents', (dataFormat, label) => {
+    const version = { ...versions[1], object_count: 1, total_size_bytes: 7_520_000 };
+    const html = renderToStaticMarkup(
+      <VersionSelector versions={[version]} selectedVersionId={version.version_id} onSelectVersion={() => undefined}
+        dataFormat={dataFormat} fileBreakdown={[{ format: 'csv', count: 2, size_bytes: 8_000_000 }]} />,
+    );
+
+    expect(html).toContain(`One ${label} archive (7.52 MB)`);
+    expect(html).toContain('Files included');
+    expect(html).toContain('CSV tables: 2 files · 8 MB');
   });
 
   it('defaults to the latest active version and keeps superseded versions visible', () => {

@@ -731,12 +731,22 @@ describe('SignedOutPurchase', () => {
     expect(knownFacts).toContain('Download window</dt><dd class="font-medium text-gray-900">14 days after purchase');
     expect(knownFacts).toContain('License</dt><dd class="font-medium text-gray-900">CC-BY-4.0');
     expect(knownFacts).toContain('Data format (as described by the seller)</dt><dd class="font-medium text-gray-900">CSV');
-    expect(knownFacts).toContain('Fulfillment type</dt><dd class="font-medium text-gray-900">File download (1 file)</dd>');
+    expect(knownFacts).toContain('Download</dt><dd class="font-medium text-gray-900">1 file</dd>');
     expect(unavailableFacts).not.toContain('Selected version');
     expect(unavailableFacts).not.toContain('Download window');
     expect(unavailableFacts).not.toContain('License');
     expect(unavailableFacts).not.toContain('Data format');
     expect(unavailableFacts).not.toContain('Fulfillment type');
+  });
+
+  it.each([
+    ['one ZIP archive (7.52 MB)', 'one ZIP archive (7.52 MB)'],
+    ['2 files (CSV, Parquet · 7.52 MB)', '2 files (CSV, Parquet · 7.52 MB)'],
+    [undefined, 'Download link after purchase'],
+  ])('shows the download preview for %s', (downloadDescription, label) => {
+    const html = renderToStaticMarkup(<SignedOutPurchase slug="dataset" price={10} pricingType="one_time"
+      fulfillmentType="file_download" downloadDescription={downloadDescription} />);
+    expect(html).toContain(`Download</dt><dd class="font-medium text-gray-900">${label}</dd>`);
   });
 });
 

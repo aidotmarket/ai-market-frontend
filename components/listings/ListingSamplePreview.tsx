@@ -93,7 +93,7 @@ export default function ListingSamplePreview({slug, listingId, onManifest, empty
   }, [slug, listingId, onManifest]);
   const guidance = emptyNotice && <p className="text-sm text-gray-600">{emptyNotice}</p>;
   if (state.kind === 'absent') return guidance ?? null;
-  return <section data-listing-sample="" aria-label="Seller-selected sample" className="min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+  return <section id={state.kind === 'ready' || state.kind === 'verified' ? 'listing-sample-preview' : undefined} data-listing-sample="" aria-label="Seller-selected sample" className="scroll-mt-24 min-w-0 max-w-full space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     {state.kind === 'ready' && <button type="button" onClick={() => startRef.current(true)} className="rounded border border-indigo-700 px-3 py-2 text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-700">View sample</button>}
     {state.kind === 'loading' && <><p role="status" aria-live="polite">Verifying sample…</p>{guidance}</>}
     {state.kind === 'unavailable' && <div role="status" aria-live="polite" className="space-y-3">

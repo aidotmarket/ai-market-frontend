@@ -534,6 +534,7 @@ export function SignedOutPurchase({
   const licenseLabel = license?.trim() || null;
   const dataFormatLabel = dataFormat?.trim().replace(/_/g, ' ').toUpperCase();
   const fulfillmentTypeLabel = formatPurchaseFact(fulfillmentType);
+  const isFileDownload = fulfillmentTypeLabel === 'File download' || (!fulfillmentTypeLabel && !!downloadDescription);
 
   return (
     <div>
@@ -592,12 +593,13 @@ export function SignedOutPurchase({
               <dd className="font-medium text-gray-900">{dataFormatLabel}</dd>
             </div>
           )}
-          {fulfillmentTypeLabel && (
+          {(isFileDownload || fulfillmentTypeLabel) && (
             <div className="flex justify-between gap-3">
-              <dt>Fulfillment type</dt>
+              <dt className={isFileDownload && !downloadDescription ? 'sr-only' : undefined}>
+                {isFileDownload ? 'Download' : 'Fulfillment type'}
+              </dt>
               <dd className="font-medium text-gray-900">
-                {fulfillmentTypeLabel}
-                {fulfillmentTypeLabel === 'File download' && downloadDescription && ` (${downloadDescription})`}
+                {isFileDownload ? downloadDescription ?? 'Download link after purchase' : fulfillmentTypeLabel}
               </dd>
             </div>
           )}

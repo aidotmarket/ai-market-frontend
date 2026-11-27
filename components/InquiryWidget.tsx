@@ -17,7 +17,6 @@ import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
 import { mergeConversationMessages } from '@/lib/conversationMessages';
 import { useAllAILocale } from '@/components/allai/AllAIContext';
-import { ListingRecoveryLinks } from '@/components/allai/AllAIFallback';
 import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   anonymousAllAIResources,
@@ -31,9 +30,11 @@ interface Props {
   listingTitle: string;
   schemaHref?: '#listing-schema' | '#listing-key-fields';
   documentationHref?: '#technical-documentation' | '#listing-documentation';
+  sampleHref?: '#listing-sample-files' | '#listing-sample-preview';
 }
 
 const DRAFT_KEY_PREFIX = 'inquiry_draft_';
+const QUESTION_SEND_FAILED = "We couldn't send your question. Try sending it again.";
 const ANONYMOUS_WAIT_NOTICE_DELAY_MS = 8_000;
 const ANONYMOUS_ATTEMPT_DEADLINE_MS = 45_000;
 
@@ -52,14 +53,16 @@ export default function InquiryWidget(props: Props) {
   return <ListingInquiryWidget key={props.listingId} {...props} />;
 }
 
-function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref, documentationHref }: Props) {
+function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref, documentationHref, sampleHref }: Props) {
   const { isAuthenticated } = useAuthStore();
   const { toast } = useToast();
   const locale = useAllAILocale();
   const resources = anonymousAllAIResources(locale);
   const recovery = resources.listingRecovery;
+  const signInHref = `/login?redirect=/listings/${encodeURIComponent(listingSlug)}`;
 
   const [question, setQuestion] = useState('');
+  const [hasSellerDraft, setHasSellerDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
@@ -104,7 +107,10 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
     setReplying(false);
     setShowTyping(false);
     setSubmissionError(null);
-    if (renderedVisit.owner !== null) setQuestion('');
+    if (renderedVisit.owner !== null) {
+      setQuestion('');
+      setHasSellerDraft(false);
+    }
     if (creating.current) setSubmitting(false);
     creating.current = false;
     sending.current = false;
@@ -147,6 +153,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
     const draft = sessionStorage.getItem(DRAFT_KEY_PREFIX + listingId);
     if (draft) {
       setQuestion(draft);
+      setHasSellerDraft(true);
       sessionStorage.removeItem(DRAFT_KEY_PREFIX + listingId);
     }
   }, [listingId]);
@@ -192,7 +199,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
     current
   );
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (requestSeller = false) => {
     if (!current() || creating.current || anonymousAbortRef.current || !question.trim()) return;
 
     setSubmissionError(null);
@@ -381,7 +388,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
     creating.current = true;
     setSubmitting(true);
     try {
-      const conv = await createInquiry(listingId, question.trim());
+      const conv = await (requestSeller
+        ? createInquiry(listingId, question.trim(), true)
+        : createInquiry(listingId, question.trim()));
       if (!current()) return;
       setConversation(conv);
       setMessages(conv.messages);
@@ -392,20 +401,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
       if (lastMsg) updateSince(lastMsg.created_at);
     } catch (err) {
       if (!current()) return;
-      if (err instanceof AxiosError) {
-        if (err.response?.status === 409) {
-          const message = 'You already have an inquiry for this listing. Check your dashboard.';
-          setSubmissionError(message);
-          toast(message, 'info');
-        } else {
-          const message = customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your question"));
-          setSubmissionError(message);
-          toast(message, 'error');
-        }
-      } else {
-        const message = customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your question"));
+      if (err instanceof AxiosError && err.response?.status === 409) {
+        const message = 'You already have an inquiry for this listing. Check your dashboard.';
         setSubmissionError(message);
-        toast(message, 'error');
+        toast(message, 'info');
+      } else {
+        setSubmissionError(customerRefusal(err, INQUIRY_REFUSALS, QUESTION_SEND_FAILED));
       }
     } finally {
       if (current()) {
@@ -474,10 +475,14 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
 
   const escalatedStatus = conversation?.status === 'escalated' || conversation?.status === 'awaiting_seller';
   const showAnonymousWaitNotice = anonymousSubmissionInProgress && anonymousWaitElapsed;
-  const publicInformationLinks = (schemaHref || documentationHref) && (
+  const showSellerButton = isAuthenticated && (hasSellerDraft || submissionError === QUESTION_SEND_FAILED || !!anonymousError);
+  const publicInformationLinks = (schemaHref || documentationHref || sampleHref) && (
     <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
       {schemaHref && <a href={schemaHref} className="underline">{recovery.schema}</a>}
       {documentationHref && <a href={documentationHref} className="underline">{recovery.documentation}</a>}
+      {sampleHref && <a href={sampleHref} className={sampleHref === '#listing-sample-preview'
+        ? 'hidden underline group-has-[#listing-sample-preview]/listing:inline'
+        : 'underline'}>{recovery.sample}</a>}
     </span>
   );
 
@@ -546,11 +551,15 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
   // Initial question form
   return (
     <div className="rounded-xl border border-gray-200 p-6">
-      <h3 className="font-semibold text-gray-900 mb-3">Ask a Question</h3>
+      <h3 id="ask-a-question" tabIndex={-1} className="scroll-mt-24 font-semibold text-gray-900 mb-3">Ask a Question</h3>
       <p id="listing-question-guidance" className="text-sm text-gray-500 mb-4">
         {isAuthenticated
-          ? 'allAI checks public listing information first. If allAI can’t answer from that information, your question can be passed to the seller.'
-          : 'allAI checks public listing information first. Sign in to contact the seller.'}
+          ? 'allAI looks for an answer in the public listing information first. If it can’t answer, ai.market passes your question to the seller.'
+          : <>allAI answers using public listing information. If you need an answer from the seller, you must{' '}
+              <Link href={signInHref} onClick={preserveAnonymousDraft} className="font-medium text-[#3F51B5] underline">
+                sign in to contact them through ai.market
+              </Link>.
+            </>}
       </p>
       {anonymousMessages.length > 0 && (
         <div className="max-h-80 overflow-y-auto mb-4" aria-live="polite">
@@ -565,6 +574,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
                   {message.safeOutcome === 'retrieval_unavailable' ? recovery.retrievalUnavailable : recovery.noAnswer}
                   {publicInformationLinks}
                   {message.fallbackDestinations?.support && <Link href={message.fallbackDestinations.support} className="mt-2 inline-block underline">{recovery.support}</Link>}
+                  {isAuthenticated && <span className="mt-2 block">You can send your question below so ai.market can pass it to the seller if needed.</span>}
                 </>;
               }
               return message.safeOutcome ? resources.safeOutcomes[message.safeOutcome] : message.content;
@@ -573,7 +583,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
         </div>
       )}
       <textarea
-        id="ask-a-question"
+        aria-label="Your question"
         aria-describedby="listing-question-guidance"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
@@ -582,7 +592,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
         className="w-full scroll-mt-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
       />
       <button
-        onClick={handleSubmit}
+        onClick={() => void handleSubmit()}
         disabled={submitting || !question.trim()}
         className="mt-3 w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
@@ -597,7 +607,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
               : 'Submitting...'}
           </>
         ) : (
-          'Submit Question'
+          isAuthenticated ? 'Submit Question' : 'Ask allAI'
         )}
       </button>
       {(!isAuthenticated || anonymousSubmissionInProgress) && (
@@ -611,7 +621,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
             <>
               allAI is checking current public information. You may keep waiting, or{' '}
               <Link
-                href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+                href={signInHref}
                 onClick={preserveAnonymousDraft}
                 className="text-[#3F51B5] hover:underline"
               >
@@ -622,29 +632,35 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
         </p>
       )}
       {isAuthenticated && submissionError && (
-        <p className="text-xs text-red-600 mt-2" role="alert">
-          {submissionError === INQUIRY_UNAVAILABLE ? <>This listing isn&apos;t available for questions right now. <Link href="/find-data" className="underline">Browse similar data.</Link></> : submissionError}
-        </p>
+        <div className="text-sm text-gray-700 mt-2" role="alert">
+          <p>{submissionError === INQUIRY_UNAVAILABLE ? <>This listing isn&apos;t available for questions right now. <Link href="/find-data" className="underline">Browse similar data.</Link></> : submissionError}</p>
+          {publicInformationLinks}
+        </div>
       )}
       {anonymousError && (
-        <div className="text-xs text-red-600 mt-2" role="alert">
-          <p>{recovery[anonymousError]} {recovery.guidance}</p>
+        <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 mt-3" role="alert">
+          <p>{anonymousError === 'timeout' ? recovery.timeout : recovery.retrievalUnavailable}</p>
           {publicInformationLinks}
-          <ListingRecoveryLinks search={recovery.search} support={recovery.support} />
-          <Link
-            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+          {!isAuthenticated && <Link
+            href={signInHref}
             onClick={preserveAnonymousDraft}
             className="mt-2 inline-block text-[#3F51B5] hover:underline"
           >
             {recovery.signIn}
-          </Link>
+          </Link>}
         </div>
       )}
-      {anonymousAnswerReturned && (
+      {showSellerButton && (
+        <button type="button" onClick={() => void handleSubmit(true)} disabled={submitting || !question.trim()}
+          className="mt-3 w-full rounded-lg border border-[#3F51B5] px-4 py-2.5 text-sm font-medium text-[#3F51B5] hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50">
+          Send to seller
+        </button>
+      )}
+      {anonymousAnswerReturned && !isAuthenticated && (
         <p className="text-xs text-gray-500 mt-2 text-center">
           Want to contact the seller?{' '}
           <Link
-            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            href={signInHref}
             onClick={preserveAnonymousDraft}
             className="text-[#3F51B5] hover:underline"
           >
