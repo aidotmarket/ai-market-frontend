@@ -241,14 +241,14 @@ describe('homepage hero and descriptions', () => {
     fetchDataRequests.mockResolvedValue({ items: [] });
   });
 
-  it('explains how businesses buy and sell data in the hero and structured data', async () => {
+  it('renders the homepage hero copy and marketplace structured data', async () => {
     const { default: LandingPage } = await import('./page');
     const { container } = render(await LandingPage());
     const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
 
     expect(hero.getByText('Data marketplace for businesses')).toBeTruthy();
-    expect(hero.getByRole('heading', { level: 1, name: "Where AI finds the data it's missing." })).toBeTruthy();
-    expect(hero.getByText('List your data once from your own storage. Listings are built for AI search to read, so buyers find you. Buyers can search, or post a request and let sellers come to them.')).toBeTruthy();
+    expect(hero.getByRole('heading', { level: 1, name: 'SEO for data.' }).textContent).toBe('SEO for data.');
+    expect(hero.getByText('The marketplace built for AI. For AI to find. For AI to train.')).toBeTruthy();
     expect(hero.getByText('Free to list; 5% only when it sells.')).toBeTruthy();
     expect(hero.getByText('Your listings are published in formats AI agents and AI search can read, so buyers can find you.')).toBeTruthy();
     expect(hero.getByText('Found in AI search.')).toBeTruthy();
@@ -282,8 +282,8 @@ describe('homepage hero and descriptions', () => {
 
   it('uses the homepage hero messaging for search and social metadata', async () => {
     const { metadata } = await import('./page');
-    const title = "ai.market — Where AI finds the data it's missing";
-    const description = 'List your data once from your own storage. Listings are built for AI search to read, so buyers find you. Free to list; 5% only when it sells.';
+    const title = 'ai.market — SEO for data';
+    const description = 'The marketplace built for AI. For AI to find. For AI to train. Free to list; 5% only when it sells.';
 
     expect(metadata.description).toBe(description);
     expect(metadata.openGraph?.description).toBe(description);
