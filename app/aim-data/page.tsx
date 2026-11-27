@@ -100,8 +100,9 @@ export default function AimDataPage() {
           <ol className="mt-2 list-decimal space-y-2 pl-5 leading-7 text-gray-600">
             <li>Create a free ai.market account or sign in.</li>
             <li>
-              In the seller dashboard, select <strong>Gateways</strong> and choose <strong>Add a gateway</strong>.
-              If prompted, finish seller setup first.
+              If you’re new to selling, choose <strong>Start selling</strong> in <strong>Overview</strong>.
+              In the seller dashboard, select <strong>Gateways</strong>. If prompted, finish the seller
+              setup steps shown there. Then choose <strong>Add a gateway</strong>.
             </li>
             <li>
               Use the one-time pairing code and generated Docker Compose snippet. Follow the install

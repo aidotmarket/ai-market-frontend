@@ -38,7 +38,9 @@ describe('AimDataPage', () => {
     const steps = within(guide.getByRole('list')).getAllByRole('listitem');
     expect(steps).toHaveLength(3);
     expect(steps[0].textContent).toMatch(/Create a free ai\.market account or sign in/);
-    expect(steps[1].textContent).toMatch(/seller dashboard.*Gateways.*Add a gateway/);
+    expect(steps[1].textContent).toMatch(
+      /If you’re new to selling, choose Start selling in Overview.*seller dashboard.*Gateways.*If prompted, finish the seller setup steps shown there.*Add a gateway/,
+    );
     expect(steps[2].textContent).toMatch(/one-time pairing code.*generated Docker Compose snippet/);
   });
 
