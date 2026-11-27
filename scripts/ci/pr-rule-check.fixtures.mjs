@@ -70,6 +70,33 @@ test('ignores an untouched template, examples, prompts and placeholders', () => 
   ]) assert.equal(hasRuleAnswers(body), false, body);
 });
 
+test('recognizes Rule headings and summaries across collapsible boundaries', () => {
+  const bullets = answers.map(answer => '- ' + answer).join('\n');
+  const inlineShots = '<details><summary>Shots</summary>img</details>';
+  const inlineLogs = '<details>\n<summary>Logs</summary>\nlog line</details>';
+  const unrelated = '<details><summary>Testing</summary>\n\n' + bullets + '\n</details>';
+  for (const body of [
+    '## Rule check\n\n<details><summary>Answers</summary>\n\n' + bullets + '\n</details>',
+    '<details><summary>More</summary>\n\n' + answered + '\n</details>',
+    inlineShots + '\n\n' + prefixed,
+    inlineLogs + '\n\n' + answered,
+    '<details><summary>PR Rule check</summary>\n\n' + bullets + '\n</details>',
+    '<details><summary>PR Rule check</summary>\n\n' + bullets + '</details>',
+  ]) assert.equal(hasRuleAnswers(body), true, body);
+
+  for (const body of [
+    unrelated,
+    inlineLogs,
+    '## Rule check\n\n' + unrelated,
+    '<details><summary>More</summary>\n\n## Rule check\n\n</details>\n\n' + bullets,
+    details('TBD') + '\n\n' + unrelated,
+    details('TBD') + '\n\n' + bullets,
+    '<details><summary>PR Rule check</summary>\n\n' + bullets,
+    '<details><summary>PR Rule check</summary><!--\n\n' + bullets + '\n-->\n</details>',
+    '<details><summary>Rule check</summary>\n\n' + bullets + '\n\n`</details>`',
+  ]) assert.equal(hasRuleAnswers(body), false, body);
+});
+
 test('flags direct HTTP, throw, JSX and fail-closed enforcement', () => {
   const changes = [
     source('app/api/publish/route.ts', '', `export function POST() { ${approval} }`),
