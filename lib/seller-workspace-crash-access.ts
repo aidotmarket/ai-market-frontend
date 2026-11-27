@@ -1,32 +1,59 @@
-import { isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { isCanonicalDraftUuid, isSellerWorkspacePath, type SellerWorkspaceCrashProof } from '@/lib/seller-workspace-crash';
 import { useAuthStore } from '@/store/auth';
 
-type SellerSession = { owner: string; generation: number; token: string };
+type SellerSession = { owner: string; generation: number; token: string; credentialRevision: number };
+
+let credentialRevision = 0;
+let trackingCredentials = false;
+
+export function captureSellerCrashSession(owner: string, token: string): SellerSession {
+  // A capability request and its reusable snapshot can outlive a Workspace visit.
+  if (!trackingCredentials) {
+    useAuthStore.subscribe((next, previous) => {
+      if (next.user?.id !== previous.user?.id || next.token !== previous.token ||
+        next.isAuthenticated !== previous.isAuthenticated || next.hydrated !== previous.hydrated ||
+        next.isLoading !== previous.isLoading || next.pendingTwoFactor !== previous.pendingTwoFactor) {
+        credentialRevision++;
+        clearRootSellerCrashAccess();
+      }
+    });
+    subscribeAuthSessionOwner(clearRootSellerCrashAccess);
+    trackingCredentials = true;
+  }
+  return { owner, token, generation: authSessionOwner(), credentialRevision };
+}
 
 function getCurrentSellerSessionToken(session: SellerSession): string | null {
   const auth = useAuthStore.getState();
-  return isAuthSessionOwner(session.generation) && auth.user?.id === session.owner &&
+  return session.credentialRevision === credentialRevision &&
+    isAuthSessionOwner(session.generation) && auth.user?.id === session.owner &&
     auth.token === session.token && auth.isAuthenticated && auth.hydrated && !auth.isLoading &&
     !auth.pendingTwoFactor ? auth.token : null;
 }
 
+type WorkspaceVisit = { pendingSourceReads: number };
 type CrashObservation = {
   pathname: string;
   session: SellerSession;
+  visit: WorkspaceVisit;
   getProof: SellerWorkspaceCrashProof;
-  dispose: () => void;
   draftRevision: number;
-  pendingSourceReads: number;
   draft?: { uuid: string };
 };
 let rootAccess: CrashObservation | undefined;
-// The dashboard can retain the snapshot for navigation while it revalidates.
-const invalidatedObservations = new WeakSet<SellerSession>();
+let workspaceVisit: WorkspaceVisit | undefined;
+
+// Capability revalidation retires the draft proof and keeps outstanding reads for this visit.
+export function retireRootSellerCrashAccess() {
+  if (!rootAccess) return;
+  window.removeEventListener('capabilities:changed', retireRootSellerCrashAccess);
+  rootAccess = undefined;
+}
 
 export function clearRootSellerCrashAccess() {
-  rootAccess?.dispose();
-  rootAccess = undefined;
+  retireRootSellerCrashAccess();
+  workspaceVisit = undefined;
 }
 
 export function discardRootSellerCrashAccessOutside(pathname: string | null) {
@@ -34,10 +61,9 @@ export function discardRootSellerCrashAccessOutside(pathname: string | null) {
 }
 
 export function getSellerWorkspaceCrashProof(session: SellerSession) {
-  if (invalidatedObservations.has(session)) return null;
   const token = getCurrentSellerSessionToken(session);
   if (!token) return null;
-  const draft = rootAccess?.session === session && rootAccess.pendingSourceReads === 0 && isSellerWorkspacePath(rootAccess.pathname)
+  const draft = rootAccess?.session === session && rootAccess.visit.pendingSourceReads === 0 && isSellerWorkspacePath(rootAccess.pathname)
     ? rootAccess.draft : undefined;
   return { token, draft };
 }
@@ -72,13 +98,16 @@ export function checkSellerWorkspaceCrashDraft() {
 export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | null) {
   const access = rootAccess;
   if (!access?.getProof()) return;
-  // Either read can finish first. Withhold the pointer until they agree.
-  access.pendingSourceReads++;
+  // An outstanding source read can contradict a later draft read in this visit,
+  // including when the dashboard replaces its capability snapshot in between.
+  const { visit } = access;
+  visit.pendingSourceReads++;
   return (response?: { current_draft_id: unknown }) => {
-    access.pendingSourceReads--;
-    if (!response || !access.getProof()) return;
+    visit.pendingSourceReads--;
+    const active = rootAccess;
+    if (!response || active?.visit !== visit || !active.getProof()) return;
     const current = response.current_draft_id;
-    if (!access.draft || current !== access.draft.uuid || (expectedDraftId && current !== expectedDraftId)) {
+    if (!active.draft || current !== active.draft.uuid || (expectedDraftId && current !== expectedDraftId)) {
       // A source read cannot prove a pointer. When it finishes before any
       // draft is proven, retire overlapping current-draft reads as well.
       clearSellerWorkspaceCrashDraft();
@@ -88,29 +117,22 @@ export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | n
 
 // The dashboard publishes its completed active capability observation here.
 // Next replaces that tree on a root crash, so disposal is tied to the proof.
-export function observeRootSellerCrashAccess(pathname: string | null, session: SellerSession) {
-  clearRootSellerCrashAccess();
-  if (pathname === null || !isSellerWorkspacePath(pathname) || invalidatedObservations.has(session) || !getCurrentSellerSessionToken(session)) return;
-
-  const invalidate = () => {
-    invalidatedObservations.add(session);
+export function observeRootSellerCrashAccess(pathname: string | null, session: SellerSession | null) {
+  if (pathname === null || !isSellerWorkspacePath(pathname)) {
     clearRootSellerCrashAccess();
-  };
-  const unsubscribeAuth = useAuthStore.subscribe(() => {
-    if (!getCurrentSellerSessionToken(session)) invalidate();
-  });
-  const unsubscribeOwner = subscribeAuthSessionOwner(invalidate);
-  window.addEventListener('capabilities:changed', invalidate);
+    return;
+  }
+  retireRootSellerCrashAccess();
+  if (!session || !getCurrentSellerSessionToken(session)) return;
+
+  const visit = workspaceVisit ?? { pendingSourceReads: 0 };
   const observation: CrashObservation = {
-    pathname, session, draftRevision: 0, pendingSourceReads: 0,
+    pathname, session, visit, draftRevision: 0,
     getProof: () => rootAccess === observation && isSellerWorkspacePath(pathname) ? getSellerWorkspaceCrashProof(session) : null,
-    dispose: () => {
-      unsubscribeAuth();
-      unsubscribeOwner();
-      window.removeEventListener('capabilities:changed', invalidate);
-    },
   };
+  workspaceVisit = visit;
   rootAccess = observation;
+  window.addEventListener('capabilities:changed', retireRootSellerCrashAccess);
 }
 
 export function getRootSellerCrashAccess(pathname: string | null) {

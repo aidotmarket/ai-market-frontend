@@ -6,7 +6,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
-import { clearRootSellerCrashAccess, getSellerWorkspaceCrashProof, observeRootSellerCrashAccess } from '@/lib/seller-workspace-crash-access';
+import {
+  captureSellerCrashSession, getSellerWorkspaceCrashProof, observeRootSellerCrashAccess, retireRootSellerCrashAccess,
+} from '@/lib/seller-workspace-crash-access';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
   getSellerWorkspaceCapabilities,
@@ -21,7 +23,7 @@ const isBuyerActivityRoute = (pathname: string) =>
   pathname === '/dashboard/requests' || pathname.startsWith('/dashboard/requests/');
 
 type CapabilitySnapshot = {
-  session: { owner: string; generation: number; token: string };
+  session: ReturnType<typeof captureSellerCrashSession>;
   version: number;
   phase: 'loading' | 'ready' | 'error';
   sellerStatus: CapabilityStatus | null;
@@ -43,7 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const refreshCapabilities = useCallback(async () => {
     // Invalidate in-flight reads even when authentication is no longer usable.
     const version = ++request.current;
-    clearRootSellerCrashAccess();
+    retireRootSellerCrashAccess();
     if (isLoading || !hydrated || !isAuthenticated || !owner || !token) {
       setSnapshot(null);
       return;
@@ -51,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // Check the live store as well as request ownership: auth may change before
     // React has run the previous effect's cleanup.
-    const session = { owner, generation: authSessionOwner(), token };
+    const session = captureSellerCrashSession(owner, token);
     const isCurrent = () => {
       const auth = useAuthStore.getState();
       return request.current === version && auth.user?.id === owner &&
@@ -117,9 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const crashSession = isSellerActive ? current.session : null;
   const crashVersion = isSellerActive ? current.version : null;
   useLayoutEffect(() => {
-    if (crashSession && crashVersion === request.current) {
-      observeRootSellerCrashAccess(pathname, crashSession);
-    }
+    observeRootSellerCrashAccess(pathname, crashVersion === request.current ? crashSession : null);
   }, [crashSession, crashVersion, pathname]);
   const sellerWorkspaceAvailable = current?.workspace === true;
   const gatewaysAvailable = current?.gateways === true;
