@@ -299,7 +299,9 @@ describe('homepage hero and descriptions', () => {
     render(await LandingPage());
     const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
 
-    fireEvent.change(hero.getByRole('searchbox'), { target: { value: '  US retail sales  ' } });
+    const search = hero.getByRole('searchbox');
+    expect(search.getAttribute('placeholder')).toBe('Search datasets by topic, industry, or use case');
+    fireEvent.change(search, { target: { value: '  US retail sales  ' } });
     fireEvent.click(hero.getByRole('button', { name: 'Search' }));
     expect(push).toHaveBeenLastCalledWith('/find-data?q=US%20retail%20sales');
     expect(hero.getByRole('link', { name: 'Browse Data' }).getAttribute('href')).toBe('/listings');
