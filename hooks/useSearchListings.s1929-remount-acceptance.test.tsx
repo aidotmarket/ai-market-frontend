@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 
-it.each(['', 'licence'])('keeps cached %j cards hidden if restoration happened while search was unmounted', async q => {
+it.each(['', 'licence'])('withholds cached %j licence terms if restoration happened while search was unmounted', async q => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(10_000_000);
   const correction = wire.public[2].corrected;
@@ -60,6 +60,7 @@ it.each(['', 'licence'])('keeps cached %j cards hidden if restoration happened w
   route.mockReturnValue(new Promise(() => {}));
   view.rerender(tree(true));
   expect(view.container.textContent).not.toContain(label);
+  expect(view.getByRole('link', {name: /Synthetic/})).toBeTruthy();
   view.unmount();
   client.clear();
 });

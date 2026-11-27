@@ -6,11 +6,11 @@ import type {Manifest} from '@/lib/listing-preview/types';
 import AtAGlance, {hasSupportedSummaryFields, summaryLicenseDisplay} from './AtAGlance';
 import ListingSamplePreview from './ListingSamplePreview';
 
-export function BuyerPreviewContent({summary, licenseDisplay, slug, listingId, onManifest}: {
-  summary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null; slug?: string; listingId?: string; onManifest?: (manifest: Manifest | null) => void;
+export function BuyerPreviewContent({summary, licenseDisplay, slug, listingId, onManifest, managedProjection = false}: {
+  summary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null; slug?: string; listingId?: string; onManifest?: (manifest: Manifest | null) => void; managedProjection?: boolean;
 }) {
-  const currentDisplay = summaryLicenseDisplay(licenseDisplay);
-  return <>{!currentDisplay && hasSupportedSummaryFields(summary) && <p className="text-sm text-gray-600">Seller-approved summary.</p>}<AtAGlance summary={summary} licenseDisplay={currentDisplay} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
+  const currentDisplay = managedProjection ? licenseDisplay : summaryLicenseDisplay(licenseDisplay);
+  return <>{!currentDisplay && hasSupportedSummaryFields(summary) && <p className="text-sm text-gray-600">Seller-approved summary.</p>}<AtAGlance summary={summary} licenseDisplay={currentDisplay} managedProjection={managedProjection} />{listingId && <ListingSamplePreview slug={slug} listingId={listingId} onManifest={onManifest} />}</>;
 }
 
 export function BuyerSamplePreview({slug, listingId, emptyNotice}: {slug: string; listingId: string; emptyNotice?: string}) {
@@ -19,11 +19,12 @@ export function BuyerSamplePreview({slug, listingId, emptyNotice}: {slug: string
 
 // Fresh loads use force-dynamic/no-store. An untouched tab retains its summary
 // until visibility resumes or bfcache restores it; there is no polling.
-export default function BuyerAtAGlance({slug, listingId, initialSummary, licenseDisplay, includeSample = true, hideSampleAvailability = false}: {
-  slug: string; listingId?: string; initialSummary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null; includeSample?: boolean; hideSampleAvailability?: boolean;
+export default function BuyerAtAGlance({slug, listingId, initialSummary, licenseDisplay, includeSample = true, hideSampleAvailability = false, managedProjection = false}: {
+  slug: string; listingId?: string; initialSummary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null; includeSample?: boolean; hideSampleAvailability?: boolean; managedProjection?: boolean;
 }) {
   const [display, setDisplay] = useState({at_a_glance: initialSummary ?? null, license_display: licenseDisplay});
   useEffect(() => {
+    if (managedProjection) return;
     let disposed = false;
     let current: AbortController | null = null;
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -63,10 +64,10 @@ export default function BuyerAtAGlance({slug, listingId, initialSummary, license
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('pageshow', restore);
     };
-  }, [slug, initialSummary, licenseDisplay]);
-  const summary = display.at_a_glance;
+  }, [slug, initialSummary, licenseDisplay, managedProjection]);
+  const summary = managedProjection ? initialSummary : display.at_a_glance;
   const visibleSummary = summary && hideSampleAvailability
     ? {...summary, sample_availability: undefined}
     : summary;
-  return <BuyerPreviewContent licenseDisplay={display.license_display} summary={visibleSummary} slug={slug} listingId={includeSample ? listingId : undefined} />;
+  return <BuyerPreviewContent licenseDisplay={managedProjection ? licenseDisplay : display.license_display} summary={visibleSummary} slug={slug} listingId={includeSample ? listingId : undefined} managedProjection={managedProjection} />;
 }

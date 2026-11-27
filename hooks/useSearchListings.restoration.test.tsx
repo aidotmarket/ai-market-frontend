@@ -59,6 +59,7 @@ async function succeedRefresh(hook: Awaited<ReturnType<typeof mount>>) {
   api.searchListings.mockResolvedValue({ results: [listing], total: 1 });
   await act(async () => { await hook.result.current.refetch(); });
   await waitFor(() => expect(hook.result.current.items).toHaveLength(1));
+  await waitFor(() => expect(hook.result.current.currentDisplayExpired).toBe(false));
   expect(hook.result.current.isError).toBe(false);
 }
 
@@ -68,23 +69,28 @@ it.each(['', 'licence'])('keeps %j restoration invalidation across failed refres
   act(() => vi.advanceTimersByTime(minute));
   vi.setSystemTime(Date.now() - 60 * minute + 16 * minute);
   restore();
-  expect(first.result.current.items).toEqual([]);
+  expect(first.result.current.items).toEqual([listing]);
+  expect(first.result.current.currentDisplayExpired).toBe(true);
   await failRefresh(first);
   first.unmount();
 
   const remounted = await mount(q);
-  expect(remounted.result.current.items).toEqual([]);
+  expect(remounted.result.current.items).toEqual([listing]);
+  expect(remounted.result.current.currentDisplayExpired).toBe(true);
   await waitFor(() => expect(remounted.result.current.isFetching).toBe(false));
-  expect(remounted.result.current.items).toEqual([]);
+  expect(remounted.result.current.items).toEqual([listing]);
+  expect(remounted.result.current.currentDisplayExpired).toBe(true);
   await succeedRefresh(remounted);
 
   // The next restoration must suppress even the successfully refreshed page.
   restore();
-  expect(remounted.result.current.items).toEqual([]);
+  expect(remounted.result.current.items).toEqual([listing]);
+  expect(remounted.result.current.currentDisplayExpired).toBe(true);
   await failRefresh(remounted);
   remounted.unmount();
   const restoredAgain = await mount(q);
-  expect(restoredAgain.result.current.items).toEqual([]);
+  expect(restoredAgain.result.current.items).toEqual([listing]);
+  expect(restoredAgain.result.current.currentDisplayExpired).toBe(true);
   await waitFor(() => expect(restoredAgain.result.current.isFetching).toBe(false));
   await succeedRefresh(restoredAgain);
 });
@@ -104,12 +110,15 @@ it.each(['visibilitychange', 'tick'])('invalidates foreground sleep without page
       vi.advanceTimersByTime(minute);
     }
   });
-  expect(hook.result.current.items).toEqual([]);
+  expect(hook.result.current.items).toEqual([listing]);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
   await failRefresh(hook);
-  expect(hook.result.current.items).toEqual([]);
+  expect(hook.result.current.items).toEqual([listing]);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
   hook.unmount();
   const remounted = await mount();
-  expect(remounted.result.current.items).toEqual([]);
+  expect(remounted.result.current.items).toEqual([listing]);
+  expect(remounted.result.current.currentDisplayExpired).toBe(true);
   await waitFor(() => expect(remounted.result.current.isFetching).toBe(false));
   await succeedRefresh(remounted);
 });
@@ -122,11 +131,14 @@ it('shares restoration invalidation with another observer and a cached query key
   semantic.unmount();
   api.listListings.mockRejectedValue(new Error('Refresh failed'));
   restore();
-  expect(browse.result.current.items).toEqual([]);
+  expect(browse.result.current.items).toEqual([listing]);
+  expect(browse.result.current.currentDisplayExpired).toBe(true);
   api.searchListings.mockRejectedValue(new Error('Refresh failed'));
   const remounted = await mount('licence');
-  expect(remounted.result.current.items).toEqual([]);
+  expect(remounted.result.current.items).toEqual([listing]);
+  expect(remounted.result.current.currentDisplayExpired).toBe(true);
   await waitFor(() => expect(remounted.result.current.isFetching).toBe(false));
   await succeedRefresh(remounted);
-  expect(browse.result.current.items).toEqual([]);
+  expect(browse.result.current.items).toEqual([listing]);
+  expect(browse.result.current.currentDisplayExpired).toBe(true);
 });

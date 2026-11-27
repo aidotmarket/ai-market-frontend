@@ -22,6 +22,7 @@ import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
 import { checkoutReplayKey, readCheckoutReplay, saveCheckoutReplay, clearCheckoutReplay } from '@/lib/checkout-replay';
 import { useListingOwnership } from '@/hooks/useListingOwnership';
 import { hasDeliveredOrderNavigation, isExistingPurchaseStatus } from '@/lib/order-status';
+import {useCurrentListingEvidence} from '@/components/listings/CurrentDisplayFreshness';
 
 interface BuyButtonProps {
   listingId: string;
@@ -62,6 +63,9 @@ export default function BuyButton({
   onCheckoutStarted,
   recoveryOnly = false,
 }: BuyButtonProps) {
+  const currentEvidence = useCurrentListingEvidence();
+  const evidenceAvailable = useRef(currentEvidence);
+  useLayoutEffect(() => { evidenceAvailable.current = currentEvidence; }, [currentEvidence]);
   const termsVersion = useServedTermsVersion();
   const { user, isAuthenticated, hydrated, isLoading } = useAuthStore();
   const { isOwner, checkingOwnership } = useListingOwnership(listingId, isAuthenticated ? user?.id : undefined, sellerId, isAuthenticated, !hydrated || isLoading);
@@ -151,6 +155,7 @@ export default function BuyButton({
 
   // Unauthenticated: redirect to login
   if (!isAuthenticated) {
+    if (!currentEvidence) return <DisabledBuyButton price={price} reason="Refresh the current listing display to buy." />;
     if (disabledReason) {
       return <>{licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}<DisabledBuyButton price={price} reason={disabledReason} /></>;
     }
@@ -190,7 +195,7 @@ export default function BuyButton({
     const visit = checkoutVisit.current;
     const isCurrent = () => visit !== null && checkoutVisit.current === visit;
     if (!isCurrent() || visit?.context !== visitContext) return;
-    if (recoveryOnly && acceptedRequest.current?.identity !== requestIdentity) return;
+    if ((recoveryOnly || !evidenceAvailable.current) && acceptedRequest.current?.identity !== requestIdentity) return;
     if (disabledReason && !(domainEnabled && acceptedRequest.current?.identity === requestIdentity)) return;
     // Dedupe guard: ignore if same listing checkout is in-flight
     const inflightKey = `${listingId}:${versionId ?? 'latest'}`;
@@ -298,7 +303,7 @@ export default function BuyButton({
   if (purchasedOrder) {
     return (
       <>
-      {licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
+      {currentEvidence && licenseDetails && <ListingLicenseDisclosure license={licenseDetails} />}
       <Link
         href={`/dashboard/orders/${purchasedOrder.id}`}
         className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-green-700"
@@ -310,6 +315,7 @@ export default function BuyButton({
   }
 
   if (recoveryOnly) return null;
+  if (!currentEvidence) return <DisabledBuyButton price={price} reason="Refresh the current listing display to buy." />;
 
   if (licenseDetails) {
     return (

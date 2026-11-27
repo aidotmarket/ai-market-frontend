@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSearchListings, type ResultItem } from '@/hooks/useSearchListings';
+import {CurrentListingLayout} from '@/components/listings/CurrentDisplayFreshness';
 import { useMarketplaceCategoryFacets } from '@/hooks/useMarketplaceCategoryFacets';
 import {
   formatMarketplaceCategoryName,
@@ -107,6 +108,8 @@ export function MarketplaceSearchExperience({
     semanticMode,
     isLoading,
     isError,
+    isRefetchError,
+    currentDisplayExpired,
     error,
     hasNextPage,
     isFetchingNextPage,
@@ -412,7 +415,7 @@ export function MarketplaceSearchExperience({
               </div>
             )}
 
-            {!isLoading && isError && (
+            {!isLoading && isError && items.length === 0 && (
               <div className="mt-6 rounded-3xl border border-red-200 bg-red-50 px-6 py-16 text-center shadow-sm">
                 <p className="text-lg font-semibold text-red-900">Something went wrong</p>
                 <p className="mt-2 text-sm text-red-600">
@@ -451,15 +454,15 @@ export function MarketplaceSearchExperience({
 
             {items.length > 0 && (
               <>
-                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <CurrentListingLayout className="mt-6 grid auto-rows-min gap-4 sm:grid-cols-2 xl:grid-cols-3" expired={currentDisplayExpired ?? false}>
                   {items.map((item) => (
-                    <MarketplaceListingCard key={item.id} listing={item} />
+                    <MarketplaceListingCard key={item.id} listing={item} verifiedDisplay={item.license_display ?? null} />
                   ))}
-                </div>
+                </CurrentListingLayout>
               </>
             )}
 
-            {!isLoading && !isError && (hasNextPage || items.length > 0) && (
+            {!isLoading && (!isError || isRefetchError) && (hasNextPage || items.length > 0) && (
               <div className="mt-8 flex justify-center">
                 {hasNextPage ? (
                   <button
@@ -474,6 +477,12 @@ export function MarketplaceSearchExperience({
                   <p className="text-sm text-slate-400">You&apos;ve reached the end of the results.</p>
                 )}
               </div>
+            )}
+
+            {items.length > 0 && (isError || currentDisplayExpired) && (
+              <p role="status" className="mt-4 text-center text-sm text-slate-600">
+                <button type="button" onClick={() => refetch()} className="underline">Refresh current results</button>
+              </p>
             )}
 
             {hasSemanticSuggestions && (

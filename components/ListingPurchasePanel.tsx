@@ -7,6 +7,7 @@ import BuyButton from '@/components/BuyButton';
 import { formatPublishedDate } from '@/lib/format';
 import type { FileBreakdownGroup, ListingLicenseDetails, ListingVersion } from '@/types';
 import FileBreakdown from '@/app/listings/[slug]/FileBreakdown';
+import {CurrentListingEvidence} from '@/components/listings/CurrentDisplayFreshness';
 
 interface ListingPurchasePanelProps {
   listingId: string;
@@ -69,11 +70,11 @@ export default function ListingPurchasePanel({
           dataFormat={dataFormat}
         />
       )}
-      {accessWindowDays != null && (
+      <CurrentListingEvidence>{accessWindowDays != null && (
         <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
           Download window: {accessWindowDays} day{accessWindowDays === 1 ? '' : 's'} after purchase.
         </p>
-      )}
+      )}</CurrentListingEvidence>
       <div className="mt-4">
         <BuyButton
           listingId={listingId}

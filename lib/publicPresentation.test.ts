@@ -22,7 +22,7 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     expect(c.render_hash).toBe(digest(c.rendered_html));
     expect(JSON.stringify(fixture)).toBe(before);
   });
-  it('requires every correction field and refuses unknown, null, partial, excess and malformed variants',async()=>{
+  it('requires every correction field and refuses unsupported, null, partial and malformed variants',async()=>{
     const c=wire.public[2].corrected;
     for(const key of correctionFields){
       const missing:Record<string,unknown>={...c};delete missing[key];
@@ -30,7 +30,7 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
       await expect(verifyPresentation({...c,[key]:null})).rejects.toThrow();
     }
     for(const bad of [null,{}, {...c,presentation_kind:'unknown'}, {...c,presentation_version:'seller-listing-review-v5'},
-      {...c,provenance:'seller_approved'}, {...c,license_label:'ai.market Standard Data Licence v1.0'}, {...c,extra:true},
+      {...c,provenance:'seller_approved'}, {...c,license_label:'ai.market Standard Data Licence v1.0'},
       {...c,rendered_html:c.rendered_html+'tampered'}, {...c,render_hash:c.original_admitted_render_hash}])
       await expect(verifyPresentation(bad)).rejects.toThrow();
     for(const key of ['listing_id','publication_id','listing_version_id','approval_id','correction_id'])
@@ -40,7 +40,8 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
   });
   it('checks UTF8 size rather than character count on both variants',async()=>{
     for(const fixture of [wire.public[0].original,wire.public[2].corrected]){
-      const valid='é'.repeat(50000),invalid='é'.repeat(50001);
+      const terms = 'license_label' in fixture ? `<dt>License</dt><dd>${fixture.license_label}</dd>` : '';
+      const valid='é'.repeat(Math.floor((100000 - terms.length) / 2)) + terms, invalid=valid+'é';
       expect((await verifyPresentation({...fixture,rendered_html:valid,render_hash:digest(valid)})).rendered_html).toBe(valid);
       await expect(verifyPresentation({...fixture,rendered_html:invalid,render_hash:digest(invalid)})).rejects.toThrow();
     }
@@ -49,7 +50,7 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     const c=wire.public[2].corrected;
     const display={license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest};
     const listing={id:c.listing_id,publication_id:c.publication_id,listing_version_id:c.listing_version_id,approval_id:c.approval_id,approved_presentation:c,license:c.license_label,license_display:display};
-    await expect(verifyCurrentListing(listing)).resolves.toBeUndefined();
+    await expect(verifyCurrentListing(listing)).resolves.toEqual({approved:c, display});
     for(const key of ['id','publication_id','listing_version_id','approval_id'])await expect(verifyCurrentListing({...listing,[key]:'ffffffff-ffff-ffff-ffff-ffffffffffff'})).rejects.toThrow();
     await expect(verifyCurrentListing({...listing,license_display:{...display,correction_digest:'a'.repeat(64)}})).rejects.toThrow();
     await expect(verifyCurrentListing({...listing,license:'ai.market Standard Data Licence v1.0'})).rejects.toThrow();
@@ -72,4 +73,23 @@ it.each(wire.public)('accepts optional approved display fields without changing 
     await expect(verifyPresentation(missingVersion)).rejects.toThrow();
     await expect(verifyPresentation({...display, presentation_display_version: null})).rejects.toThrow();
   }
+});
+
+it('projects additive public fields and binds a new label to the hashed correction and adjacent metadata', async () => {
+  const fixture = wire.public[2];
+  const license_label = "Data licence for research & teaching";
+  const rendered_html = fixture.corrected.rendered_html.replace(
+    '<dd>ai.market Standard Data Licence v1.1</dd>', '<dd>Data licence for research &amp; teaching</dd>',
+  );
+  const correction = {...fixture.corrected, rendered_html, render_hash: digest(rendered_html), license_label};
+  const display = {...fixture.license_display, license_label};
+  const listing = {id: correction.listing_id, license: license_label,
+    approved_presentation: {...correction, arbitrary_html: '<script>ignored</script>'},
+    license_display: {...display, arbitrary_label: 'unverified'}};
+  await expect(verifyCurrentListing(listing)).resolves.toEqual({approved: correction, display});
+  await expect(verifyPresentation({...fixture.original, listing_id: correction.listing_id, additive: 1})).resolves.toEqual(fixture.original);
+  await expect(verifyPresentation({...fixture.original, additive: 1}, undefined, 'purchased')).rejects.toThrow();
+  await expect(verifyCurrentListing({...listing, license_display: {...display, license_label: 'different'}})).rejects.toThrow();
+  await expect(verifyCurrentListing({...listing, approved_presentation: {...fixture.corrected, license_label}})).rejects.toThrow();
+  await expect(verifyCurrentListing({...listing, approved_presentation: {...correction, presentation_kind:'unsupported'}})).rejects.toThrow();
 });

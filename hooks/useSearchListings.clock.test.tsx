@@ -56,9 +56,8 @@ function cards(search: ReturnType<typeof retainedSearch>) {
 }
 
 function expectExpired(search: ReturnType<typeof retainedSearch>) {
-  expect(search.result.current.items).toEqual([]);
-  expect(search.result.current.isError).toBe(true);
-  expect(search.result.current.error?.message).toBe('Refresh to load current marketplace results.');
+  expect(search.result.current.items).toHaveLength(1);
+  expect(search.result.current.currentDisplayExpired).toBe(true);
   expect(cards(search)).not.toContain('ai.market Standard Data Licence v1.1');
 }
 
@@ -70,7 +69,7 @@ it('preserves ordinary timing, expiring at the existing ten-minute boundary', ()
   expectExpired(search);
 });
 
-it('removes the retained licence card after a backward wall-clock change and failed refresh', () => {
+it('withholds the retained card licence after a backward wall-clock change and failed refresh', () => {
   const search = retainedSearch();
   expect(cards(search)).toContain('ai.market Standard Data Licence v1.1');
   act(() => vi.advanceTimersByTime(60_000));
@@ -117,7 +116,7 @@ it.each(['', 'licence'])('timestamps successful %j queries with both clocks', as
   expect(q ? api.searchListings : api.listListings).toHaveBeenCalledOnce();
 });
 
-it('suppresses retained licence cards after wall-clock setback, paused suspension, and failed refresh', async () => {
+it('suppresses licences on retained cards after wall-clock setback, paused suspension, and failed refresh', async () => {
   const search = retainedSearch();
   const minute = 60_000;
   expect(cards(search)).toContain('ai.market Standard Data Licence v1.1');

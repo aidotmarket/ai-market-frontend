@@ -46,7 +46,7 @@ export async function parsePurchasedLicenseDisplay(value:unknown, orderId:string
       if (!exactFields(presentation,['presentation_version','rendered_html','render_hash'],['sample_files']) ||
           !supportedVersion(presentation.presentation_version) || !hash(presentation.render_hash)) return fail();
     } else {
-      const verified=await verifyPresentation(presentation);
+      const verified=await verifyPresentation(presentation, undefined, 'purchased');
       if (verified.presentation_kind!==undefined) return fail();
     }
   }

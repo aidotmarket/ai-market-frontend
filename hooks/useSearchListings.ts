@@ -4,6 +4,7 @@ import {useEffect,useState,useSyncExternalStore} from 'react';
 import { useInfiniteQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { listListings, searchListings } from '@/api/listings';
 import { DATA_FULFILLMENT_TYPES } from '@/lib/marketplaceListings';
+import {verifyCurrentListing} from '@/lib/publicPresentation';
 import type { ListingListItem, SearchResultItem } from '@/types';
 
 const PAGE_SIZE = 12;
@@ -133,7 +134,7 @@ export function useSearchListings({
           limit: PAGE_SIZE,
           offset,
         });
-        return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
+        return {result: {...result, results: await Promise.all(result.results.map(withVerifiedDisplay))}, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
       }
 
       const result = await listListings({
@@ -144,7 +145,7 @@ export function useSearchListings({
         max_price: maxPrice,
         fulfillment_type: DATA_FULFILLMENT_TYPES,
       });
-      return {result, observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
+      return {result: await Promise.all(result.map(withVerifiedDisplay)), observedAt:Date.now(), observedAtMonotonic:performance.now(), observationEpoch};
     },
     getNextPageParam: (lastPage, allPages) => {
       const result=lastPage.result;
@@ -182,7 +183,7 @@ export function useSearchListings({
     performance.now() - page.observedAtMonotonic,
     Date.now() - page.observedAt
   ) >= 10 * 60_000) ?? false;
-  const rawItems: ResultItem[] = expired ? [] : filterDiscoverableItems(query.data?.pages.flatMap((page): ResultItem[] =>
+  const rawItems: ResultItem[] = filterDiscoverableItems(query.data?.pages.flatMap((page): ResultItem[] =>
     Array.isArray(page.result) ? page.result : page.result.results
   ) || []);
 
@@ -194,13 +195,10 @@ export function useSearchListings({
   const queryHints = semanticMode && enabled && query.isSuccess && !query.isFetching
     && !query.isPlaceholderData && !expired ? firstSearchPage : undefined;
 
-  const refreshingExpired = expired && query.isFetching;
   return {
     ...query,
-    items: rawItems,
-    isLoading: query.isLoading || refreshingExpired,
-    isError: !refreshingExpired && (query.isError || expired),
-    error: refreshingExpired ? null : expired ? new Error('Refresh to load current marketplace results.') : query.error,
+    items: expired ? rawItems.map(withoutDisplay) : rawItems,
+    currentDisplayExpired: expired,
     facets,
     total,
     suggestedQuery: queryHints?.suggested_query,
@@ -208,6 +206,21 @@ export function useSearchListings({
     semanticMode,
     pageSize: PAGE_SIZE,
   };
+}
+
+function withoutDisplay<T extends ResultItem>(item: T): T {
+  if (!('license_display' in item)) return item;
+  return {...item, license_display: null};
+}
+
+async function withVerifiedDisplay<T extends ResultItem>(item: T): Promise<T> {
+  if (!item.license_display) return item;
+  try {
+    const {display} = await verifyCurrentListing({...item});
+    return {...item, license_display: display};
+  } catch {
+    return withoutDisplay(item);
+  }
 }
 
 export function filterDiscoverableItems(items: ResultItem[]) {

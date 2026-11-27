@@ -60,8 +60,9 @@ it.each(['', 'licence'])('hides an old %j card when sleep and a wall setback can
   act(() => document.dispatchEvent(new Event('visibilitychange')));
   route.mockRejectedValue(new Error('Controlled refresh failure'));
   await act(async () => { await search.result.current.refetch(); });
-  await waitFor(() => expect(search.result.current.isError).toBe(true));
-  expect(search.result.current.items).toHaveLength(0);
+  await waitFor(() => expect(search.result.current.isError).toBe(true), {timeout: 3000});
+  expect(search.result.current.items).toMatchObject([{id: listing.id, license_display: null}]);
+  expect(search.result.current.currentDisplayExpired).toBe(true);
   const cards = renderToStaticMarkup(<>{search.result.current.items.map(listing => (
     <MarketplaceListingCard key={listing.id} listing={listing} />
   ))}</>);

@@ -1,12 +1,12 @@
 import {LISTING_DATA_HEADER, LISTING_UUID, ListingUnavailable} from '@/lib/listing-http-status';
-import CurrentDisplayFreshness from '@/components/listings/CurrentDisplayFreshness';
+import CurrentDisplayFreshness, {CurrentListingEvidence, CurrentListingLayout, type ListingProjection} from '@/components/listings/CurrentDisplayFreshness';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
 import { generatedSampleState, samplePresentation } from '@/lib/generatedSample';
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
-import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE} from '@/lib/publicPresentation';
+import {verifyCurrentListing, record, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE, type LicenseDisplay} from '@/lib/publicPresentation';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -133,17 +133,32 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     return <GeneratedSamplePage listing={listing} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
-  const documentsPromise = fetchPublicListingDocuments(listing.id);
-
   if (isPublicSourceReference(listing)) {
-    return <PublicSourceReferencePage listing={listing} documents={await documentsPromise} emitJsonLd={DATASET_JSONLD_ENABLED} />;
+    return <PublicSourceReferencePage listing={listing} documents={await fetchPublicListingDocuments(listing.id)} emitJsonLd={DATASET_JSONLD_ENABLED} />;
   }
 
+  const listingId = listing.id;
+  async function refreshAction(): Promise<ListingProjection | null> {
+    'use server';
+    const requestHeaders = await headers();
+    const userAgent = requestHeaders.get('user-agent');
+    const next: ListingWithSamples | null = forwardedListing(requestHeaders) ?? await fetchPublicListing(slug, userAgent);
+    if (!next || next.id !== listingId || next.slug !== slug ||
+        generatedSampleState(next) !== 'ordinary' || isPublicSourceReference(next)) return null;
+    const content = await renderOrdinaryListing(next, requestedVersionId, userAgent);
+    return {observedAt: Date.now(), content};
+  }
+
+  const content = await renderOrdinaryListing(listing, requestedVersionId, userAgent);
+  return <CurrentDisplayFreshness key={listingId} observedAt={Date.now()} refreshAction={refreshAction}>
+    {content}
+  </CurrentDisplayFreshness>;
+}
+
+async function renderOrdinaryListing(listing: ListingWithSamples, requestedVersionId: string | null, userAgent: string | null) {
+  const {approved, display: currentDisplay} = await verifyCurrentListing(listing as unknown as Record<string, unknown>);
   const hasActiveScanFindings = listing.scan_findings?.publication_state === 'PUBLISHED';
-  const approved = listing.approved_presentation;
-  await verifyCurrentListing(listing as unknown as Record<string, unknown>);
   const corrected = approved?.presentation_kind === CORRECTION_KIND;
-  const currentDisplay = readLicenseDisplay(listing.license_display);
   const schemaSummary = listing.schema_summary;
   const schemaColumns = Array.isArray(schemaSummary?.columns) ? schemaSummary.columns : [];
   const rowCount = listing.row_count;
@@ -152,7 +167,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const publicLicenseUrl = licenseDetails && typeof listing.jsonld?.license === 'string' &&
     listing.jsonld.license.startsWith('https://ai.market/licenses/')
     ? listing.jsonld.license : null;
-  const legacyLicense = typeof listing.license === 'string' ? listing.license : null;
+  const legacyLicense = typeof listing.license === 'string' ? currentDisplay?.license_label ?? listing.license : null;
   const pendingSellerTerms = listing.license_status === 'pending_seller_terms';
   // This explicit hold applies only to new purchases, not existing orders or checkout recovery.
   const purchaseDisabledReason = listing.purchase_hold_reason === 'listing_publication_unavailable'
@@ -161,8 +176,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
   const atAGlanceSummary = pendingSellerTerms && listing.at_a_glance
     ? {...listing.at_a_glance, sample_availability: undefined}
     : listing.at_a_glance;
-  const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
+  const [documents, versions] = await Promise.all([fetchPublicListingDocuments(listing.id), fetchListingVersions(listing.id)]);
   const sampleFiles = listing.sample_files ?? approved?.sample_files;
+  const listingHeading = <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>;
+  const embeddedHeading = approved && approved.approved_display_html == null;
   const {technical, pdf} = selectListingDocumentation(documents);
   const keyFields = atAGlanceSummary?.key_fields;
   const hasSummarySchema = keyFields?.provenance !== 'absent' && Array.isArray(keyFields?.value) && keyFields.value.length > 0;
@@ -180,15 +197,17 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     : null;
 
   return (
-    <CurrentDisplayFreshness observedAt={Date.now()}>
+    <>
+      <CurrentListingEvidence>
       {currentDisplay && <meta name="ai-market:licence-display-provenance" content={CORRECTION_NOTICE} data-correction-digest={currentDisplay.correction_digest} />}
       {shouldEmitJsonLd && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: safeJsonLdStringify(listing.jsonld) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdStringify(currentDisplay ? bindJsonLdLicense(listing.jsonld, currentDisplay) : listing.jsonld) }}
         />
       )}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+      </CurrentListingEvidence>
+      <CurrentListingLayout className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-6">
         <Link href="/listings" className="hover:text-gray-700">
@@ -202,7 +221,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
           <div>
-            {(!approved || approved.approved_display_html != null) && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
+            {embeddedHeading
+              ? currentDisplay && <CurrentListingEvidence fallback={listingHeading}>{null}</CurrentListingEvidence>
+              : listingHeading}
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <span>Published {listing.published_at ? formatPublishedDate(listing.published_at) : 'N/A'}</span>
               <span>&middot;</span>
@@ -220,15 +241,16 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             )}
           </div>
 
-          <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
+          <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} managedProjection />
 
+          <CurrentListingEvidence required={!!currentDisplay}>
           {approved ? <>
             {approved.approved_display_html != null ? <>
               <div className="prose prose-sm max-w-none">
                 <BackendListingHtml description={listing.description} descriptionHtml={approved.approved_display_html} />
               </div>
               <details>
-                <summary className="cursor-pointer text-sm text-gray-700">Original seller-approved version</summary>
+                <summary className="cursor-pointer text-sm text-gray-700">{corrected ? CORRECTION_TITLE : 'Original seller-approved version'}</summary>
                 <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
               </details>
             </> : <>
@@ -243,6 +265,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
 
 
           </>}
+          </CurrentListingEvidence>
           <ListingDocumentation documents={documents}/>
           {!approved && <>
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
@@ -283,15 +306,17 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             {!showVersionInventory && <FileBreakdown groups={listing.file_breakdown} />}
           </>}
 
+          <CurrentListingEvidence>
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
             {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
           </Link>}
           {licenseDetails && !pendingSellerTerms && <PrePurchaseLicensor />}
           {licenseDetails && (pendingSellerTerms || approved && !listing.purchasable) && <ListingLicenseDisclosure license={licenseDetails} />}
+          {listing.license_provenance && <p className="text-sm text-gray-600">seller previously indicated: {listing.license_provenance}</p>}
+          </CurrentListingEvidence>
           {pendingSellerTerms && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
             <p className="font-medium">Not yet available to buy. The seller needs to accept the current terms.</p>
           </div>}
-          {listing.license_provenance && <p className="text-sm text-gray-600">seller previously indicated: {listing.license_provenance}</p>}
 
           {!pendingSellerTerms && <SampleFiles files={sampleFiles} />}
 
@@ -354,18 +379,18 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 disabledReason={purchaseDisabledReason}
               />
             )}
-            {!pendingSellerTerms && !(approved && !listing.purchasable) && !listing.purchase_hold_reason && (
+            <CurrentListingEvidence>{!pendingSellerTerms && !(approved && !listing.purchasable) && !listing.purchase_hold_reason && (
               <UsdcLargePurchaseRequest
                 listingId={listing.id}
                 slug={listing.slug}
                 title={listing.title}
                 pricing={listing.pricing}
               />
-            )}
+            )}</CurrentListingEvidence>
           </div>
 
           {/* Legacy license */}
-          {legacyLicense && <div className="rounded-xl border border-gray-200 p-6 space-y-4">
+          <CurrentListingEvidence>{legacyLicense && <div className="rounded-xl border border-gray-200 p-6 space-y-4">
             <h3 className="font-semibold text-gray-900">License</h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center gap-4">
@@ -373,7 +398,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 <span className="text-sm font-medium text-gray-900 text-right">{legacyLicense}</span>
               </div>
             </div>
-          </div>}
+          </div>}</CurrentListingEvidence>
 
           {/* Publisher card */}
           <PublisherCard publisher={listing.publisher} />
@@ -404,13 +429,26 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           </div>
         </div>
       </div>
-    </div>
-    </CurrentDisplayFreshness>
+    </CurrentListingLayout>
+    </>
   );
 }
 
 function safeJsonLdStringify(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+function bindJsonLdLicense(jsonld: Record<string, unknown>, display: LicenseDisplay) {
+  const {license, additionalProperty, ...dataset} = jsonld;
+  const licence = record(license) && license.name === display.license_label
+    ? {'@type': 'CreativeWork', name: display.license_label}
+    : undefined;
+  const properties = Array.isArray(additionalProperty) ? additionalProperty.filter(property => {
+    if (!record(property) || (property.name !== 'license' && property.name !== 'Licence display provenance')) return true;
+    const expected = property.name === 'license' ? display.license_label : CORRECTION_NOTICE;
+    return property.value === expected && property.propertyID === display.correction_digest;
+  }) : undefined;
+  return {...dataset, license: licence, additionalProperty: properties};
 }
 
 function shouldEmitDatasetJsonLd(listing: ListingDetail): listing is ListingDetail & {

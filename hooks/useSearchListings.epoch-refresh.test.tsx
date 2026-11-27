@@ -65,7 +65,10 @@ it.each([
   await act(async () => initial.resolve(response()));
   expect(hook.result.current.items).toEqual([]);
   await act(async () => freshInitial.resolve(response()));
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(12));
+  await waitFor(() => {
+    expect(hook.result.current.items).toHaveLength(12);
+    expect(hook.result.current.currentDisplayExpired).toBe(false);
+  });
 
   // B: a subsequent first-page request is pending on an ordinary tab return.
   const oldRefresh = deferred<ReturnType<typeof response>>();
@@ -75,12 +78,16 @@ it.each([
   await waitFor(() => expect(route).toHaveBeenCalledTimes(3));
   await act(async () => { changeVisibility('hidden'); changeVisibility('visible'); });
   await waitFor(() => expect(route).toHaveBeenCalledTimes(4));
-  expect(hook.result.current.items).toEqual([]);
-  expect(hook.result.current.isLoading).toBe(true);
+  expect(hook.result.current.items).toHaveLength(12);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
+  expect(hook.result.current.isLoading).toBe(false);
   expect(hook.result.current.isError).toBe(false);
   expect(hook.result.current.error).toBeNull();
   await act(async () => { oldRefresh.resolve(response()); freshRefresh.resolve(response()); });
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(12));
+  await waitFor(() => {
+    expect(hook.result.current.items).toHaveLength(12);
+    expect(hook.result.current.currentDisplayExpired).toBe(false);
+  });
 
   // Load two pages, then G: interrupt a third page. Both retained pages must refresh.
   route.mockResolvedValueOnce(response(12));
@@ -97,9 +104,11 @@ it.each([
   await waitFor(() => expect(route).toHaveBeenCalledTimes(7));
   await act(async () => { oldMore.resolve(response(24)); refreshedFirst.resolve(response()); });
   await waitFor(() => expect(route).toHaveBeenCalledTimes(8));
-  expect(hook.result.current.items).toEqual([]);
+  expect(hook.result.current.items).toHaveLength(24);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
   await act(async () => refreshedSecond.resolve(response(12)));
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(24));
+  await waitFor(() => expect(hook.result.current.currentDisplayExpired).toBe(false));
+  expect(hook.result.current.items).toHaveLength(24);
   expect(hook.result.current.data?.pageParams).toEqual([0, 12]);
 
   // C: spec order. Adjacent bumps produce one effective full refetch.
@@ -111,11 +120,13 @@ it.each([
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
   });
   await waitFor(() => expect(route).toHaveBeenCalledTimes(9));
-  expect(hook.result.current.items).toEqual([]);
-  expect(hook.result.current.isLoading).toBe(true);
+  expect(hook.result.current.items).toHaveLength(24);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
+  expect(hook.result.current.isLoading).toBe(false);
   expect(hook.result.current.isError).toBe(false);
   await act(async () => restored.resolve(response()));
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(24));
+  await waitFor(() => expect(hook.result.current.currentDisplayExpired).toBe(false));
+  expect(hook.result.current.items).toHaveLength(24);
   expect(route).toHaveBeenCalledTimes(10);
 
   // F: performance pauses during foreground sleep, with no browser restore event.
@@ -124,11 +135,13 @@ it.each([
   vi.setSystemTime(Date.now() + 2 * minute);
   await act(async () => vi.advanceTimersByTime(minute));
   await waitFor(() => expect(route).toHaveBeenCalledTimes(11));
-  expect(hook.result.current.items).toEqual([]);
-  expect(hook.result.current.isLoading).toBe(true);
+  expect(hook.result.current.items).toHaveLength(24);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
+  expect(hook.result.current.isLoading).toBe(false);
   expect(hook.result.current.isError).toBe(false);
   await act(async () => afterSleep.resolve(response()));
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(24));
+  await waitFor(() => expect(hook.result.current.currentDisplayExpired).toBe(false));
+  expect(hook.result.current.items).toHaveLength(24);
   expect(hook.result.current.isError).toBe(false);
 });
 
@@ -136,15 +149,19 @@ it('shows the error after the epoch refresh and its production retry fail', asyn
   vi.useRealTimers();
   api.listListings.mockResolvedValue(page());
   const hook = renderSearch('');
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(12));
+  await waitFor(() => {
+    expect(hook.result.current.items).toHaveLength(12);
+    expect(hook.result.current.currentDisplayExpired).toBe(false);
+  });
   api.listListings.mockRejectedValue(new Error('Refresh failed'));
   await act(async () => { changeVisibility('hidden'); changeVisibility('visible'); });
   await waitFor(() => expect(hook.result.current.isFetching).toBe(false), { timeout: 3000 });
   expect(api.listListings).toHaveBeenCalledTimes(3);
-  expect(hook.result.current.items).toEqual([]);
+  expect(hook.result.current.items).toHaveLength(12);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
   expect(hook.result.current.isLoading).toBe(false);
   expect(hook.result.current.isError).toBe(true);
-  expect(hook.result.current.error?.message).toBe('Refresh to load current marketplace results.');
+  expect(hook.result.current.error?.message).toBe('Refresh failed');
 });
 
 // Some event loops can drain microtasks between the two restoration events.
@@ -154,7 +171,10 @@ it.each(['', 'licence'])('supersedes an already-started focus refresh on persist
   const response = q ? { results: page(), total: 12 } : page();
   route.mockResolvedValueOnce(response);
   const hook = renderSearch(q);
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(12));
+  await waitFor(() => {
+    expect(hook.result.current.items).toHaveLength(12);
+    expect(hook.result.current.currentDisplayExpired).toBe(false);
+  });
   const focusResponse = deferred<typeof response>();
   const restoredResponse = deferred<typeof response>();
   route.mockReturnValueOnce(focusResponse.promise).mockReturnValueOnce(restoredResponse.promise);
@@ -163,9 +183,13 @@ it.each(['', 'licence'])('supersedes an already-started focus refresh on persist
   await act(async () => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
   await waitFor(() => expect(route).toHaveBeenCalledTimes(3));
   await act(async () => focusResponse.resolve(response));
-  expect(hook.result.current.items).toEqual([]);
-  expect(hook.result.current.isLoading).toBe(true);
+  expect(hook.result.current.items).toHaveLength(12);
+  expect(hook.result.current.currentDisplayExpired).toBe(true);
+  expect(hook.result.current.isLoading).toBe(false);
   expect(hook.result.current.isError).toBe(false);
   await act(async () => restoredResponse.resolve(response));
-  await waitFor(() => expect(hook.result.current.items).toHaveLength(12));
+  await waitFor(() => {
+    expect(hook.result.current.items).toHaveLength(12);
+    expect(hook.result.current.currentDisplayExpired).toBe(false);
+  });
 });

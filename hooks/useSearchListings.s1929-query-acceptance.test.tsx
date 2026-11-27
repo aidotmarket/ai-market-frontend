@@ -57,8 +57,9 @@ it.each(['', 'licence'])('keeps a pre-restore response hidden after restoring %j
 
   vi.setSystemTime(Date.now() - 60 * 60_000 + 16 * 60_000);
   act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
-  expect(search.result.current.items).toHaveLength(0);
-  expect(search.result.current.isLoading).toBe(true);
+  expect(search.result.current.items).toMatchObject([{id: listing.id, license_display: null}]);
+  expect(search.result.current.currentDisplayExpired).toBe(true);
+  expect(search.result.current.isLoading).toBe(false);
   expect(search.result.current.isError).toBe(false);
   expect(search.result.current.error).toBeNull();
 
@@ -67,7 +68,8 @@ it.each(['', 'licence'])('keeps a pre-restore response hidden after restoring %j
     await request;
   });
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
-  expect(search.result.current.items).toHaveLength(0);
+  expect(search.result.current.items).toMatchObject([{id: listing.id, license_display: null}]);
+  expect(search.result.current.currentDisplayExpired).toBe(true);
   search.unmount();
   client.clear();
 });
@@ -113,8 +115,9 @@ it.each(['', 'licence'])('expires %j after foreground sleep and a failed refresh
   act(() => document.dispatchEvent(new Event('visibilitychange')));
   route.mockRejectedValue(new Error('Controlled refresh failure'));
   await act(async () => { await search.result.current.refetch(); });
-  await waitFor(() => expect(search.result.current.isError).toBe(true));
-  expect(search.result.current.items).toHaveLength(0);
+  await waitFor(() => expect(search.result.current.isError).toBe(true), {timeout: 3000});
+  expect(search.result.current.items).toMatchObject([{id: listing.id, license_display: null}]);
+  expect(search.result.current.currentDisplayExpired).toBe(true);
   search.unmount();
   client.clear();
 });

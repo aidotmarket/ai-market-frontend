@@ -104,7 +104,7 @@ describe('corrected backend 1ad9300 real composed detail wire',()=>{
     fetchPublicListingDocuments.mockResolvedValue([documentFixture()]);
     const fetch=vi.fn().mockImplementation(async()=>Response.json({...wire,summary:projectedSummary}));
     vi.stubGlobal('fetch',fetch);
-    await expect(verifyCurrentListing(wire)).resolves.toBeUndefined();
+    await expect(verifyCurrentListing(wire)).resolves.toMatchObject({display: wire.license_display});
     const params=Promise.resolve({slug:wire.slug});
     document.body.innerHTML=renderToStaticMarkup(await ListingDetailPage({params}));
     const frame=within(document.body).getByTitle('Listing with platform-corrected licence display');
@@ -132,6 +132,29 @@ describe('corrected backend 1ad9300 real composed detail wire',()=>{
     await expect(verifyCurrentListing(wire)).rejects.toThrow();
     await expect(ListingDetailPage({params})).rejects.toThrow();
     await expect(generateMetadata({params})).rejects.toThrow();
+  });
+
+  it('renders the verified correction label and ignores additive fields and a mismatched JSON-LD label', async () => {
+    const {createHash} = await import('node:crypto');
+    const wire = composed.detail[2];
+    const license_label = 'Data licence for research and teaching';
+    const rendered_html = wire.approved_presentation.rendered_html.replace(
+      '<dd>ai.market Standard Data Licence v1.1</dd>', `<dd>${license_label}</dd>`,
+    );
+    fetchPublicListing.mockResolvedValue({...wire,
+      approved_presentation: {...wire.approved_presentation, rendered_html, license_label,
+        render_hash: createHash('sha256').update(rendered_html).digest('hex'), extra_html: '<script>ignoredMarkup</script>'},
+      license: license_label,
+      license_display: {...wire.license_display, license_label, extra_label: 'ignoredEvidence'},
+      jsonld: {'@type': 'Dataset', license: {name: 'Unbound JSON-LD licence'}},
+    });
+    fetchListingVersions.mockResolvedValue([]);
+    const html = renderToStaticMarkup(await ListingDetailPage({params: Promise.resolve({slug: wire.slug})}));
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    expect(within(container).getByRole('region', {name:'At a glance'}).textContent).toContain(license_label);
+    expect(within(container).getByTitle('Listing with platform-corrected licence display').getAttribute('srcdoc')).toBe(rendered_html);
+    expect(html).not.toMatch(/ignoredMarkup|ignoredEvidence|Unbound JSON-LD licence/);
   });
 });
 
@@ -1392,7 +1415,7 @@ describe('S1950 approved description display', () => {
     expect(heading.closest('details')).toBeNull();
     expect(within(container).getByText('Business').closest('details')).toBeNull();
     expect(within(container).getByText('test').closest('details')).toBeNull();
-    expect(details?.querySelector('summary')?.textContent).toBe('Original seller-approved version');
+    expect(details?.querySelector('summary')?.textContent).toBe(corrected ? 'Listing with platform-corrected licence display' : 'Original seller-approved version');
     expect(details?.hasAttribute('open')).toBe(false);
     expect(details?.querySelector('iframe')?.getAttribute('srcdoc')).toBe(presentation.rendered_html);
     expect(details?.querySelector('iframe')?.getAttribute('sandbox')).toBe('');

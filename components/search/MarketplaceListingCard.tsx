@@ -1,4 +1,4 @@
-import {readLicenseDisplay, CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
+import {readLicenseDisplay, CORRECTION_NOTICE_BUYER, type LicenseDisplay} from '@/lib/publicPresentation';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
@@ -8,11 +8,13 @@ import type { ListingListItem, SearchResultItem } from '@/types';
 
 type CardListing = ListingListItem | SearchResultItem;
 
-export function MarketplaceListingCard({ listing }: { listing: CardListing }) {
+export function MarketplaceListingCard({ listing, verifiedDisplay }: { listing: CardListing; verifiedDisplay?: LicenseDisplay | null }) {
   if (generatedSampleState(listing) !== 'ordinary') return <GeneratedSampleCard listing={listing} />;
   let display;
   try {
-    display = readLicenseDisplay('license_display' in listing ? listing.license_display : null);
+    display = verifiedDisplay === undefined
+      ? readLicenseDisplay('license_display' in listing ? listing.license_display : null)
+      : verifiedDisplay;
   } catch {
     // Contain invalid evidence to this card without emitting its licence line.
     display = null;
