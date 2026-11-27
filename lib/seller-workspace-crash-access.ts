@@ -57,6 +57,7 @@ type CrashObservation = {
 };
 let rootAccess: CrashObservation | undefined;
 let workspaceVisit: WorkspaceVisit | undefined;
+const deniedCrashSessions = new WeakSet<SellerSession>();
 
 function invalidateSellerCrashSession() {
   retireRootSellerCrashAccess();
@@ -68,6 +69,12 @@ export function retireRootSellerCrashAccess() {
   if (!rootAccess) return;
   window.removeEventListener('capabilities:changed', retireRootSellerCrashAccess);
   rootAccess = undefined;
+}
+
+export function denySellerWorkspaceCrashAccess() {
+  // A route return can reuse the dashboard snapshot until capabilities are read again.
+  if (rootAccess) deniedCrashSessions.add(rootAccess.session);
+  retireRootSellerCrashAccess();
 }
 
 export function clearRootSellerCrashAccess() {
@@ -103,6 +110,7 @@ function currentSourceReadEpoch() {
 }
 
 export function getSellerWorkspaceCrashProof(session: SellerSession) {
+  if (deniedCrashSessions.has(session)) return null;
   const token = getCurrentSellerSessionToken(session);
   if (!token) return null;
   const draft = rootAccess?.session === session && rootAccess.sourceReads.pending === 0 && isSellerWorkspacePath(rootAccess.pathname)
@@ -172,7 +180,7 @@ export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | n
 
 export function observeRootSellerCrashAccess(session: SellerSession | null) {
   retireRootSellerCrashAccess();
-  if (!session || !getCurrentSellerSessionToken(session)) return;
+  if (!session || deniedCrashSessions.has(session) || !getCurrentSellerSessionToken(session)) return;
   const visit = workspaceVisit;
   const sourceReads = currentSourceReadEpoch();
   if (!visit || !sourceReads) return;

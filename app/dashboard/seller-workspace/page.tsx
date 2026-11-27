@@ -21,6 +21,7 @@ import SavedLicenseStep from '@/components/seller-workspace/SavedLicenseStep';
 import GuidedPublishStep from '@/components/seller-workspace/GuidedPublishStep';
 import { WorkspaceConfirmation, WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
+import { denySellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash-access';
 import {
   type AWSAuthorization,
   type ConnectionVerifyRequest,
@@ -215,6 +216,12 @@ export default function SellerWorkspacePage() {
     setWholeBucketConfirmed(false);
   }, []);
 
+  const gateForActiveSeller = useCallback(() => {
+    if (!mountedRef.current) return;
+    denySellerWorkspaceCrashAccess();
+    setPageState('gated');
+  }, []);
+
   const showAuthorization = useCallback((session: AuthorizationSession | null) => {
     if (!mountedRef.current) return;
     authorizationRef.current = session;
@@ -285,7 +292,7 @@ export default function SellerWorkspacePage() {
       } catch (error) {
         if (cancelled) return;
         const code = errorCode(error);
-        if (code === 'active_seller_required') setPageState('gated');
+        if (code === 'active_seller_required') gateForActiveSeller();
         else if (code === 'unavailable') setPageState('unavailable');
         else setPageState('error');
       }
@@ -298,7 +305,7 @@ export default function SellerWorkspacePage() {
       authorizationRef.current = null;
       mutationKeysRef.current.clear();
     };
-  }, [clearSensitive, retryKey]);
+  }, [clearSensitive, gateForActiveSeller, retryKey]);
 
   const trustPolicyJSON = useMemo(
     () =>
@@ -333,7 +340,7 @@ export default function SellerWorkspacePage() {
     const code = errorCode(error);
     if (code === 'active_seller_required') {
       clearSensitive();
-      setPageState('gated');
+      gateForActiveSeller();
       return true;
     }
     if (code === 'unavailable') {

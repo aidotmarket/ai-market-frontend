@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { StrictMode, useState, type ReactNode } from 'react';
+import { StrictMode, useContext, useState, type ReactNode } from 'react';
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import type { SellerWorkspaceCapabilities } from '@/api/sellerWorkspace';
+import type { SellerWorkspaceCrashProof } from '@/lib/seller-workspace-crash';
 
 let DashboardLayout: typeof import('./dashboard/layout').default;
 let GlobalError: typeof import('./global-error').default;
@@ -19,13 +21,19 @@ let api: typeof import('@/api/client').api;
 let refreshAccessToken: typeof import('@/api/client').refreshAccessToken;
 const defaultRefreshAdapter = axios.defaults.adapter;
 
-const { getCapabilities, getWorkspaceCapabilities, listGateways, logout, push, readListingDraft, sourceGet } = vi.hoisted(() => ({
+const {
+  getCapabilities, getWorkspaceCapabilities, listWorkspaceConnections, createWorkspaceConnection,
+  listGateways, logout, push, readListingDraft, readOwnerListings, sourceGet,
+} = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
-  getWorkspaceCapabilities: vi.fn(async () => null),
+  getWorkspaceCapabilities: vi.fn<() => Promise<SellerWorkspaceCapabilities | null>>(),
+  listWorkspaceConnections: vi.fn(),
+  createWorkspaceConnection: vi.fn(),
   listGateways: vi.fn(async () => []),
   logout: vi.fn(async () => {}),
   push: vi.fn(),
   readListingDraft: vi.fn(),
+  readOwnerListings: vi.fn(),
   sourceGet: vi.fn(),
 }));
 vi.mock('next/navigation', async importOriginal => ({
@@ -35,11 +43,17 @@ vi.mock('next/navigation', async importOriginal => ({
 vi.mock('@/api/capabilities', () => ({ getCapabilities }));
 vi.mock('@/api/auth', () => ({ logout }));
 vi.mock('@/api/sellerListingDraft', () => ({ readListingDraft }));
-vi.mock('@/api/connector-seller-settings', () => ({ nativeWrite: vi.fn() }));
+vi.mock('@/api/connector-seller-settings', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/connector-seller-settings')>(),
+  nativeRead: readOwnerListings,
+  nativeWrite: vi.fn(),
+}));
 vi.mock('@/api/sellerGateways', () => ({ listSellerGateways: listGateways }));
-vi.mock('@/api/sellerWorkspace', () => ({
+vi.mock('@/api/sellerWorkspace', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/sellerWorkspace')>(),
   getSellerWorkspaceCapabilities: getWorkspaceCapabilities,
-  isAWSConnectionAvailable: () => false,
+  listSellerWorkspaceConnections: listWorkspaceConnections,
+  createSellerWorkspaceConnection: createWorkspaceConnection,
 }));
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({ default: () => null }));
 
@@ -207,7 +221,10 @@ beforeEach(async () => {
   useAuthStore.setState({ user: null, token: null, isAuthenticated: false, hydrated: false,
     isLoading: false, pendingTwoFactor: null, hydrate: hydrate.mockClear() });
   getCapabilities.mockReset().mockResolvedValue(capability('active'));
-  getWorkspaceCapabilities.mockClear();
+  getWorkspaceCapabilities.mockReset().mockResolvedValue(null);
+  listWorkspaceConnections.mockReset().mockResolvedValue([]);
+  createWorkspaceConnection.mockReset();
+  readOwnerListings.mockReset().mockResolvedValue({ items: [], cursor: null });
   listGateways.mockClear();
   readListingDraft.mockReset().mockResolvedValue({ draft_id: draftUuid, version: 1, content: { title: 'synthetic private title' } });
   sourceGet.mockReset();
@@ -249,6 +266,77 @@ it('reports once after the established dashboard observation outlives its provid
   expect(readListingDraft).toHaveBeenCalledOnce();
   expect(hydrate).not.toHaveBeenCalled();
 });
+
+it.each(['initial load', 'connection action', 'renewed capability', 'ordinary load error'] as const)(
+  'uses the Workspace access state after %s for the root fallback', async scenario => {
+    const { default: SellerWorkspacePage } = await import('./dashboard/seller-workspace/page');
+    const { SellerWorkspaceApiError } = await import('@/api/sellerWorkspace');
+    const { SellerWorkspaceCrashAccess } = await import('@/lib/seller-workspace-crash');
+    const denied = new SellerWorkspaceApiError('active_seller_required');
+    const available = { enabled: true, status: 'available', reason: 'enabled' } as const;
+    const disabled = { enabled: false, status: 'disabled', reason: 'disabled' } as const;
+    const provider = { connect: disabled, profile: disabled, publish: disabled, delivery: disabled };
+    getWorkspaceCapabilities.mockResolvedValue({
+      master: available, providers: { aws: { ...provider, connect: available }, r2: provider },
+    });
+    if (scenario === 'initial load') {
+      getWorkspaceCapabilities.mockResolvedValueOnce(null).mockRejectedValueOnce(denied);
+    }
+    if (scenario === 'ordinary load error') {
+      listWorkspaceConnections.mockRejectedValueOnce(new Error('synthetic read error'));
+    }
+    createWorkspaceConnection.mockRejectedValueOnce(denied);
+
+    const captured: { panelProof: SellerWorkspaceCrashProof | null } = { panelProof: null };
+    function RoutedWorkspace() {
+      const pathname = useContext(PathnameContext);
+      const getProof = useContext(SellerWorkspaceCrashAccess);
+      return pathname === workspace ? <>
+        <button type="button" onClick={() => { captured.panelProof = getProof; }}>Capture panel proof</button>
+        <SellerWorkspacePage />
+      </> : null;
+    }
+    const dashboard = await observeActiveSeller(undefined, <RoutedWorkspace />);
+    const attemptedConnection = scenario === 'connection action' || scenario === 'renewed capability';
+    if (attemptedConnection) {
+      const action = await screen.findByRole('button', { name: 'Add AWS connection' });
+      expect(getRootSellerCrashAccess(workspace)?.()?.token).toBe('synthetic-token');
+      fireEvent.click(screen.getByRole('button', { name: 'Capture panel proof' }));
+      expect(captured.panelProof?.()?.token).toBe('synthetic-token');
+      fireEvent.click(action);
+    }
+    const gated = scenario !== 'ordinary load error';
+    await screen.findByRole('heading', { name: gated ? 'Active seller access required' : 'Workspace could not be loaded' });
+    expect(getCapabilities).toHaveBeenCalledTimes(attemptedConnection ? 2 : 1);
+    expect(getWorkspaceCapabilities).toHaveBeenCalledTimes(2);
+    expect(listWorkspaceConnections).toHaveBeenCalledTimes(scenario === 'initial load' ? 0 : 1);
+    expect(createWorkspaceConnection).toHaveBeenCalledTimes(attemptedConnection ? 1 : 0);
+    expect(getRootSellerCrashAccess(workspace)?.()?.token).toBe(gated ? undefined : 'synthetic-token');
+    if (attemptedConnection) expect(captured.panelProof?.()).toBeNull();
+
+    if (scenario === 'renewed capability') {
+      dashboard.navigate(sibling);
+      dashboard.navigate(workspace);
+      await screen.findByRole('button', { name: 'Add AWS connection' });
+      expect(getRootSellerCrashAccess(workspace)).toBeNull();
+      await act(async () => { window.dispatchEvent(new Event('capabilities:changed')); });
+      expect(getRootSellerCrashAccess(workspace)?.()?.token).toBe('synthetic-token');
+      expect(getCapabilities).toHaveBeenCalledTimes(5);
+      expect(getWorkspaceCapabilities).toHaveBeenCalledTimes(4);
+      expect(listWorkspaceConnections).toHaveBeenCalledTimes(2);
+    }
+    dashboard.unmount();
+    const fallback = renderFallback();
+    expectBuiltInFallback(fallback.container);
+    await Promise.resolve();
+    const authorized = !gated || scenario === 'renewed capability';
+    expect(fetchMock).toHaveBeenCalledTimes(authorized ? 1 : 0);
+    if (authorized) {
+      expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer synthetic-token' });
+      expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toMatchObject({ step: 'root' });
+    }
+  },
+);
 
 it('omits the previous UUID after active capability is re-established without a fresh draft read', async () => {
   const dashboard = await observeActiveSeller(true);
