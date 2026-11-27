@@ -22,14 +22,17 @@ import type { DataRequestListItem } from '@/types';
 
 const marketplaceSummary =
   'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
-const homepageDescription = 'List your data once from your own storage. Listings are built for AI search to read, so buyers find you. Free to list; 5% only when it sells.';
+const homepageTitle = 'ai.market — SEO for data';
+const heroSubhead = 'The marketplace built for AI. For AI to find. For AI to train.';
+const heroFee = 'Free to list; 5% only when it sells.';
+const homepageDescription = `${heroSubhead} ${heroFee}`;
 
 export const metadata: Metadata = {
   alternates: { canonical: '/' },
-  title: { absolute: "ai.market — Where AI finds the data it's missing" },
+  title: { absolute: homepageTitle },
   description: homepageDescription,
   openGraph: {
-    title: "ai.market — Where AI finds the data it's missing",
+    title: homepageTitle,
     description: homepageDescription,
     url: 'https://ai.market',
     siteName: 'ai.market',
@@ -38,7 +41,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "ai.market — Where AI finds the data it's missing",
+    title: homepageTitle,
     description: homepageDescription,
     images: ['/og/home.png'],
   },
@@ -313,15 +316,14 @@ export default async function LandingPage() {
                   Data marketplace for businesses
                 </span>
                 <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-5xl lg:text-6xl">
-                  Where AI finds{' '}
-                  <span className="text-[#3F51B5]">the data it&apos;s missing.</span>
+                  SEO{' '}
+                  <span className="text-[#3F51B5]">for data.</span>
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
-                  List your data once from your own storage. Listings are built for AI search to read,
-                  so buyers find you. Buyers can search, or post a request and let sellers come to them.
+                  {heroSubhead}
                 </p>
                 <p className="mt-3 max-w-xl text-sm font-semibold text-[#0F6E56]">
-                  Free to list; 5% only when it sells.
+                  {heroFee}
                 </p>
                 <HeroSearch />
                 <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">

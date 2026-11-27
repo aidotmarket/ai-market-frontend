@@ -44,7 +44,7 @@ const publicPages = [
 describe('route canonical metadata', () => {
   it('uses the homepage hero title as the root default', () => {
     expect(root.title).toEqual({
-      default: "ai.market - Where AI finds the data it's missing",
+      default: 'ai.market - SEO for data',
       template: '%s | ai.market',
     });
   });
