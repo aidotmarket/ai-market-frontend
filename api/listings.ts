@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from './client';
+import type { AxiosRequestConfig } from 'axios';
 import { privateReadOptions } from './privateReads';
 import type {LicenseSelection} from './listingLicenses';
 import type { ListingAuthorityReferences } from './listingAuthority';
@@ -8,7 +9,15 @@ import type { ListingAuthorityReferences } from './listingAuthority';
 import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse, SellerListingItem } from '@/types';
 import type { TableFormat } from '@/components/gateways/fileMetadata';
 
-export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title' | 'status'> & ListingAuthorityReferences;
+export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title'> & ListingAuthorityReferences & {
+  status: SellerListingItem['status'] | 'hidden' | 'withdrawn' | 'held';
+  price?: number | null;
+  updated_at?: ListingDetail['updated_at'];
+  license_display?: ListingDetail['license_display'];
+  at_a_glance?: ListingDetail['at_a_glance'];
+  structured_metadata?: unknown;
+  raw_metadata?: { object_count?: number | null; file_size_bytes?: number | null } | null;
+};
 export type ListingWithAuthority = ListingDetail & ListingAuthorityReferences;
 
 export interface ListingAccessWindowResponse { listing_id: string; access_window_days: number }
@@ -140,8 +149,9 @@ export interface PendingSellerTermsListing extends ListingAuthorityReferences {
   license_status: 'pending_seller_terms';
 }
 
-export const getPendingSellerTermsListings = () =>
+export const getPendingSellerTermsListings = (options?: Pick<AxiosRequestConfig, 'timeout' | 'signal' | 'validateStatus'>) =>
   api.get<{ count: number; listings: PendingSellerTermsListing[] }>('/sellers/me/listings', {
+    ...options,
     params: { license_status: 'pending_seller_terms' },
   });
 export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);

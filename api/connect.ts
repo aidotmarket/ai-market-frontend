@@ -1,10 +1,11 @@
-import { AxiosError } from 'axios';
+import { AxiosError, type AxiosRequestConfig } from 'axios';
 import { api } from './client';
 
 export const STRIPE_CONNECT_URL_PREFIX = 'https://connect.stripe.com/';
 
 export const getConnectOnboarding = () => api.post('/connect/onboarding');
-export const getConnectStatus = () => api.get('/connect/status');
+export const getConnectStatus = (options?: Pick<AxiosRequestConfig, 'timeout' | 'signal' | 'validateStatus'>) =>
+  options ? api.get('/connect/status', options) : api.get('/connect/status');
 export const getConnectLoginLink = () => api.post('/connect/login-link');
 
 export function getConnectOnboardingRedirectUrl(data: unknown) {

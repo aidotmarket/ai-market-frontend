@@ -28,7 +28,7 @@ vi.mock('@/components/Toast', () => ({ useToast: () => ({ toast: navigation.toas
 vi.mock('@/components/legal/TermsGate', () => ({
   useTermsGate: termsGate,
 }));
-vi.mock('@/components/listings/SellerShareControls', () => ({ default: ({ listingId }: { listingId: string }) => <span data-testid={`share-${listingId}`}>Share controls</span> }));
+vi.mock('@/components/listings/SellerShareControls', () => ({ default: ({ listingId }: { listingId: string }) => <button data-testid={`share-${listingId}`}>Share</button> }));
 
 beforeEach(() => {
   Object.assign(auth, { user: { id: 'seller-a' }, hydrated: true, isAuthenticated: true, isLoading: false });
@@ -47,14 +47,47 @@ it('renders listings with enabled payouts on the happy path', async () => {
   render(<ListingsPage />);
   expect(await screen.findByText('Seller dataset')).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Seller dataset' }).getAttribute('href')).toBe('/dashboard/listings/listing-1');
-  expect(screen.queryByText(/Finish payout setup/)).toBeNull();
+  expect(screen.queryByText(/Payout setup is incomplete/)).toBeNull();
 });
 
 it('shows the payout setup warning when Connect confirms disabled payouts', async () => {
   api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: false } });
   render(<ListingsPage />);
   expect(await screen.findByText('Seller dataset')).toBeTruthy();
-  expect(screen.getByText(/Finish payout setup/)).toBeTruthy();
+  expect(screen.getByText(/Payout setup is incomplete/)).toBeTruthy();
+});
+
+const readinessCases = (['enabled', 'disabled', 'unknown'] as const).flatMap(payouts =>
+  (['pending', 'clear', 'unknown'] as const).map(terms => ({ payouts, terms })),
+);
+
+it.each(readinessCases)('shows one status and the applicable fix with $payouts payouts and $terms Terms', async ({ payouts, terms }) => {
+  const title = `Synthetic dataset ${'longUnbrokenTitle'.repeat(20)}`;
+  api.getMyListings.mockResolvedValue({ data: [{ ...rows(1, 1)[0], title }, ...rows(2, 1)] });
+  if (payouts === 'unknown') api.getConnectStatus.mockRejectedValue(new Error('Connect unavailable'));
+  else api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: payouts === 'enabled' } });
+  if (terms === 'unknown') api.getPendingSellerTermsListings.mockRejectedValue(new Error('Terms unavailable'));
+  if (terms === 'pending') api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [
+    { id: 'id-1', status: 'published', license_status: 'pending_seller_terms' },
+  ] } });
+
+  render(<ListingsPage />);
+  const row = within((await screen.findByRole('link', { name: title })).closest('li')!);
+  const held = terms === 'pending' || payouts === 'disabled';
+  expect(row.getAllByText(/^Live(?: — not buyable yet)?$/)).toHaveLength(1);
+  expect(row.getByText(held ? 'Live — not buyable yet' : 'Live')).toBeTruthy();
+  const fixes = row.queryAllByRole('link', { name: /^Fix / });
+  expect(fixes).toHaveLength(held ? 1 : 0);
+  if (terms === 'pending') {
+    expect(row.getByText('Seller Terms need to be accepted.')).toBeTruthy();
+    expect(fixes[0].getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings');
+  } else if (payouts === 'disabled') {
+    expect(row.getByText('Payout setup is incomplete.')).toBeTruthy();
+    expect(fixes[0].getAttribute('href')).toBe('/dashboard');
+  }
+  const other = within(screen.getByRole('link', { name: 'Owner row 2' }).closest('li')!);
+  expect(other.queryByRole('link', { name: 'Fix seller Terms' })).toBeNull();
+  for (const action of ['Share', 'Edit', 'Unlist', 'Delete']) expect(row.getByRole('button', { name: action })).toBeTruthy();
 });
 
 const publicReference = {
@@ -80,12 +113,12 @@ it.each([
   if (payouts === 'unknown') api.getConnectStatus.mockRejectedValue(new Error('Connect unavailable'));
   else api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: payouts === 'enabled' } });
   render(<ListingsPage />);
-  const row = (await screen.findByRole('link', { name: 'Emissions and allowances' })).closest('tr')!;
+  const row = (await screen.findByRole('link', { name: 'Emissions and allowances' })).closest('li')!;
   expect(within(row).getByText('Public source reference — no checkout.')).toBeTruthy();
-  expect(within(row).queryByText(/Finish payout setup/)).toBeNull();
-  expect(within(row).getByText('Published')).toBeTruthy();
+  expect(within(row).queryByText(/Payout setup is incomplete/)).toBeNull();
+  expect(within(row).getByText('Live')).toBeTruthy();
   expect(within(row).getByRole('link').getAttribute('href')).toBe('/dashboard/listings/source-reference');
-  for (const name of ['Edit', 'Unpublish', 'Delete']) expect(within(row).getByRole('button', { name })).toBeTruthy();
+  for (const name of ['Edit', 'Unlist', 'Delete']) expect(within(row).getByRole('button', { name })).toBeTruthy();
   expect(api.getMyListings).toHaveBeenCalledTimes(1);
   expect(api.getConnectStatus).toHaveBeenCalledTimes(1);
   expect(api.getPendingSellerTermsListings).toHaveBeenCalledTimes(1);
@@ -104,8 +137,8 @@ it.each([
   }] });
   api.getConnectStatus.mockResolvedValue({ data: { payouts_enabled: false } });
   render(<ListingsPage />);
-  const row = (await screen.findByRole('link', { name: 'Legacy reference' })).closest('tr')!;
-  expect(within(row).getByText(/Finish payout setup/)).toBeTruthy();
+  const row = (await screen.findByRole('link', { name: 'Legacy reference' })).closest('li')!;
+  expect(within(row).getByText(/Payout setup is incomplete/)).toBeTruthy();
   expect(within(row).queryByText('Public source reference — no checkout.')).toBeNull();
 });
 
@@ -114,7 +147,7 @@ it.each([403, 500])('renders listings with unknown payouts after Connect returns
   render(<ListingsPage />);
   expect(await screen.findByText('Seller dataset')).toBeTruthy();
   expect(screen.queryByText("We couldn't load your listings just now. Try again, or contact support if it keeps happening.")).toBeNull();
-  expect(screen.queryByText(/Finish payout setup/)).toBeNull();
+  expect(screen.queryByText(/Payout setup is incomplete/)).toBeNull();
 });
 
 it('shows the listings error when listings fail', async () => {
@@ -127,10 +160,11 @@ it('shows the listings error when listings fail', async () => {
 it('prompts sellers with inherited listings to accept Terms 1.1', async () => {
   api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [{ id: 'listing-1', slug: 'seller-dataset', title: 'Seller dataset', status: 'published', license_status: 'pending_seller_terms' }] } });
   render(<ListingsPage />);
-  const link = await screen.findByRole('link', { name: 'Review and accept Terms 1.1' });
+  const link = await screen.findByRole('link', { name: 'Fix seller Terms' });
   expect(link.getAttribute('href')).toBe('/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings');
   expect(termsGate).toHaveBeenCalledWith('seller');
-  expect(screen.getByText(/not yet available to buy/)).toBeTruthy();
+  expect(screen.getByText('Live — not buyable yet')).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Review and accept Terms 1.1' })).toBeNull();
 });
 
 it('prompts inherited sellers with the backend-served 1.2 version', async () => {
@@ -167,6 +201,19 @@ function deferred<T>() {
 }
 const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
 
+it('waits for the new page before showing a Terms banner based on its rows', async () => {
+  const nextPage = deferred<{ data: ReturnType<typeof rows> }>();
+  api.getMyListings.mockResolvedValueOnce({ data: rows(1, 21) }).mockReturnValueOnce(nextPage.promise);
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [{ id: 'id-1' }] } });
+  render(<ListingsPage />);
+  await screen.findByRole('link', { name: 'Fix seller Terms' });
+  fireEvent.click(button('Next'));
+  expect(screen.getByText('Loading listings...')).toBeTruthy();
+  expect(screen.queryByText('1 inherited listing needs seller Terms.')).toBeNull();
+  await act(async () => { nextPage.resolve({ data: rows(21, 1) }); });
+  expect(screen.getByText('1 inherited listing needs seller Terms.')).toBeTruthy();
+});
+
 it('reaches older rows in backend order, hides each sentinel, and returns from the last page', async () => {
   api.getMyListings.mockResolvedValueOnce({ data: rows(1, 21) })
     .mockResolvedValueOnce({ data: rows(21, 21) })
@@ -177,7 +224,7 @@ it('reaches older rows in backend order, hides each sentinel, and returns from t
   expect(button('Previous').disabled).toBe(true);
   expect(screen.queryByText('Owner row 21')).toBeNull();
   expect(screen.getByText('Page 1 · Showing 1–20')).toBeTruthy();
-  expect(screen.getAllByRole('row').slice(1).map(row => within(row).getByRole('link').textContent))
+  expect(screen.getAllByRole('listitem').map(row => within(row).getByRole('link').textContent))
     .toEqual(rows(1, 20).map(row => row.title));
   fireEvent.click(button('Next'));
   await screen.findByText('Owner row 21');
@@ -198,7 +245,7 @@ it.each([0, 20, 21])('uses only a real sentinel for the %s-row first-page bounda
   api.getMyListings.mockResolvedValue({ data: rows(1, count) });
   render(<ListingsPage />);
   await waitFor(() => expect(screen.queryByText('Loading listings...')).toBeNull());
-  expect(screen.queryAllByRole('row').length).toBe(count === 0 ? 0 : 21);
+  expect(screen.queryAllByRole('listitem')).toHaveLength(Math.min(count, 20));
   expect(button('Next').disabled).toBe(count !== 21);
   expect(button('Previous').disabled).toBe(true);
   if (count === 0) expect(screen.getByText('No listings yet')).toBeTruthy();
@@ -277,7 +324,7 @@ it('clears confirmation on page change and retires a delayed TermsGate edit call
   navigation.accept.mockImplementation((action: () => void) => { accepted = action; });
   api.getMyListings.mockResolvedValueOnce({ data: rows(1, 21) }).mockResolvedValueOnce({ data: rows(21, 1) });
   render(<ListingsPage />); await screen.findByText('Owner row 1');
-  const first = screen.getByText('Owner row 1').closest('tr')!;
+  const first = screen.getByText('Owner row 1').closest('li')!;
   fireEvent.click(within(first).getByRole('button', { name: 'Edit' }));
   fireEvent.click(within(first).getByRole('button', { name: 'Delete' }));
   expect(button('Delete listing')).toBeTruthy();
@@ -295,11 +342,11 @@ it.each(['delete', 'unpublish'])('holds paging through %s acknowledgement and re
   api.deleteListing.mockReturnValue(mutation.promise); api.unpublishListing.mockReturnValue(mutation.promise);
   render(<ListingsPage />); await screen.findByText('Owner row 1');
   fireEvent.click(button('Next')); await screen.findByText('Owner row 21');
-  const row = screen.getByText('Owner row 21').closest('tr')!;
+  const row = screen.getByText('Owner row 21').closest('li')!;
   if (kind === 'delete') {
     fireEvent.click(within(row).getByRole('button', { name: 'Delete' }));
     fireEvent.click(button('Delete listing')); fireEvent.click(button('Delete listing'));
-  } else fireEvent.click(within(row).getByRole('button', { name: 'Unpublish' }));
+  } else fireEvent.click(within(row).getByRole('button', { name: 'Unlist' }));
   expect(button('Next').disabled).toBe(true); expect(button('Previous').disabled).toBe(true);
   expect(kind === 'delete' ? api.deleteListing : api.unpublishListing).toHaveBeenCalledExactlyOnceWith('id-21');
   await act(async () => mutation.resolve({}));
@@ -346,7 +393,7 @@ it('keeps a failed mutation refresh truthful and manually retryable without rest
   api.getMyListings.mockResolvedValueOnce({ data: rows(1, 21) })
     .mockRejectedValueOnce(new Error('refresh offline')).mockResolvedValueOnce({ data: rows(2, 20) });
   render(<ListingsPage />); await screen.findByText('Owner row 1');
-  const row = screen.getByText('Owner row 1').closest('tr')!;
+  const row = screen.getByText('Owner row 1').closest('li')!;
   fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Delete listing'));
   await screen.findByRole('alert');
   expect(screen.queryByText('Owner row 1')).toBeNull();
@@ -356,20 +403,25 @@ it('keeps a failed mutation refresh truthful and manually retryable without rest
 });
 
 it('preserves all owner statuses, sharing eligibility, TermsGate editing and delete cancellation', async () => {
-  const statuses = ['draft', 'enhanced', 'published', 'unlisted', 'pending_review', 'suspended', 'archived'];
-  api.getMyListings.mockResolvedValue({ data: rows(1, statuses.length).map((row, i) => ({ ...row, status: statuses[i] })) });
+  const statuses = [
+    ['draft', 'Draft'], ['enhanced', 'Enhanced'], ['published', 'Live'], ['unlisted', 'Not public'],
+    ['pending_review', 'Pending review'], ['suspended', 'Suspended'], ['archived', 'Archived'],
+    ['hidden', 'Not public'], ['withdrawn', 'Withdrawn'], ['held', 'Held'], ['future_state', 'future_state'],
+  ];
+  api.getMyListings.mockResolvedValue({ data: rows(1, statuses.length).map((row, i) => ({ ...row, status: statuses[i][0] })) });
   render(<ListingsPage />); await screen.findByText('Owner row 1');
   expect(api.getMyListings).toHaveBeenCalledExactlyOnceWith({ skip: 0, limit: 21 });
-  statuses.forEach((status, i) => {
-    const row = screen.getByText(`Owner row ${i + 1}`).closest('tr')!;
-    expect(within(row).queryByRole('button', { name: 'Unpublish' }) !== null)
+  statuses.forEach(([status, label], i) => {
+    const row = screen.getByText(`Owner row ${i + 1}`).closest('li')!;
+    expect(within(row).getAllByText(label, { exact: true })).toHaveLength(1);
+    expect(within(row).queryByRole('button', { name: 'Unlist' }) !== null)
       .toBe(status === 'published');
     expect(within(row).queryByRole('link', { name: 'Publish' }) !== null).toBe(status === 'unlisted');
     expect(within(row).queryByTestId(`share-id-${i + 1}`) !== null).toBe(status === 'published');
     expect(within(row).getByRole('button', { name: 'Edit' })).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy();
   });
-  const draft = screen.getByText('Owner row 1').closest('tr')!;
+  const draft = screen.getByText('Owner row 1').closest('li')!;
   fireEvent.click(within(draft).getByRole('button', { name: 'Edit' }));
   expect(navigation.accept).toHaveBeenCalledTimes(1);
   expect(navigation.push).toHaveBeenCalledExactlyOnceWith('/dashboard/listings/id-1/edit');
@@ -411,10 +463,10 @@ it.each(['delete', 'unpublish'])('keeps rows and releases controls after a rejec
   api.deleteListing.mockRejectedValue(new Error('offline')); api.unpublishListing.mockRejectedValue(new Error('offline'));
   api.getMyListings.mockResolvedValue({ data: rows(1, 21) });
   render(<ListingsPage />); await screen.findByText('Owner row 1');
-  const row = screen.getByText('Owner row 1').closest('tr')!;
+  const row = screen.getByText('Owner row 1').closest('li')!;
   if (kind === 'delete') {
     fireEvent.click(within(row).getByRole('button', { name: 'Delete' })); fireEvent.click(button('Delete listing'));
-  } else fireEvent.click(within(row).getByRole('button', { name: 'Unpublish' }));
+  } else fireEvent.click(within(row).getByRole('button', { name: 'Unlist' }));
   await waitFor(() => expect(navigation.toast).toHaveBeenCalledWith(kind === 'delete' ? "We couldn't delete your listing just now. Try again, or contact support if it keeps happening." : LISTING_ACTION_FALLBACK, 'error'));
   expect(screen.getByText('Owner row 1')).toBeTruthy();
   expect(button('Next').disabled).toBe(false);
@@ -429,7 +481,7 @@ async function rejectListingAction(data: unknown, kind: 'unpublish' | 'delete' =
   if (kind === 'delete') {
     fireEvent.click(button('Delete'));
     fireEvent.click(button('Delete listing'));
-  } else fireEvent.click(button('Unpublish'));
+  } else fireEvent.click(button('Unlist'));
   await waitFor(() => expect(navigation.toast).toHaveBeenCalledTimes(1));
   // A refusal must retain the listing without a success toast or refresh.
   expect(screen.getByText('Seller dataset')).toBeTruthy();
@@ -487,7 +539,7 @@ it.each(['unpublish', 'delete'] as const)('dashboard_unpublish_account_switch_di
   await screen.findByText('Owner row 1');
   if (kind === 'delete') {
     fireEvent.click(button('Delete')); fireEvent.click(button('Delete listing'));
-  } else fireEvent.click(button('Unpublish'));
+  } else fireEvent.click(button('Unlist'));
   auth.user = { id: 'seller-b' }; view.rerender(<ListingsPage />);
   await screen.findByText('Owner row 101');
   await act(async () => mutation.reject({ response: { status: 409, data: { detail: { code: 'capability_required' } } } }));
