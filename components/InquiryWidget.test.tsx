@@ -517,6 +517,36 @@ describe('InquiryWidget', () => {
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
   });
 
+  it('renders allAI answers with Markdown while showing the buyer question verbatim', async () => {
+    const listingUrl = 'https://ai.market/listings/x';
+    const question = `**Sales &#38; Transactions** <${listingUrl}>`;
+    const { container } = renderWidget();
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce(completedSseResponse([
+        'Sales &#38; Transactions &#40;10k&#41;',
+        'Synthetic Retail Sales &#38; Transactions &#40;10k &#43; 730k rows&#41;',
+        'CC BY 4&#46;0',
+        '&#91;x&#93;&#40;https://evil.example&#41;',
+        '&#33;&#91;i&#93;&#40;https://evil.example/p.png&#41;',
+        '<img src="https://evil.example/raw.png">',
+        `<${listingUrl}>`,
+      ].join('\n\n')));
+
+    typeQuestion(question);
+
+    expect(await screen.findByText('Sales & Transactions (10k)')).toBeTruthy();
+    expect(screen.getByText('Synthetic Retail Sales & Transactions (10k + 730k rows)')).toBeTruthy();
+    expect(screen.getByText('CC BY 4.0')).toBeTruthy();
+    expect(screen.getByText('[x](https://evil.example)')).toBeTruthy();
+    expect(screen.getByText('![i](https://evil.example/p.png)')).toBeTruthy();
+    expect(container.querySelector('a[href*="evil.example"], img[src*="evil.example"]')).toBeNull();
+    const link = screen.getByRole('link', { name: listingUrl });
+    expect(link.getAttribute('href')).toBe(listingUrl);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(screen.getByText(question).textContent).toBe(question);
+  });
+
   it('drops a cached session after a message 404 and creates a fresh session on retry', async () => {
     const requestOrder: string[] = [];
     let sessionAttempt = 0;
@@ -1070,6 +1100,12 @@ describe('InquiryWidget', () => {
         role: 'buyer',
         content: 'Is this current?',
         created_at: '2026-08-05T10:00:00Z',
+      }, {
+        id: 'message-2',
+        conversation_id: 'conversation-1',
+        role: 'seller',
+        content: '**Updated daily** &#38; <https://ai.market/listings/x>',
+        created_at: '2026-08-05T10:00:00Z',
       }],
       created_at: '2026-08-05T10:00:00Z',
     };
@@ -1087,6 +1123,8 @@ describe('InquiryWidget', () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
     const heading = await screen.findByRole('heading', { name: 'Your Inquiry' });
+    const sellerReply = '**Updated daily** &#38; <https://ai.market/listings/x>';
+    expect(screen.getByText(sellerReply).textContent).toBe(sellerReply);
     const reply = screen.getByRole('textbox') as HTMLInputElement;
     fireEvent.change(reply, { target: { value: 'How often is it updated?' } });
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
