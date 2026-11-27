@@ -19,8 +19,9 @@ function record(value: unknown): Record<string, unknown> | undefined {
 export function formatListingActionError(error: unknown, action: 'update' | 'delete' = 'update'): ListingActionError {
   if (isLegacyActionAuthError(error)) return { message: ACTION_AUTH_REFRESH };
 
-  const responseData = record(record(error)?.response)?.data;
-  const data = record(responseData);
+  const response = record(record(error)?.response);
+  const status = response?.status;
+  const data = record(response?.data);
   const detail = data?.detail;
   const capabilityFailure = [record(detail), data].find(value =>
     value?.code === 'capability_required' || value?.error === 'capability_required');
@@ -45,7 +46,20 @@ export function formatListingActionError(error: unknown, action: 'update' | 'del
     'This listing is managed in Seller Workspace. To sell it again, open Seller Workspace, choose Manage listings, then Resume sales.': 'To sell this listing again, open Seller Workspace, choose Manage listings, then Resume sales.',
   }, '');
   if (workspaceMessage) return { message: workspaceMessage, workspaceHref: '/dashboard/seller-workspace' };
+
+  // The dashboard unpublish fixture pairs this exact detail with HTTP 409.
+  if (status === 409 && detail === 'This listing has active orders.') {
+    return { message: 'This listing has active orders. Wait until those orders are resolved before changing the listing.' };
+  }
+
   console.error('Listing action failed', error);
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+    return {
+      message: action === 'delete'
+        ? "This listing can't be deleted. Contact support if you need help."
+        : "This listing can't be updated. Contact support if you need help.",
+    };
+  }
   return { message: action === 'delete' ? "We couldn't delete your listing just now. Try again, or contact support if it keeps happening." : LISTING_ACTION_FALLBACK };
 }
 

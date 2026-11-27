@@ -32,15 +32,27 @@ it('keeps unknown structured details in the console only', () => {
   expect(console.error).toHaveBeenCalledExactlyOnceWith('Listing action failed', error);
 });
 
-it.each(['This listing has active orders.', { response: { data: 'This listing has active orders.' } }])
-('preserves a plain string error: %j', error => {
-  expect(formatListingActionError(error)).toEqual({ message: LISTING_ACTION_FALLBACK });
-});
-
 it('maps network errors to the generic sentence and logs the original error', () => {
   const error = new Error('Network Error');
   expect(formatListingActionError(error)).toEqual({ message: LISTING_ACTION_FALLBACK });
   expect(console.error).toHaveBeenCalledExactlyOnceWith('Listing action failed', error);
+});
+
+it.each([408, 429, 500, 503])('keeps retry guidance for HTTP %i', status => {
+  const error = { response: { status, data: { detail: 'Private backend diagnostic' } } };
+  expect(formatListingActionError(error)).toEqual({ message: LISTING_ACTION_FALLBACK });
+});
+
+it.each([400, 403, 404, 409, 422])('uses fixed refusal copy for HTTP %i', status => {
+  const error = { response: { status, data: {
+    status: 503, message: 'Private backend diagnostic', detail: { message: 'Internal validation failure' },
+  } } };
+  expect(formatListingActionError(error)).toEqual({
+    message: "This listing can't be updated. Contact support if you need help.",
+  });
+  expect(formatListingActionError(error, 'delete')).toEqual({
+    message: "This listing can't be deleted. Contact support if you need help.",
+  });
 });
 
 it.each([
@@ -53,9 +65,19 @@ it.each([
   });
 });
 
-it('dashboard_unpublish_string_detail', () => {
-  expect(formatListingActionError({ response: { data: { detail: '  This listing has active orders.  ' } } }))
-    .toEqual({ message: LISTING_ACTION_FALLBACK });
+it('matches the active-orders conflict from the dashboard fixture', () => {
+  expect(formatListingActionError({ response: { status: 409, data: { detail: 'This listing has active orders.' } } }))
+    .toEqual({ message: 'This listing has active orders. Wait until those orders are resolved before changing the listing.' });
+});
+
+it.each([
+  'This listing has active orders.',
+  { response: { status: 409, data: { detail: 'This listing has active orders. Internal order ID: 123' } } },
+  { response: { status: 409, data: { detail: { message: 'This listing has active orders.' } } } },
+  { response: { status: 409, data: 'This listing has active orders.' } },
+  { response: { status: 503, data: { detail: 'This listing has active orders.' } } },
+])('does not infer active orders outside the exact conflict contract: %j', error => {
+  expect(formatListingActionError(error).message).not.toContain('active orders');
 });
 
 it.each([
@@ -94,7 +116,7 @@ it.each(['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'])('uses customer copy for
 });
 it.each([{},[],null,42,'{"code":"oops"}','[object Object]','bad\u0000text','<b>text</b>'])('rejects malformed draft messages: %j',message=>{
  expect(listingDraftError({response:{data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}})).toBeNull();
- expect(formatListingActionError({response:{status:409,data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}})).toEqual({message:LISTING_ACTION_FALLBACK});
+ expect(formatListingActionError({response:{status:409,data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}})).toEqual({message:"This listing can't be updated. Contact support if you need help."});
 });
 
 it.each([

@@ -28,7 +28,7 @@ it.each([
   },
   {
     detail: { error: 'unexpected_backend_failure', diagnostic: 'private backend details' },
-    expected: "We couldn't update your listing just now. Try again, or contact support if it keeps happening.",
+    expected: "This listing can't be updated. Contact support if you need help.",
   },
 ])('renders a plain-English unpublish toast through ToastProvider: $expected', async ({ detail, expected }) => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
