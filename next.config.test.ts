@@ -115,6 +115,26 @@ describe('next.config request discovery rewrites', () => {
     });
   });
 
+  it.each([
+    ['production', 'https://api.example.test', 'https://api.example.test'],
+    ['development', undefined, 'http://localhost:8000'],
+  ] as const)('proxies the public full catalog in %s beside the compact catalog', async (nodeEnv, apiUrl, backend) => {
+    vi.stubEnv('NODE_ENV', nodeEnv);
+    vi.stubEnv('NEXT_PUBLIC_API_URL', apiUrl);
+    vi.stubEnv('API_URL', undefined);
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    if (!Array.isArray(rewrites)) throw new Error('Expected flat rewrites');
+    const compactIndex = rewrites.findIndex(rewrite => rewrite.source === '/llms.txt');
+    expect(compactIndex).toBeGreaterThanOrEqual(0);
+    expect(rewrites.slice(compactIndex, compactIndex + 2)).toEqual([
+      { source: '/llms.txt', destination: `${backend}/llms.txt` },
+      { source: '/llms-full.txt', destination: `${backend}/llms-full.txt` },
+    ]);
+  });
+
   it('keeps local licence URLs on the readable Next page', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     const { default: config } = await import('./next.config');
