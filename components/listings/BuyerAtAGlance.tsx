@@ -1,7 +1,7 @@
 "use client";
 import {useEffect, useState} from 'react';
 import {fetchBuyerSummary, type ListingSummary} from '@/lib/api';
-import type {LicenseDisplay} from '@/lib/publicPresentation';
+import {readPublicLicenseDisplay, type LicenseDisplay} from '@/lib/publicPresentation';
 import type {Manifest} from '@/lib/listing-preview/types';
 import AtAGlance, {hasSupportedSummaryFields, summaryLicenseDisplay} from './AtAGlance';
 import ListingSamplePreview from './ListingSamplePreview';
@@ -68,5 +68,11 @@ export default function BuyerAtAGlance({slug, listingId, initialSummary, license
   const visibleSummary = summary && hideSampleAvailability
     ? {...summary, sample_availability: undefined}
     : summary;
-  return <BuyerPreviewContent licenseDisplay={display.license_display} summary={visibleSummary} slug={slug} listingId={includeSample ? listingId : undefined} />;
+  let currentDisplay: LicenseDisplay | null = null;
+  try {
+    currentDisplay = readPublicLicenseDisplay(display.license_display);
+  } catch {
+    // Keep the approved summary when the public licence overlay is invalid.
+  }
+  return <BuyerPreviewContent licenseDisplay={currentDisplay} summary={visibleSummary} slug={slug} listingId={includeSample ? listingId : undefined} />;
 }

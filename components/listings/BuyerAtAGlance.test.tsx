@@ -69,10 +69,11 @@ it('starts with no markup and shows newly approved metadata on return', async ()
   expect(view.container.textContent).not.toContain('you');
 });
 
-it('overlays only the public licence row and preserves the supplied summary', async () => {
+it('overlays only the public licence row with additive metadata and preserves the supplied summary', () => {
   const original = structuredClone(fixture.at_a_glance) as ListingSummary;
   const before = JSON.stringify(original);
-  render(<BuyerAtAGlance slug={fixture.slug} initialSummary={original} licenseDisplay={fixture.license_display as LicenseDisplay} />);
+  const licenseDisplay = {...fixture.license_display, future_metadata: {enabled: true}} as LicenseDisplay;
+  render(<BuyerAtAGlance slug={fixture.slug} initialSummary={original} licenseDisplay={licenseDisplay} />);
   const region = screen.getByRole('region', {name: 'At a glance'});
   expect(region.textContent).toContain('ai.market Standard Data Licence v1.1');
   expect(document.body.textContent?.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
@@ -90,7 +91,8 @@ it('keeps the original licence and attribution without a correction', () => {
 
 it('refreshes the summary and correction together on visibility and bfcache return', async () => {
   const original = fixture.at_a_glance as ListingSummary;
-  vi.mocked(fetchBuyerSummary).mockResolvedValueOnce({at_a_glance: original, license_display: fixture.license_display as LicenseDisplay})
+  const licenseDisplay = {...fixture.license_display, future_metadata: true} as LicenseDisplay;
+  vi.mocked(fetchBuyerSummary).mockResolvedValueOnce({at_a_glance: original, license_display: licenseDisplay})
     .mockResolvedValueOnce({at_a_glance: original, license_display: null});
   render(<BuyerAtAGlance slug={fixture.slug} initialSummary={original} />);
   await visibility('visible');
@@ -105,6 +107,7 @@ it('refreshes the summary and correction together on visibility and bfcache retu
 it.each([
   {...fixture.license_display, provenance: 'seller_entered'},
   {...fixture.license_display, license_label: 'arbitrary licence'},
+  {...fixture.license_display, license_display: null, future_metadata: true},
 ])('keeps the complete original buyer display for an unsupported correction %#', licenseDisplay => {
   const props = {slug: fixture.slug, initialSummary: fixture.at_a_glance as ListingSummary};
   const view = render(<BuyerAtAGlance {...props} />);

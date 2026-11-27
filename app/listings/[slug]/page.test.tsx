@@ -96,7 +96,11 @@ const documentationGuidance = 'Want to check field names or whether a data dicti
 
 describe('corrected backend 1ad9300 real composed detail wire',()=>{
   afterEach(()=>{vi.unstubAllGlobals();fetchPublicListing.mockReset();fetchListingVersions.mockReset();fetchPublicListingDocuments.mockReset().mockResolvedValue([]);});
-  it.each(composed.detail.flatMap(wire => [wire, {...wire, approved_presentation: {...wire.approved_presentation, approved_display_html: '<h2>Approved coverage</h2><ul><li>Region</li></ul>', presentation_display_version: 'approved-display-v1'}}]))('accepts actual builder/serializer $slug through strict fetch, page and metadata, preserving documents',async wire=>{
+  it.each(composed.detail.flatMap(wire => [wire, {
+    ...wire,
+    license_display: {...wire.license_display, future_metadata: true},
+    approved_presentation: {...wire.approved_presentation, approved_display_html: '<h2>Approved coverage</h2><ul><li>Region</li></ul>', presentation_display_version: 'approved-display-v1'},
+  }]))('accepts actual builder/serializer $slug through public fetch, page and metadata, preserving documents',async wire=>{
     const before=JSON.stringify(wire);
     const actual=await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
     fetchPublicListing.mockImplementation(actual.fetchPublicListing);
