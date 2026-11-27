@@ -23,7 +23,7 @@ import type { DataRequestListItem } from '@/types';
 const marketplaceSummary =
   'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
 const homepageTitle = 'ai.market — SEO for data';
-const heroSubhead = 'The marketplace built for AI. For AI to find. For AI to train.';
+const heroSubhead = 'Where AI search finds data.';
 const heroFee = 'Free to list; 5% only when it sells.';
 const homepageDescription = `${heroSubhead} ${heroFee}`;
 
