@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
+import { redirectLegacyModelSearch, type MarketplaceSearchParams } from '@/lib/marketplaceSearchRedirect';
 
 export const metadata: Metadata = {
   alternates: { canonical: '/search' },
@@ -9,6 +10,8 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default function SearchPage() {
+export default async function SearchPage({ searchParams }: { searchParams: Promise<MarketplaceSearchParams> }) {
+  redirectLegacyModelSearch('/search', await searchParams);
+
   return <MarketplaceSearchExperience mode="search" />;
 }

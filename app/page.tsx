@@ -134,7 +134,6 @@ const accentStyles = {
 
 const categoryBadge: Record<string, string> = {
   dataset: 'bg-[#E1F5EE] text-[#0F6E56]',
-  model: 'bg-[#E8EAF6] text-[#3F51B5]',
 };
 
 const defaultBadge = 'bg-[#F0F0F0] text-[#666666]';

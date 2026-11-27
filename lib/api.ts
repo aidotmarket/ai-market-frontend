@@ -1,6 +1,7 @@
 import {ListingUnavailable, listingHttpStatus} from './listing-http-status';
 import {requestPublicListing, syntheticListingFetchOptions} from './public-listing-read';
 import {verifyCurrentListing} from './publicPresentation';
+import { DATA_FULFILLMENT_TYPES } from './marketplaceListings';
 import type { ListingPublicListResponse } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
 
@@ -97,6 +98,7 @@ export async function fetchPublicListings(params?: {
   if (params?.per_page) searchParams.set('per_page', String(params.per_page));
   if (params?.category) searchParams.set('category', params.category);
   if (params?.sort) searchParams.set('sort', params.sort);
+  for (const type of DATA_FULFILLMENT_TYPES) searchParams.append('fulfillment_type', type);
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/public/listings${qs ? `?${qs}` : ''}`, {

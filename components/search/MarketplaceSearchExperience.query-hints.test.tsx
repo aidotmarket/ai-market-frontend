@@ -23,15 +23,44 @@ vi.mock('@/api/listings', () => ({
   searchListings: mocks.searchListings,
   getMarketplaceCategoryFacets: async () => ({ finance: 4 }),
 }));
-vi.mock('@/components/search/MarketplaceListingCard', () => ({
-  MarketplaceListingCard: ({ listing }: { listing: { title: string } }) => <p>{listing.title}</p>,
-}));
-
 const emptyPage = { results: [], total: 0 };
 const correction = { suggested_query: 'climate data' };
 const hint = { hint: 'no_results_try_other_words' };
 const correctionName = 'Did you mean climate data?';
 const hintText = 'Try searching with different words.';
+const dataFulfillmentTypes = ['ai_queryable', 'file_download', 'reference'];
+const referenceListing = {
+  id: 'synthetic-reference', slug: 'synthetic-reference', title: 'Synthetic public source dataset',
+  fulfillment_type: 'reference', category: 'finance', data_format: 'csv', price: 20,
+};
+const firstPageListings = Array.from({ length: 12 }, (_, index) => ({
+  id: `fixture-${index}`, slug: `fixture-${index}`, title: `Fixture dataset ${index}`,
+  category: 'finance', data_format: 'json', price: 15,
+}));
+
+function expectDiscoveryRequests(fetchMock: ReturnType<typeof mockDiscoveryFetch>, path: string, pagination: string) {
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  return fetchMock.mock.calls.map(([request], index) => {
+    const url = new URL(request.url);
+    expect(url.pathname).toBe(`/api/v1/${path}`);
+    expect(url.searchParams.getAll('fulfillment_type')).toEqual(dataFulfillmentTypes);
+    expect(url.searchParams.has('fulfillment_type[]')).toBe(false);
+    expect(url.searchParams.get('limit')).toBe('12');
+    expect(url.searchParams.get(pagination)).toBe(String(index * 12));
+    return url.searchParams;
+  });
+}
+
+function mockDiscoveryFetch(firstPage: unknown, secondPage: (items: typeof referenceListing[]) => unknown) {
+  const fetchMock = vi.fn<(request: Request) => Promise<Response>>()
+    .mockImplementationOnce(async () => Response.json(firstPage))
+    .mockImplementationOnce(async request => {
+      const types = new URL(request.url).searchParams.getAll('fulfillment_type');
+      return Response.json(secondPage(types.includes(referenceListing.fulfillment_type) ? [referenceListing] : []));
+    });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -59,14 +88,19 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it('waits for an explicit correction and then searches with all the active filters', async () => {
-  const filters = { category: 'finance', type: 'data', data_type: 'csv', min_price: '5', max_price: '30', sort: 'price-asc' };
+  const filters = { category: 'finance', data_type: 'csv', min_price: '5', max_price: '30', sort: 'price-asc' };
+  const request = {
+    category: 'finance', min_price: 5, max_price: 30,
+    fulfillment_type: dataFulfillmentTypes, limit: 12, offset: 0,
+  };
   mocks.searchParams = new URLSearchParams({ q: 'climte data', ...filters, page: '2', per_page: '12', offset: '12' });
   mocks.searchListings
     .mockResolvedValueOnce({ ...emptyPage, ...correction })
-    .mockResolvedValueOnce({ results: [{ id: 'eu-emissions', title: 'EU emissions dataset', data_format: 'csv' }], total: 1 });
+    .mockResolvedValueOnce({ results: [{ ...firstPageListings[0], title: 'EU emissions dataset', data_format: 'csv' }], total: 1 });
   const navigate = setup();
   const button = await screen.findByRole('button', { name: correctionName });
 
@@ -74,7 +108,7 @@ it('waits for an explicit correction and then searches with all the active filte
   expect(screen.getByText('Data results for "climte data"')).toBeTruthy();
   expect(mocks.replace).not.toHaveBeenCalled();
   expect(mocks.push).not.toHaveBeenCalled();
-  expect(mocks.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', expect.objectContaining({ offset: 0 }));
+  expect(mocks.searchListings).toHaveBeenCalledExactlyOnceWith('climte data', request);
 
   fireEvent.click(button);
   expect(mocks.replace).toHaveBeenCalledTimes(1);
@@ -85,21 +119,49 @@ it('waits for an explicit correction and then searches with all the active filte
 
   expect(await screen.findByText('EU emissions dataset')).toBeTruthy();
   expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('climate data');
-  expect(mocks.searchListings).toHaveBeenLastCalledWith('climate data', expect.objectContaining({
-    category: 'finance', min_price: 5, max_price: 30, fulfillment_type: ['ai_queryable', 'file_download'], offset: 0,
-  }));
+  expect(mocks.searchListings).toHaveBeenLastCalledWith('climate data', request);
+  expect(mocks.listListings).not.toHaveBeenCalled();
   expectNoHints();
 });
 
 it('ignores correction and hint metadata on a later page', async () => {
-  mocks.searchListings
-    .mockResolvedValueOnce({ results: Array.from({ length: 12 }, (_, id) => ({ id })), total: 13 })
-    .mockResolvedValueOnce({ results: [{ id: 'later', title: 'Later result' }], total: 13, ...correction, ...hint });
+  const { searchListings } = await vi.importActual<typeof import('@/api/listings')>('@/api/listings');
+  mocks.searchListings.mockImplementation(searchListings);
+  const fetchMock = mockDiscoveryFetch(
+    { results: firstPageListings, total: 13 },
+    results => ({ results, total: 13, ...correction, ...hint }),
+  );
   setup();
 
   fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
-  expect(await screen.findByText('Later result')).toBeTruthy();
+  const link = await screen.findByRole('link', { name: new RegExp(referenceListing.title) });
+  expect(link.getAttribute('href')).toBe(`/listings/${referenceListing.slug}`);
+  for (const params of expectDiscoveryRequests(fetchMock, 'search/listings', 'offset')) {
+    expect(params.get('q')).toBe('climte data');
+  }
   expectNoHints();
+});
+
+it('browses and pages through data with no type selector in the URL', async () => {
+  mocks.searchParams = new URLSearchParams('category=finance&min_price=5&max_price=30&data_type=csv&sort=price-asc');
+  const { listListings } = await vi.importActual<typeof import('@/api/listings')>('@/api/listings');
+  mocks.listListings.mockImplementation(listListings);
+  const fetchMock = mockDiscoveryFetch(firstPageListings, items => items);
+  setup();
+
+  const loadMore = await screen.findByRole('button', { name: 'Load more' });
+  expect(screen.getByText('Showing 0 results filtered to CSV')).toBeTruthy();
+
+  fireEvent.click(loadMore);
+  const link = await screen.findByRole('link', { name: new RegExp(referenceListing.title) });
+  expect(link.getAttribute('href')).toBe(`/listings/${referenceListing.slug}`);
+  expect(screen.getByText('1 result filtered to CSV')).toBeTruthy();
+  for (const params of expectDiscoveryRequests(fetchMock, 'listings/', 'skip')) {
+    expect(params.get('category')).toBe('finance');
+    expect(params.get('min_price')).toBe('5');
+    expect(params.get('max_price')).toBe('30');
+  }
+  expect(mocks.searchListings).not.toHaveBeenCalled();
 });
 
 it('clears the previous hint during loading, after a new query fails, and in browse', async () => {
@@ -120,6 +182,6 @@ it('clears the previous hint during loading, after a new query fails, and in bro
   expectNoHints();
 
   navigate(new URLSearchParams());
-  expect(await screen.findByText('No listings found')).toBeTruthy();
+  expect(await screen.findByText('No data found')).toBeTruthy();
   expectNoHints();
 });

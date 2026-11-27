@@ -1,14 +1,17 @@
 import type { Metadata } from 'next';
 import { MarketplaceSearchExperience } from '@/components/search/MarketplaceSearchExperience';
+import { redirectLegacyModelSearch, type MarketplaceSearchParams } from '@/lib/marketplaceSearchRedirect';
 
 export const metadata: Metadata = {
   alternates: { canonical: '/listings' },
   title: 'Browse Marketplace',
-  description: 'Explore marketplace listings on ai.market with text search, filters, and incremental discovery.',
+  description: 'Browse data listings on ai.market by category, format, and price, or search by topic.',
 };
 
 export const dynamic = 'force-dynamic';
 
-export default function BrowseListingsPage() {
+export default async function BrowseListingsPage({ searchParams }: { searchParams: Promise<MarketplaceSearchParams> }) {
+  redirectLegacyModelSearch('/listings', await searchParams);
+
   return <MarketplaceSearchExperience mode="browse" />;
 }

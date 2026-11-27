@@ -52,6 +52,34 @@ function request(id: string) {
 }
 
 describe('homepage listing grid', () => {
+  it('requests newest data listings and displays a public source reference', async () => {
+    const listing = {
+      ...browseResponse.items[0], slug: 'synthetic-reference', title: 'Synthetic public source dataset',
+      fulfillment_type: 'reference', price: 0,
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      const params = new URL(url, 'https://example.test').searchParams;
+      const items = params.getAll('fulfillment_type').includes(listing.fulfillment_type) ? [listing] : [];
+      return Response.json({ ...browseResponse, items });
+    });
+    const api = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListings.mockImplementationOnce(api.fetchPublicListings);
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { default: LandingPage } = await import('./page');
+      render(await LandingPage());
+      expect(fetchMock).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(
+        /\/api\/v1\/public\/listings\?per_page=4&sort=newest&fulfillment_type=ai_queryable&fulfillment_type=file_download&fulfillment_type=reference$/,
+      ), { cache: 'no-store' });
+      const link = screen.getByRole('heading', { name: listing.title }).closest('a');
+      expect(link?.getAttribute('href')).toBe(`/listings/${listing.slug}`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each(listingSummaryCases())('renders the browse excerpt for $state', async ({ summary }) => {
     const listing = { ...browseResponse.items[0], summary };
     const withMarkdown = {
