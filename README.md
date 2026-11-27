@@ -78,7 +78,8 @@ verification remain owner work.
 When a PR adds an executable refusal, block, gate, fence, mandatory approval or
 proof, or a fail-closed path, explain the harm, the restriction and when it
 applies, the cost and who bears it, and why a narrower approach fell short.
-The PR template includes the prompts. Prose, bullets, and subheadings work.
+The PR template includes the prompts. Prose, bullets, subheadings, tables, and
+a details block with a `Rule check` summary and four answers work.
 Editing the PR description reruns the check. Ordinary changes can leave the
 commented template as-is.
 
@@ -87,17 +88,20 @@ PR's merge base. It reports direct guarded HTTP refusals (401, 403, 423 or 428),
 named permission errors, and native controls disabled by a negated
 authorization, approval or proof predicate. It also recognizes direct denials
 in a catch block after a named verification call. For a confirmed addition,
-CI fails when it finds no visible Rule check answer text. Reviewers assess
+CI fails when it finds no accepted Rule check answer text. Reviewers assess
 whether the explanation answers all four questions and cover restrictions
 outside these patterns.
 
-Possible rewrites and ambiguous outcomes such as policy-dependent early returns
-or named fail-closed callbacks are advisory. After matching exact guards and
-moves, each removed guard can make one addition with a similar outcome
-advisory. Tests, fixtures, docs, and descriptive UI copy are outside automatic
-enforcement. The check compares syntax and can miss indirect predicates,
-reachability changes, compound conditions, alternate status codes, or rules
-expressed in other languages or configuration.
+Ambiguous outcomes such as policy-dependent early returns or named fail-closed
+callbacks, and source comparison failures, are advisory. The check matches
+exact guards and moves. Reviewers can assess an architectural rewrite when its
+predicate and effect are demonstrably equivalent. For example, replacing a
+literal 403 response with a typed `ForbiddenError` can be equivalent when the
+error handler produces the same refusal on that path. Tests, fixtures, docs,
+and descriptive UI copy are outside automatic enforcement. The check compares
+syntax and can miss indirect predicates, reachability changes, compound
+conditions, alternate status codes, or rules expressed in other languages or
+configuration.
 
 1. **Harm.** Koskadeux MCP #619 introduced an undocumented restriction that
    invalidated otherwise approved verdicts and interrupted review work.

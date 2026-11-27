@@ -17,6 +17,11 @@ const answers = [
   'Sellers have to refresh their approval and the reviewer checks its rationale.',
 ];
 const answered = '## Rule check\n\n' + answers.join(' ');
+const prefixed = '## PR Rule check\n\n' + answers.map(answer => '- ' + answer).join('\n');
+const details = body => '<details>\n<summary>Rule check</summary>\n' + body + '\n</details>';
+const table = rows => '| Topic | Answer |\n| --- | --- |\n' +
+  rows.map(([label, answer]) => `| ${label} | ${answer} |`).join('\n');
+const labels = ['Harm', 'Effect', 'Prior approach', 'Cost'];
 const approval = "if (!hasApproval()) return Response.json({ error: 'Approval required' }, { status: 403 });";
 const source = (path, before, after) => ({ path, before, after });
 const scan = (...changes) => [...newFindings(changes)];
@@ -24,14 +29,19 @@ const scan = (...changes) => [...newFindings(changes)];
 test('accepts prose, loose labels, headings and answers beneath numbered prompts', () => {
   const equivalentBodies = [
     answered,
+    prefixed,
     '# **Max’s Rule Check** #\n\n' + answers.join('\n'),
     '**Rule check:** ' + answers.join(' '),
     'Rule check\n' + answers.join('\n'),
     '## Restriction rationale\n\n' + answers.join(' '),
-    'Rule check\n----------\n' + ['Harm', 'Effect', 'Prior approach', 'Cost']
+    'Rule check\n----------\n' + labels
       .map((label, i) => `- **${label}:** ${answers[i]}`).join('\n'),
-    ['Harm', 'Effect', 'Prior approach', 'Cost'].map((label, i) => `**${label}:** ${answers[i]}`).join('\n\n'),
-    '### Rule check (if applicable)\n#### Why change it?\n' + answers.join(' ') + '\n## Testing\nFixtures passed.',
+    labels.map((label, i) => `**${label}:** ${answers[i]}`).join('\n\n'),
+    '### PR Rule check (if applicable)\n#### Why change it?\n' + answers.join(' ') + '\n## Testing\nFixtures passed.',
+    '## Rule check\n\n' + table(labels.map((label, i) => [label, answers[i]])),
+    details('\n' + answers.map((answer, i) => `${i + 1}. ${answer}`).join('\n') + '\n'),
+    details(answers.join(' ')),
+    details('\n' + table(labels.map((label, i) => [label, answers[i]]))),
     ...['   ', '    ', '\t'].map(indent => '## Rule check\n\n' + prompts
       .map((prompt, i) => `${i + 1}. **${prompt}**\n\n${indent}${answers[i]}`).join('\n\n')),
   ];
@@ -47,6 +57,16 @@ test('ignores an untouched template, examples, prompts and placeholders', () => 
     '## Rule check\n\n```md\n' + answers.join('\n') + '\n```',
     '## Rule check\n\n    ' + answers.join(' '),
     answered.split('\n').map(line => '> ' + line).join('\n'),
+    '## PR Rule checking\n' + answers.join('\n'),
+    '## PR Rule check\n## Testing\n' + labels.map((label, i) => `${label}: ${answers[i]}`).join('\n'),
+    '## PR Rule check\n\n' + table(labels.map(label => [label, 'TBD'])),
+    details(answers.slice(0, 3).concat('TBD').join('\n')),
+    details(answers.join('\n')).replace('Rule check', 'Testing'),
+    details(answers.join('\n')).replace('\n</details>', ''),
+    details('<!--\n' + answers.join('\n') + '\n-->'),
+    details('```md\n' + answers.join('\n') + '\n```'),
+    details(answers.map(answer => '> ' + answer).join('\n')),
+    details(answers.join('\n')).split('\n').map(line => '> ' + line).join('\n'),
   ]) assert.equal(hasRuleAnswers(body), false, body);
 });
 
@@ -68,6 +88,7 @@ test('does not infer restriction behavior from UI copy or ordinary code', () => 
     source('components/Rule.tsx', '', 'const copy = "This gate refuses access if approval is missing";'),
     source('components/Submit.tsx', '', 'const action = <button disabled={saving}>Publish</button>;'),
     source('lib/parse.ts', '', "function read(value) { if (!value) throw new Error('Proof required'); }"),
+    source('app/api/listing/route.ts', '', 'if (!listing) return Response.json({}, { status: 404 });'),
     source('app/api/report/route.ts', '', 'if (!isAuthorized()) new Response(null, { status: 403 });'),
     source('app/api/inspect/route.ts', '', 'if (!isAuthorized()) return new Response(null, {status: 403, ...opts});'),
   ), []);
@@ -96,20 +117,45 @@ test('keeps existing, equivalent and moved guards eligible', () => {
   ), []);
 });
 
-test('pairs one old guard with at most one rewrite or move', () => {
+test('keeps changed predicates and unrelated outcomes confirmed', () => {
   const wrap = (body) => `function publish() { ${body} }`;
   const rewrite = approval.replace('hasApproval()', 'hasHumanApproval()');
   assert.deepEqual(scan(
     source('app/route.ts', wrap(approval), wrap(rewrite + '\n' + approval.replace('hasApproval()', 'proofVerified'))),
-  ).map(({ confirmed }) => confirmed), [false, true]);
+  ).map(({ confirmed }) => confirmed), [true, true]);
   assert.deepEqual(scan(
     source('app/route.ts', wrap(approval.replace('hasApproval()', 'mayPublish()')), wrap(approval)),
-  ).map(({ confirmed }) => confirmed), [false]);
+  ).map(({ confirmed }) => confirmed), [true]);
+  for (const replacement of [
+    approval.replace('403', '401'),
+    'if (!hasApproval()) throw new ProofRequiredError();',
+    'if (!hasApproval()) throw new ForbiddenError();',
+  ]) {
+    assert.deepEqual(scan(source('app/route.ts', wrap(approval), wrap(replacement)))
+      .map(({ confirmed }) => confirmed), [true]);
+  }
+});
+
+test('matches each exact move at most once', () => {
+  const wrap = (body) => `function publish() { ${body} }`;
   assert.equal(scan(
     source('app/old.js', wrap(approval), ''),
     source('app/moved.ts', '', wrap(approval)),
     source('app/duplicate.ts', '', wrap(approval)),
   ).filter(({ confirmed }) => confirmed).length, 1);
+});
+
+test('reports parser recursion as advisory and continues scanning', () => {
+  const deep = 'const ordinary = ' + '('.repeat(15000) + '42' + ')'.repeat(15000) + ';';
+  assert.deepEqual(scan(
+    source('lib/deep-before.js', deep, approval),
+    source('lib/deep-after.js', '', deep),
+    source('app/route.ts', '', approval),
+  ).map(({ path, effect, confirmed }) => [path, effect, confirmed]), [
+    ['lib/deep-before.js', 'could not compare source syntax', false],
+    ['lib/deep-after.js', 'could not compare source syntax', false],
+    ['app/route.ts', '403', true],
+  ]);
 });
 
 test('CLI reads Git blobs at the merge base and the latest PR description', () => {
@@ -143,7 +189,8 @@ test('CLI reads Git blobs at the merge base and the latest PR description', () =
     mkdirSync(join(dir, 'tests'));
     mkdirSync(join(dir, 'docs'));
     for (const path of ['tests/fixture.js', 'docs/example.mjs', 'app/route.test.tsx']) write(path, restriction);
-    const ordinary = commit('Add test and docs examples');
+    write('app/listing.ts', 'if (!listing) return Response.json({}, { status: 404 });');
+    const ordinary = commit('Add ordinary route and test and docs examples');
     write(route, restriction + "\nimport { writeFileSync } from 'node:fs';\nwriteFileSync('ran-source', 'yes');");
     const head = commit('Add runtime restriction');
     write(route, normal);
@@ -159,12 +206,18 @@ test('CLI reads Git blobs at the merge base and the latest PR description', () =
       return result;
     };
 
-    assert.equal(run('opened', ordinary, template).status, 0);
+    const unchanged = run('opened', ordinary, template);
+    assert.equal(unchanged.status, 0);
+    assert.equal(unchanged.stdout, '');
+    const incomparable = run('synchronize', 'f'.repeat(40), template);
+    assert.equal(incomparable.status, 0);
+    assert.match(incomparable.stdout, /Rule check review \(advisory\).*could not compare source syntax/);
     const missing = run('synchronize', head, '$(touch ran-body)\n' + template);
     assert.equal(missing.status, 1);
     assert.match(missing.stdout, /Rule check finding: app\/route.ts:1/);
+    assert.match(missing.stdout, /“PR Rule check” heading followed by four bullets/);
     assert.match(missing.stdout, /Saving the description reruns this check/);
-    const edited = run('edited', head, answered);
+    const edited = run('edited', head, prefixed);
     assert.equal(edited.status, 0);
     assert.match(edited.stdout, /Rule check finding: app\/route.ts:1/);
     assert.equal(existsSync(join(dir, 'ran-source')), false);

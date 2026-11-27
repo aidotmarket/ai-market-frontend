@@ -13,18 +13,26 @@ const denialStatus = new Set(['401', '403', '423', '428']);
 const denialError = /^(?:PermissionError|AuthorizationError|ForbiddenError|ApprovalRequiredError|ProofRequiredError)$/;
 const possibleDenial = /^(?:notFound|redirect|deny(?:Access)?|forbidden|\w*UnavailableResponse|failClosed)$/i;
 const printer = ts.createPrinter({ removeComments: true });
+const incomparable = 'could not compare source syntax';
 
 function git(...args) {
-  return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 function* changedSources({ base, head }) {
   for (const sha of [base.sha, head.sha]) {
     if (!/^[a-f0-9]{40}$/.test(sha) || /^0+$/.test(sha)) throw new Error('Invalid PR commit SHA');
   }
-  const common = git('merge-base', base.sha, head.sha).trim();
-  const diff = git('diff', '--raw', '--no-abbrev', '--no-ext-diff', '--no-renames',
-    '--ignore-submodules=all', '-z', common, head.sha, '--').split('\0');
+  let diff;
+  try {
+    const common = git('merge-base', base.sha, head.sha).trim();
+    diff = git('diff', '--raw', '--no-abbrev', '--no-ext-diff', '--no-renames',
+      '--ignore-submodules=all', '-z', common, head.sha, '--').split('\0');
+  } catch {
+    yield { path: '.', advisory: incomparable };
+    return;
+  }
   for (let i = 0; i + 1 < diff.length; i += 2) {
     const path = diff[i + 1];
     if (!runtimeExtension.test(path) || nonRuntime.test(path) || testFile.test(path)) continue;
@@ -34,11 +42,16 @@ function* changedSources({ base, head }) {
       yield { path, advisory: 'could not compare a non-regular source file' };
       continue;
     }
-    yield {
-      path,
-      before: oldMode === '000000' ? '' : git('cat-file', 'blob', oldBlob),
-      after: newMode === '000000' ? '' : git('cat-file', 'blob', newBlob),
-    };
+    let before;
+    let after;
+    try {
+      before = oldMode === '000000' ? '' : git('cat-file', 'blob', oldBlob);
+      after = newMode === '000000' ? '' : git('cat-file', 'blob', newBlob);
+    } catch {
+      yield { path, advisory: incomparable };
+      continue;
+    }
+    yield { path, before, after };
   }
 }
 
@@ -120,7 +133,7 @@ function findings(path, source) {
   function add(node, family, effect, condition, confirmed) {
     const signature = JSON.stringify([family, effect, condition]);
     const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-    result.push({ path, line, family, signature, confirmed, effect });
+    result.push({ path, line, signature, confirmed, effect });
   }
 
   function print(node) {
@@ -198,10 +211,18 @@ export function* newFindings(sources) {
   const removed = [];
   const added = [];
   for (const { path, before, after, advisory } of sources) {
-    const previous = advisory ? null : findings(path, before);
-    const current = advisory ? null : findings(path, after);
+    let previous;
+    let current;
+    try {
+      if (!advisory) {
+        previous = findings(path, before);
+        current = findings(path, after);
+      }
+    } catch (error) {
+      if (!(error instanceof RangeError) || error.message !== 'Maximum call stack size exceeded') throw error;
+    }
     if (!previous || !current) {
-      yield { path, effect: advisory || 'could not compare source syntax', confirmed: false };
+      yield { path, effect: advisory || incomparable, confirmed: false };
       continue;
     }
     for (const item of current) {
@@ -210,18 +231,10 @@ export function* newFindings(sources) {
     removed.push(...previous);
   }
 
-  // Match exact moves before pairing possible rewrites, once per removed site.
-  const unmatched = added.filter(item => !take(removed, old => old.signature === item.signature));
-  const rewrites = new Set();
-  for (const sameFile of [true, false]) {
-    for (const item of unmatched) {
-      if (!item.confirmed || rewrites.has(item)) continue;
-      if (take(removed, old => old.family === item.family &&
-        (old.confirmed || old.effect === item.effect) &&
-        (!sameFile || old.path === item.path))) rewrites.add(item);
-    }
+  // Match exact moves once per removed site.
+  for (const item of added) {
+    if (!take(removed, old => old.signature === item.signature)) yield item;
   }
-  for (const item of unmatched) yield { ...item, confirmed: item.confirmed && !rewrites.has(item) };
 }
 
 function check(pr) {
@@ -236,6 +249,7 @@ function check(pr) {
   if (!confirmed || hasRuleAnswers(pr.body)) return 0;
   console.log('Add the four Rule check answers to the PR description: what harm prompted this, ' +
     'what changes and when, why a narrower approach was insufficient, and who bears the cost. ' +
+    'For example, use a “PR Rule check” heading followed by four bullets. ' +
     'Saving the description reruns this check.');
   return 1;
 }
