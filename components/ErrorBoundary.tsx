@@ -6,6 +6,7 @@ interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   logErrors?: boolean;
+  onError?: (error: Error, info: ErrorInfo) => void;
 }
 
 interface State {
@@ -14,6 +15,7 @@ interface State {
 
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
+  private notified = false;
 
   static getDerivedStateFromError(): State {
     return { hasError: true };
@@ -22,6 +24,10 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     if (this.props.logErrors !== false) {
       console.error('ErrorBoundary caught:', error, info);
+    }
+    if (this.props.onError && !this.notified) {
+      this.notified = true;
+      this.props.onError(error, info);
     }
   }
 

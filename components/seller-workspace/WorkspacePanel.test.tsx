@@ -5,8 +5,16 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceOverview, type WorkspaceView } from './WorkspaceOverview';
 import { WorkspacePanel } from './WorkspacePanel';
 
+vi.mock('@/store/auth', () => ({
+  useAuthStore: { getState: () => ({
+    token: 'test-token', isAuthenticated: true, hydrated: true, isLoading: false,
+    user: { role: 'seller', status: 'active' },
+  }) },
+}));
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   cleanup();
   vi.restoreAllMocks();
 });
@@ -105,4 +113,44 @@ it('contains a render failure and keeps the fallback through navigation and a re
   expect(save).not.toHaveBeenCalled();
   expect(suggest).not.toHaveBeenCalled();
   expect(logError).not.toHaveBeenCalled();
+});
+
+it('reports all three boundary identities, including an error in a hidden panel, once each', async () => {
+  vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
+  vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMock);
+  window.history.replaceState(null, '', '/dashboard/seller-workspace');
+
+  function WorkspaceData({ broken }: { broken: boolean }) {
+    if (broken) throw new TypeError('synthetic is not a function');
+    return <p>Data panel</p>;
+  }
+
+  const panels = (view: 'data' | 'license' | 'listing', broken: boolean) => (
+    <>
+      <WorkspacePanel active={view === 'data'} showReloadOnError crashStep="data"><WorkspaceData broken={broken} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'license'} showReloadOnError crashStep="license"><WorkspaceData broken={broken} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'} showReloadOnError crashStep="listing"><WorkspaceData broken={broken} /></WorkspacePanel>
+    </>
+  );
+
+  const onCaughtError = vi.fn();
+  const { rerender } = render(panels('data', false), { onCaughtError });
+  rerender(panels('license', false));
+  rerender(panels('listing', true));
+  expect(screen.getByRole('alert').textContent).toContain('Reload the page');
+  await Promise.resolve();
+
+  expect(fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string))).toEqual(
+    ['data', 'license', 'listing'].map(step => expect.objectContaining({
+      step, error_name: 'TypeError', error_code: 'not_callable',
+      component_frames: expect.arrayContaining(['WorkspacePanel', 'WorkspaceData']),
+    })),
+  );
+  rerender(panels('data', true));
+  rerender(panels('license', true));
+  await Promise.resolve();
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(onCaughtError).toHaveBeenCalledTimes(3);
 });
