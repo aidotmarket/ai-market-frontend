@@ -43,7 +43,7 @@ it.each([408, 429, 500, 503])('keeps retry guidance for HTTP %i', status => {
   expect(formatListingActionError(error)).toEqual({ message: LISTING_ACTION_FALLBACK });
 });
 
-it.each([400, 403, 404, 409, 422])('uses fixed refusal copy for HTTP %i', status => {
+it.each([400, 403, 404, 409])('uses fixed refusal copy for HTTP %i', status => {
   const error = { response: { status, data: {
     status: 503, message: 'Private backend diagnostic', detail: { message: 'Internal validation failure' },
   } } };
@@ -53,6 +53,21 @@ it.each([400, 403, 404, 409, 422])('uses fixed refusal copy for HTTP %i', status
   expect(formatListingActionError(error, 'delete')).toEqual({
     message: "This listing can't be deleted. Contact support if you need help.",
   });
+});
+
+it('gives the seller fixed correction guidance for HTTP 422 listing updates', () => {
+  const error = { response: { status: 422, data: { detail: [
+    { loc: ['body', 'title'], msg: 'Synthetic title validation diagnostic', type: 'value_error' },
+  ] } } };
+  expect(formatListingActionError(error)).toEqual({ message: 'Check the listing details and try again.' });
+  expect(formatListingActionError(error, 'delete')).toEqual({
+    message: "This listing can't be deleted. Contact support if you need help.",
+  });
+});
+
+it('uses refresh guidance for a final HTTP 401', () => {
+  const error = { response: { status: 401, data: { detail: 'Synthetic authentication diagnostic' } } };
+  expect(formatListingActionError(error)).toEqual({ message: ACTION_AUTH_REFRESH });
 });
 
 it.each([

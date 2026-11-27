@@ -53,6 +53,9 @@ export function formatListingActionError(error: unknown, action: 'update' | 'del
   }
 
   console.error('Listing action failed', error);
+  if (status === 401) return { message: ACTION_AUTH_REFRESH };
+  if (status === 422 && action === 'update') return { message: 'Check the listing details and try again.' };
+
   if (typeof status === 'number' && Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429) {
     return {
       message: action === 'delete'
