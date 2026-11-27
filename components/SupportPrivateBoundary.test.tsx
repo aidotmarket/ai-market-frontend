@@ -38,7 +38,13 @@ it.each(['/support/mailbox-account', '/support/mailbox-account/', null])('never 
   expect(ports.history).not.toHaveBeenCalled(); expect(ports.list).not.toHaveBeenCalled(); expect(ports.count).not.toHaveBeenCalled();
   expect(recoveryRead).not.toHaveBeenCalled();expect(screen.queryByLabelText('Pending account changes')).toBeNull();
 });
-it.each(['/dashboard', '/support', '/requests/example', '/support/mailbox-account-other'])('retains actual normal tree, hydration, history, notifications and allAI on %s', async path => {
+it.each([
+  ['/dashboard', false],
+  ['/support', true],
+  ['/pricing', true],
+  ['/requests/example', false],
+  ['/support/mailbox-account-other', false],
+] as const)('retains the normal tree and allAI on %s (desktop dock: %s)', async (path, docked) => {
   ports.path = path;
   render(<SupportPrivateBoundary><main>Ordinary page</main></SupportPrivateBoundary>);
   await waitFor(() => expect(ports.list).toHaveBeenCalledOnce());
@@ -46,8 +52,12 @@ it.each(['/dashboard', '/support', '/requests/example', '/support/mailbox-accoun
   expect(ports.history).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/\/api\/allai\/support\/anonymous\/session\/retained-general-session$/));
   expect(document.querySelector('header')).toBeTruthy(); expect(document.querySelector('footer')).toBeTruthy();
   const launcher = document.getElementById('allai-launcher'); expect(launcher).toBeTruthy();
+  expect(document.querySelector('.allai-desktop-dock')).toBeNull();
   fireEvent.click(launcher!);
   expect(await screen.findByLabelText('Conversation history')).toBeTruthy();
+  const dialog = screen.getByRole('dialog');
+  expect(dialog.classList.contains('allai-desktop-dock')).toBe(docked);
+  expect(screen.getByText('Ordinary page').closest('.marketplace-main')).toBeTruthy();
   expect(screen.getByText('Ordinary page')).toBeTruthy();
   expect(recoveryRead).toHaveBeenCalledOnce();
 });

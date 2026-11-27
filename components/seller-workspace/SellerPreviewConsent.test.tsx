@@ -20,11 +20,11 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 it('defaults both independent consent controls off and disabled with adapter absent', async () => {
   render(<SellerPreviewConsent listingId={id(10)} />); await screen.findByText(/Saved consent/);
   for (const checkbox of screen.getAllByRole('checkbox') as HTMLInputElement[]) { expect(checkbox.checked).toBe(false); expect(checkbox.disabled).toBe(true); }
-  expect(screen.getByText(PREVIEW_CONSENT_WORDING)).toBeTruthy(); expect(screen.getByText(/Preview values withheld/)).toBeTruthy();
+  expect(screen.getByText(PREVIEW_CONSENT_WORDING)).toBeTruthy(); expect(screen.getByText(/AI previews of sample values are not enabled/)).toBeTruthy();
 });
 it('withholds values honestly even when backend reports saved consent on', async () => {
   vi.mocked(readPreview).mockResolvedValue({ ...preview, enabled: true, sample_available: true }); render(<SellerPreviewConsent listingId={id(10)} />);
-  await screen.findByText(/On for the current sample/); expect(screen.getByText(/verified native sample adapter is unavailable/)).toBeTruthy();
+  await screen.findByText(/On for the current sample/); expect(screen.getByText(/AI previews of sample values are not enabled/)).toBeTruthy();
   expect((screen.getByLabelText(PREVIEW_CONSENT_WORDING) as HTMLInputElement).checked).toBe(false);
 });
 it('revokes stale consent against its saved publication/digest even with effects off', async () => {

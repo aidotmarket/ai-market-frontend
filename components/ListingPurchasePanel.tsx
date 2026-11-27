@@ -5,7 +5,8 @@ import { formatBytes } from '@/lib/formatBytes';
 import { useMemo, useState } from 'react';
 import BuyButton from '@/components/BuyButton';
 import { formatPublishedDate } from '@/lib/format';
-import type { ListingLicenseDetails, ListingVersion } from '@/types';
+import type { FileBreakdownGroup, ListingLicenseDetails, ListingVersion } from '@/types';
+import FileBreakdown from '@/app/listings/[slug]/FileBreakdown';
 
 interface ListingPurchasePanelProps {
   listingId: string;
@@ -19,6 +20,7 @@ interface ListingPurchasePanelProps {
   licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
+  fileBreakdown?: FileBreakdownGroup[] | null;
   initialVersionId?: string | null;
   disabledReason?: string;
 }
@@ -35,6 +37,7 @@ export default function ListingPurchasePanel({
   licenseDetails,
   dataFormat,
   fulfillmentType,
+  fileBreakdown,
   initialVersionId,
   disabledReason: listingDisabledReason,
 }: ListingPurchasePanelProps) {
@@ -45,6 +48,12 @@ export default function ListingPurchasePanel({
   );
   const [selectedVersionId, setSelectedVersionId] = useState(defaultVersion?.version_id ?? '');
   const selectedVersion = visibleVersions.find((version) => version.version_id === selectedVersionId) ?? defaultVersion;
+  // The public inventory belongs to the current active version.
+  const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
+  const selectedIsCurrent = selectedVersion?.version_id === currentVersionId;
+  const selectedFiles = selectedVersion && describeVersionFiles(
+    selectedVersion, selectedIsCurrent ? fileBreakdown : undefined, selectedIsCurrent ? dataFormat : undefined,
+  );
   const disabledReason = selectedVersion?.status === 'superseded'
     ? 'This version has been superseded and is shown for provenance only.'
     : listingDisabledReason;
@@ -56,6 +65,8 @@ export default function ListingPurchasePanel({
           versions={visibleVersions}
           selectedVersionId={selectedVersion?.version_id ?? ''}
           onSelectVersion={setSelectedVersionId}
+          fileBreakdown={fileBreakdown}
+          dataFormat={dataFormat}
         />
       )}
       {accessWindowDays != null && (
@@ -77,6 +88,7 @@ export default function ListingPurchasePanel({
           licenseDetails={licenseDetails}
           dataFormat={dataFormat}
           fulfillmentType={fulfillmentType}
+          downloadDescription={selectedFiles?.delivery}
           disabledReason={disabledReason}
         />
       </div>
@@ -88,12 +100,17 @@ export function VersionSelector({
   versions,
   selectedVersionId,
   onSelectVersion,
+  fileBreakdown,
+  dataFormat,
 }: {
   versions: ListingVersion[];
   selectedVersionId: string;
   onSelectVersion: (versionId: string) => void;
+  fileBreakdown?: FileBreakdownGroup[] | null;
+  dataFormat?: string | null;
 }) {
   const visibleVersions = sortVersions(versions);
+  const currentVersionId = visibleVersions.find((version) => version.status === 'active')?.version_id;
 
   if (visibleVersions.length === 0) return null;
 
@@ -117,6 +134,9 @@ export function VersionSelector({
       <div className="space-y-2">
         {visibleVersions.map((version) => {
           const selected = version.version_id === selectedVersionId;
+          const isCurrent = version.version_id === currentVersionId;
+          const groups = isCurrent ? fileBreakdown : undefined;
+          const files = describeVersionFiles(version, groups, isCurrent ? dataFormat : undefined);
           return (
             <div
               key={version.version_id}
@@ -134,8 +154,14 @@ export function VersionSelector({
                 </span>
               </div>
               <p className="mt-1 text-gray-600">
-                Published {formatPublishedDate(version.published_at)} · {formatBytes(version.total_size_bytes)} · {version.object_count.toLocaleString()} objects
+                Published {formatPublishedDate(version.published_at)}
               </p>
+              <p className="mt-1 text-gray-700">{files.summary}</p>
+              {selected && (
+                <div className="mt-2">
+                  <FileBreakdown groups={groups} totalFileCount={files.archive ? undefined : version.object_count} heading="h3" showUnavailable />
+                </div>
+              )}
               {version.status === 'superseded' && (
                 <p className="mt-1 text-gray-500">Visible for provenance. Not purchasable.</p>
               )}
@@ -145,6 +171,36 @@ export function VersionSelector({
       </div>
     </div>
   );
+}
+
+function archiveFormat(dataFormat?: string | null) {
+  const format = dataFormat?.trim().toLowerCase();
+  if (!format) return undefined;
+  if (/^(?:\.?zip|application\/(?:x-zip-compressed|zip))$/.test(format)) return 'ZIP';
+  if (/^(?:\.?tar\.gz|\.?tgz)$/.test(format)) return 'TAR.GZ';
+  if (/^(?:\.?tar|application\/x-tar)$/.test(format)) return 'TAR';
+  if (/^(?:\.?7z|application\/x-7z-compressed)$/.test(format)) return '7Z';
+  return undefined;
+}
+
+function describeVersionFiles(version: ListingVersion, groups?: FileBreakdownGroup[] | null, dataFormat?: string | null) {
+  const count = version.object_count;
+  const bytes = version.total_size_bytes;
+  const size = bytes > 0 || (bytes === 0 && count > 0) ? formatBytes(bytes) : undefined;
+  const archive = count === 1 ? archiveFormat(dataFormat) : undefined;
+  if (archive) {
+    const details = size ? ` (${size})` : '';
+    return { archive, delivery: `one ${archive} archive${details}`, summary: `One ${archive} archive${details}` };
+  }
+
+  const formats = groups?.filter(group => group.format !== 'other')
+    .map(group => group.format === 'parquet' ? 'Parquet' : group.format.toUpperCase());
+  const details = [[...new Set(formats)].join(', '), size].filter(Boolean).join(' · ');
+  const sizeAndFormats = details ? ` (${details})` : '';
+  const delivery = count > 0
+    ? `${count.toLocaleString('en-US')} ${count === 1 ? 'file' : 'files'}${sizeAndFormats}`
+    : details || undefined;
+  return { archive, delivery, summary: delivery ?? 'Download details are unavailable for this version.' };
 }
 
 export function selectDefaultVersion(versions: ListingVersion[], initialVersionId?: string | null) {

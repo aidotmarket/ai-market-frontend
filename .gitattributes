@@ -1,2 +1,3 @@
 tests/fixtures/listing-markdown-parity.json -text
 tests/fixtures/listing-markdown-parity-extra.json -text
+tests/fixtures/buyer-request-anonymization-chunk1.json -text

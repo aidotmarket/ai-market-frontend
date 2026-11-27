@@ -1,11 +1,11 @@
 'use client';
-import {isPlainListingMessage,listingDraftError} from '@/lib/listing-action-error';
+import {listingDraftError} from '@/lib/listing-action-error';
 
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import type { ListingDraftContent } from '@/api/sellerListingDraft';
+import type { ListingDraftContent, SavedListingDraft } from '@/api/sellerListingDraft';
 import {StartAnotherListingAction,useListingFlow} from './GuidedListingFlow';
 import {admissiblePrice,PRICE_REASON} from './listingSteps';
 import type {SellerCategory} from '@/api/sellerListingSource';
@@ -13,6 +13,10 @@ import GrowingTextarea from './GrowingTextarea';
 import ListingPreview from './ListingPreview';
 import ListingMarkdown from '@/components/ListingMarkdown';
 import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
+import { useListingPolish, type ListingPolishOptions } from './useListingPolish';
+import { listingPolish as polishCopy } from '@/lib/i18n/listing-polish';
+import { WorkspaceConfirmation } from './WorkspacePanel';
+import { pendingPolishAccept } from './pendingPolishAccept';
 
 const fields = [
   ['title', 'Title'], ['description', 'Description'], ['category', 'Category'], ['tags', 'Tags'],
@@ -29,8 +33,10 @@ const limits: Record<DraftField, number> = { title: 255, description: 10000, cat
 const fieldClass = 'mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#3F51B5] focus:outline-none focus:ring-1 focus:ring-[#3F51B5]';
 const buttonClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50';
 
-export default function SellerListingEditor({ assistant, active = true, initialContent, savedVersion, onSave, sourceVersion: providedSourceVersion, categories: providedCategories, licensesEnabled: providedLicensesEnabled = false, onNext }: { sourceVersion?: number | null; categories?: SellerCategory[]; licensesEnabled?: boolean; onNext?:()=>void; assistant?: ListingAssistant; active?: boolean; initialContent?: ListingDraftContent; savedVersion?: number; onSave?: (content: ListingDraftContent, baselineVersion?: number) => Promise<number | void> }) {
+export default function SellerListingEditor({ assistant: providedAssistant, active = true, initialContent, savedVersion, onSave, sourceVersion: providedSourceVersion, categories: providedCategories, licensesEnabled: providedLicensesEnabled = false, onNext, listingPolish, reportListingDirty = true, descriptionOnly: successor = false }: { sourceVersion?: number | null; categories?: SellerCategory[]; licensesEnabled?: boolean; onNext?:()=>void; assistant?: ListingAssistant; active?: boolean; initialContent?: ListingDraftContent; savedVersion?: number; onSave?: (content: ListingDraftContent, baselineVersion?: number) => Promise<number | void>; listingPolish?: ListingPolishOptions; reportListingDirty?: boolean; descriptionOnly?: boolean }) {
   const flow=useListingFlow();
+  const descriptionOnly = successor || !!listingPolish?.published;
+  const assistant = descriptionOnly ? undefined : providedAssistant;
   const sourceVersion=flow?flow.source?.version??null:providedSourceVersion;
   const currentRevision=useRef(flow?.fileRevision);currentRevision.current=flow?.fileRevision;
   const currentSource=useRef(sourceVersion);currentSource.current=sourceVersion;
@@ -42,7 +48,8 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const completedHistory = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [draft, setDraft] = useState<Draft>(initialContent ? { title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags } : emptyDraft);
+  const [draft, setDraft] = useState<Draft>(initialContent ? { title: initialContent.title, description: initialContent.description, category: initialContent.category, tags: initialContent.tags } :
+    { ...emptyDraft, title: listingPolish?.publishedTitle ?? '' });
   const [activeField, setActiveField] = useState<DraftField>('title');
   const [brief, setBrief] = useState(initialContent?.brief ?? '');
   const [message, setMessage] = useState('');
@@ -51,50 +58,85 @@ export default function SellerListingEditor({ assistant, active = true, initialC
   const [reviewed, setReviewed] = useState<DraftField[]>([]);
   const [price, setPrice] = useState(initialContent?.price ?? '');
   const descriptionInvalid = descriptionTooLong(draft.description);
-  const priceInvalid = price !== '' && !admissiblePrice(price);
+  const priceInvalid = !descriptionOnly && price !== '' && !admissiblePrice(price);
   const [license, setLicense] = useState(initialContent?.license ?? '');
   const [previewOpen, setPreviewOpen] = useState(false);
   const snapshot = JSON.stringify({ brief, ...draft, price, license, description_source_version:descriptionSourceVersion });
   const [savedSnapshot, setSavedSnapshot] = useState(snapshot);
   const [baselineVersion,setBaselineVersion]=useState(savedVersion);
+  const draftId = listingPolish?.draft?.draft_id;
+  const [baselineDraftId, setBaselineDraftId] = useState(draftId);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [alreadyPublished,setAlreadyPublished]=useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveConfirmation, setSaveConfirmation] = useState<"save" | "next" | null>(null);
+  const dirty = snapshot !== savedSnapshot;
+  const polish = useListingPolish(listingPolish, active, dirty, saving, { id: baselineDraftId, version: baselineVersion }, (saved, publishedDescription) => {
+    adoptContent(saved?.content, saved?.version ?? 0, saved?.draft_id, publishedDescription);
+  });
+  const publicationOnly = !!listingPolish?.published && !draftId;
+  const adoptingDraft = !!listingPolish && !dirty && (savedVersion !== baselineVersion || draftId !== baselineDraftId);
+  const editorReadOnly = polish.busy || publicationOnly || adoptingDraft;
+  const editBlocked = () => !!listingPolish && (!active || editorReadOnly || listingPolish.lock.current || !!pendingPolishAccept());
   const save = async () => {
-    if (!onSave || savingRef.current || priceInvalid || descriptionInvalid) return false;
-    if(snapshot===savedSnapshot)return true;
+    if (!onSave || savingRef.current || editBlocked() || priceInvalid || descriptionInvalid) return false;
+    if(!dirty)return true;
     savingRef.current = true; setSaving(true); setSaveError(null);
     const submitted = snapshot;
     try {
       const version=await onSave(JSON.parse(submitted),baselineVersion);
-      if (mounted.current) {setSavedSnapshot(submitted);if(typeof version==='number')setBaselineVersion(version);}
+      if (mounted.current) {
+        setSavedSnapshot(submitted);
+        if(typeof version==='number')setBaselineVersion(version);
+        if (polish.hasRemaining) polish.end();
+      }
       return true;
     } catch (error) {
       const draftFailure=listingDraftError(error);setAlreadyPublished(draftFailure?.alreadyPublished??false);
-      const detail=axios.isAxiosError(error)?error.response?.data?.detail:null;
-      if (mounted.current) setSaveError(draftFailure?.message??(isPlainListingMessage(detail)?detail:isPlainListingMessage(detail?.message)?detail.message:axios.isAxiosError(error) && error.response?.status === 409
+      if (mounted.current) setSaveError(draftFailure?.message??(axios.isAxiosError(error) && error.response?.status === 409
         ? 'This draft was saved elsewhere. Your edits are still here. Copy any changes you want to keep, then reload the Workspace to open the saved version.'
         : 'Saving could not be confirmed. Your edits are still here. Try saving again.'));
     } finally { savingRef.current = false; if (mounted.current) setSaving(false); }
   };
+  const finishSave = async (destination: "save" | "next") => {
+    if (!await save() || destination === "save") return;
+    if (flow) {
+      const missing = flow.stepsForContent(JSON.parse(snapshot)).slice(0,4).find(s=>s.state!=='done'&&s.state!=='skipped');
+      if (missing) { setSaveError(missing.reason); return; }
+      flow.navigate('review');
+    } else onNext?.();
+  };
+  const requestSave = (destination: "save" | "next") => {
+    if (editBlocked()) return;
+    if (dirty && polish.hasRemaining) setSaveConfirmation(destination);
+    else void finishSave(destination);
+  };
+  function adoptContent(content: ListingDraftContent | undefined, version: number, id?: string | null, publishedDescription?: string) {
+    const nextDraft = content ? { title: content.title, description: content.description, category: content.category, tags: content.tags } :
+      { ...emptyDraft, title: listingPolish?.publishedTitle ?? '', description: publishedDescription ?? '' };
+    const next = { brief:content?.brief??'', ...nextDraft, price:content?.price??'', license:content?.license??'', description_source_version:content?.description_source_version??null };
+    setDraft(nextDraft);setBrief(next.brief);setPrice(next.price);setLicense(next.license);setDescriptionSourceVersion(next.description_source_version);
+    setSavedSnapshot(JSON.stringify(next));setBaselineVersion(version);setBaselineDraftId(id);setSaveError(null);
+    setProposals({});setReviewed([]);setMessages([]);completedHistory.current=[];setRequested(false);setProposalSourceVersion(null);
+    controller.current?.abort();requesting.current=false;setIsStreaming(false);
+  }
   // Adopt content only while pristine; dirty edits can follow non-editor version changes.
   useEffect(()=>{
-    if(savedVersion===undefined||savedVersion===baselineVersion||saving)return;
+    if(savedVersion===undefined||savedVersion===baselineVersion&&draftId===baselineDraftId||saving||polish.ownBusy)return;
     const content=initialContent;
     const nextDraft=content?{title:content.title,description:content.description,category:content.category,tags:content.tags}:emptyDraft;
     const next={brief:content?.brief??'',...nextDraft,price:content?.price??'',license:content?.license??'',description_source_version:content?.description_source_version??null};
     if(snapshot!==savedSnapshot){
-      if(JSON.stringify(next)===savedSnapshot)setBaselineVersion(savedVersion);
+      if(draftId===baselineDraftId&&JSON.stringify(next)===savedSnapshot)setBaselineVersion(savedVersion);
       return;
     }
-    setDraft(nextDraft);setBrief(next.brief);setPrice(next.price);setLicense(next.license);setDescriptionSourceVersion(next.description_source_version);
-    setSavedSnapshot(JSON.stringify(next));setBaselineVersion(savedVersion);setSaveError(null);
-    setProposals({});setReviewed([]);setMessages([]);completedHistory.current=[];setRequested(false);setProposalSourceVersion(null);
-    controller.current?.abort();requesting.current=false;setIsStreaming(false);
-  },[initialContent,savedVersion,baselineVersion,snapshot,savedSnapshot,saving]);
+    adoptContent(content,savedVersion,draftId);
+  },[initialContent,savedVersion,baselineVersion,draftId,baselineDraftId,snapshot,savedSnapshot,saving,polish.ownBusy]);
   const flowRef=useRef(flow);flowRef.current=flow;
-  useEffect(()=>{flowRef.current?.setListingDirty(snapshot!==savedSnapshot);},[snapshot,savedSnapshot]);
+  useEffect(()=>{
+    if (reportListingDirty) flowRef.current?.setListingDirty(snapshot!==savedSnapshot);
+  },[snapshot,savedSnapshot,reportListingDirty]);
   const requesting = useRef(false);
   const [requested, setRequested] = useState(false);
   const mounted = useRef(true);
@@ -116,12 +158,13 @@ export default function SellerListingEditor({ assistant, active = true, initialC
     // Keep the request alive so a late reply can be discarded with the source-change explanation.
   },[sourceVersion,flow?.fileRevision]);
   const update = (field: DraftField, value: string) => {
-    if(field==='description')setDescriptionSourceVersion(null);
+    if (editBlocked() || descriptionOnly && field !== 'description') return;
+    if(field==='description' && !descriptionOnly)setDescriptionSourceVersion(null);
     setDraft((current) => ({ ...current, [field]: value }));
     setReviewed((current) => current.filter((item) => item !== field));
   };
   const ask = async (instruction: string) => {
-    if (!active || !assistant || isStreaming || requesting.current) return;
+    if (!active || !assistant || isStreaming || requesting.current || editBlocked()) return;
     requesting.current = true;
     setRequested(true); setError(null); setIsStreaming(true);
     setMessages((current) => [...current, { role: 'user', content: instruction }]);
@@ -134,7 +177,7 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       }, requestController.signal);
       if (!mounted.current || requestController.signal.aborted) return;
       if(currentSource.current!==undefined && (result.source_version!==currentSource.current || sourceVersion!==currentSource.current || requestRevision!==currentRevision.current)){
-        setProposals({});setError('Your files changed while Allai was drafting. Ask again.');return;
+        setProposals({});setError('Your files changed while allAI was drafting. Ask again.');return;
       }
       setProposalSourceVersion(result.source_version??null);
       if (typeof result.message !== 'string' || result.message.length > 12000 || !Array.isArray(result.proposals)) throw new Error('Invalid assistant response');
@@ -148,54 +191,75 @@ export default function SellerListingEditor({ assistant, active = true, initialC
       }
     } catch (error) { if (mounted.current && !requestController.signal.aborted) {
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      setError(status === 402 && axios.isAxiosError(error) && error.response?.data?.detail === 'starter_credits_unavailable' ? 'Starter credits are not available for this account. Your draft is still here and you can continue editing.' : status === 402 ? 'There are not enough starter credits for this request. Your draft is still here and you can continue editing.' : status === 409 || status === 429 ? 'Allai is already working or receiving too many requests. Your draft is still here; try again shortly.' : 'Allai could not respond. Your draft is still here; try again.');
+      setError(status === 402 && axios.isAxiosError(error) && error.response?.data?.detail === 'starter_credits_unavailable' ? 'This account has no starter credits for allAI. Your draft is saved. Edit your description and price below to continue.' : status === 402 ? 'There are not enough starter credits for this request. Your draft is still here and you can continue editing.' : status === 409 || status === 429 ? 'allAI is already working or receiving too many requests. Your draft is still here. Try again shortly.' : 'allAI could not respond. Your draft is still here. Try again.');
     } }
     finally { if (controller.current === requestController) { requesting.current = false; if (mounted.current) setIsStreaming(false); } }
   };
   const accept = (field: DraftField) => {
+    if (editBlocked()) return;
     const proposal = proposals[field];
     if (!proposal) return;
-    if(sourceVersion!==undefined && proposalSourceVersion!==sourceVersion){setProposals({});setError('Your files changed while Allai was drafting. Ask again.');return;}
+    if(sourceVersion!==undefined && proposalSourceVersion!==sourceVersion){setProposals({});setError('Your files changed while allAI was drafting. Ask again.');return;}
     if(field==='category'&&!categories.some(c=>c.slug===proposal.value)){setError('Choose a category from the list.');return;}
     update(field, proposal.value);
     if(field==='description' && typeof sourceVersion==='number' && proposalSourceVersion===sourceVersion)setDescriptionSourceVersion(sourceVersion);
     setProposals((current) => { const next = { ...current }; delete next[field]; return next; });
   };
+  const EditorFields = listingPolish ? 'fieldset' : 'div';
+  const idSuffix = listingPolish?.published ? '-publication' : '';
+  const headingId = `listing-editor-title${idSuffix}`;
+  const briefId = `seller-listing-brief${idSuffix}`;
+  const priceErrorId = `seller-price-error${idSuffix}`;
+  const messageId = `seller-allai-message${idSuffix}`;
+  const previewId = `seller-listing-preview${idSuffix}`;
   const label = fields.find(([field]) => field === activeField)![1];
 
   return (
     <>
-    <section className="space-y-5" aria-labelledby="listing-editor-title">
-      <div><h2 id="listing-editor-title" className="text-xl font-semibold text-gray-900">Describe and price</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">Allai, our assistant, can draft this for you from your files. Review her suggestions, ask for changes, and decide what buyers will see.</p></div>
-      {assistant && <p className="text-sm text-gray-600">Allai requests use your existing starter credits. Editing and saving your draft do not use credits.</p>}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <section className="space-y-5" aria-labelledby={headingId}>
+      <div><h2 id={headingId} className="text-xl font-semibold text-gray-900">Describe and price</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">{descriptionOnly ? polishCopy.successorDescription : "allAI, our assistant, can draft this for you from your files. Review her suggestions, ask for changes, and decide what buyers will see."}</p></div>
+      {assistant && <p className="text-sm text-gray-600">allAI requests use your existing starter credits. Editing and saving your draft do not use credits.</p>}
+      {polish.panel}
+      <EditorFields disabled={listingPolish ? editorReadOnly : undefined} className={descriptionOnly ? "grid gap-5" : "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]"}>
         <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
-          <div className="rounded-lg bg-indigo-50 p-4"><label htmlFor="seller-listing-brief" className="text-sm font-semibold text-indigo-950">Give Allai a starting point</label><p className="mt-1 text-xs leading-5 text-indigo-900">Tell her what the data covers and who it helps. Share information you want her to use for the listing.</p><textarea id="seller-listing-brief" rows={3} maxLength={4000} value={brief} onChange={(event) => setBrief(event.target.value)} className={fieldClass} placeholder="For example: weekly retail sales by region, covering 2024–2026…" /><p className="mt-3 text-xs text-indigo-900">Allai reads your file names and sizes to write the draft. It never opens your files.</p><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask('Draft my listing title, description, category and tags.')} className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{isStreaming ? 'Allai is working…' : 'Ask Allai to draft my listing'}</button>{assistant&&!brief.trim()&&<p className="mt-2 text-xs text-indigo-900">Describe your data above to ask Allai for a draft.</p>}</div>
-          <nav aria-label="Listing fields" className="flex flex-wrap gap-2">{fields.map(([field, fieldLabel]) => <button key={field} type="button" onClick={() => setActiveField(field)} aria-current={activeField === field ? 'step' : undefined} className={`${buttonClass} ${activeField === field ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : ''}`}>{fieldLabel}{reviewed.includes(field) ? ' ✓' : ''}</button>)}</nav>
-          {Object.keys(proposals).length > 0 && <button type="button" onClick={() => fields.forEach(([field]) => accept(field))} className={buttonClass}>Use all Allai suggestions</button>}
+          {!descriptionOnly && <div className="rounded-lg bg-indigo-50 p-4"><label htmlFor={briefId} className="text-sm font-semibold text-indigo-950">Give allAI a starting point</label><p className="mt-1 text-xs leading-5 text-indigo-900">Tell her what the data covers and who it helps. Share information you want her to use for the listing.</p><textarea id={briefId} rows={3} maxLength={4000} value={brief} onChange={(event) => { if (!editBlocked()) setBrief(event.target.value); }} className={fieldClass} placeholder="For example: weekly retail sales by region, covering 2024–2026…" /><p className="mt-3 text-xs text-indigo-900">allAI reads your file names and sizes to write the draft. It never opens your files.</p><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask('Draft my listing title, description, category and tags.')} className="mt-3 rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{isStreaming ? 'allAI is working…' : 'Ask allAI to draft my listing'}</button>{assistant&&!brief.trim()&&<p className="mt-2 text-xs text-indigo-900">Describe your data above to ask allAI for a draft.</p>}</div>}
+          {!descriptionOnly && <nav aria-label="Listing fields" className="flex flex-wrap gap-2">{fields.map(([field, fieldLabel]) => <button key={field} type="button" onClick={() => setActiveField(field)} aria-current={activeField === field ? 'step' : undefined} className={`${buttonClass} ${activeField === field ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : ''}`}>{fieldLabel}{reviewed.includes(field) ? ' ✓' : ''}</button>)}</nav>}
+          {Object.keys(proposals).length > 0 && <button type="button" onClick={() => fields.forEach(([field]) => accept(field))} className={buttonClass}>Use all allAI suggestions</button>}
           {fields.map(([field, fieldLabel]) => <div key={field} className={`rounded-lg border p-4 ${activeField === field ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-100'}`}>
-            <label htmlFor={`seller-listing-${field}`} className="text-sm font-semibold text-gray-900">{fieldLabel}</label>
-            {field === 'category' ? <div className="relative mt-2 rounded-lg border border-gray-300 bg-white focus-within:ring-1 focus-within:ring-indigo-500"><span aria-hidden="true" className="pointer-events-none flex items-start justify-between gap-3 px-3 py-2 text-sm text-gray-900"><span className="min-w-0 whitespace-normal break-words">{categories.find(c=>c.slug===draft.category)?.name??'Choose a category from the list'}</span><span>⌄</span></span><select id={`seller-listing-${field}`} value={categories.some(c=>c.slug===draft.category)?draft.category:''} onFocus={()=>setActiveField(field)} onChange={event=>update(field,event.target.value)} className="absolute inset-0 h-full w-full opacity-0"><option value="">Choose a category from the list</option>{categories.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select></div> : field === 'description' ? <MarkdownTextField id={`seller-listing-${field}`} value={draft[field]} onFocus={() => setActiveField(field)} onChange={value => update(field, value)} /> : <GrowingTextarea id={`seller-listing-${field}`} maxLength={limits[field]} value={draft[field]} onFocus={() => setActiveField(field)} onChange={(event) => update(field, event.target.value)} className={fieldClass} />}
+            <label htmlFor={`seller-listing-${field}${idSuffix}`} className="text-sm font-semibold text-gray-900">{fieldLabel}</label>
+            {field === 'category' ? <div className="relative mt-2 rounded-lg border border-gray-300 bg-white focus-within:ring-1 focus-within:ring-indigo-500"><span aria-hidden="true" className="pointer-events-none flex items-start justify-between gap-3 px-3 py-2 text-sm text-gray-900"><span className="min-w-0 whitespace-normal break-words">{categories.find(c=>c.slug===draft.category)?.name??(descriptionOnly ? draft.category : 'Choose a category from the list')}</span><span>⌄</span></span><select disabled={descriptionOnly} id={`seller-listing-${field}${idSuffix}`} value={categories.some(c=>c.slug===draft.category)?draft.category:''} onFocus={()=>setActiveField(field)} onChange={event=>update(field,event.target.value)} className="absolute inset-0 h-full w-full opacity-0"><option value="">Choose a category from the list</option>{categories.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select></div> : field === 'description' ? <MarkdownTextField readOnly={editorReadOnly} id={`seller-listing-${field}${idSuffix}`} value={draft[field]} onFocus={() => setActiveField(field)} onChange={value => update(field, value)} /> : <GrowingTextarea readOnly={descriptionOnly} id={`seller-listing-${field}${idSuffix}`} maxLength={limits[field]} value={draft[field]} onFocus={() => setActiveField(field)} onChange={(event) => update(field, event.target.value)} className={fieldClass} />}
             {field === 'description' && <p className="mt-2 text-xs text-gray-500">Anything you keep here, including file names, will be public.</p>}
-            {field === 'tags' && <p className="mt-2 text-xs text-gray-500">Separate tags with commas.</p>}
-            {proposals[field] && <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-3"><p className="text-xs font-semibold text-indigo-800">Allai suggests</p>{field==='description'?<ListingMarkdown text={proposals[field]!.value}/>:<p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-800">{proposals[field]!.value}</p>}{proposals[field]!.reasoning && <p className="mt-2 text-xs text-gray-500">{proposals[field]!.reasoning}</p>}<div className="mt-3 flex gap-2"><button type="button" onClick={() => accept(field)} className={buttonClass}>Use suggestion</button><button type="button" onClick={() => setProposals((current) => { const next = { ...current }; delete next[field]; return next; })} className={buttonClass}>Keep mine</button></div></div>}
+            {field === 'tags' && !descriptionOnly && <p className="mt-2 text-xs text-gray-500">Separate tags with commas.</p>}
+            {proposals[field] && <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-3"><p className="text-xs font-semibold text-indigo-800">allAI suggests</p>{field==='description'?<ListingMarkdown text={proposals[field]!.value}/>:<p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-800">{proposals[field]!.value}</p>}{proposals[field]!.reasoning && <p className="mt-2 text-xs text-gray-500">{proposals[field]!.reasoning}</p>}<div className="mt-3 flex gap-2"><button type="button" onClick={() => accept(field)} className={buttonClass}>Use suggestion</button><button type="button" onClick={() => setProposals((current) => { const next = { ...current }; delete next[field]; return next; })} className={buttonClass}>Keep mine</button></div></div>}
           </div>)}
-          <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-gray-900">Your price (USD)<input type="number" min="0" max="999999.99" step="0.01" aria-invalid={priceInvalid} aria-describedby={priceInvalid ? "seller-price-error" : undefined} value={price} onChange={(event) => setPrice(event.target.value)} className={fieldClass} /></label>{!licensesEnabled&&<label className="text-sm font-semibold text-gray-900">Your license<input value={license} onChange={(event) => setLicense(event.target.value)} maxLength={500} className={fieldClass} /></label>}</div>
-          {priceInvalid && <p id="seller-price-error" role="alert" className="text-sm text-red-800">Enter $0 for a free listing or $25 to $999,999.99 for a paid listing, with no more than two decimal places.</p>}
-          {onSave ? <div className="space-y-3">{snapshot!==savedSnapshot&&<button type="button" disabled={saving || priceInvalid || descriptionInvalid || snapshot === savedSnapshot} onClick={()=>void save()} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button>}<p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}{alreadyPublished&&<> <StartAnotherListingAction/></>}</p>}<p className="text-xs text-gray-500">Saves your listing fields, brief, price and license. Chat and unaccepted suggestions stay in this Workspace only. Save your file choices separately in Choose your files.</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Save your draft and file choices before reviewing and publishing.</p>}
+          <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-gray-900">Your price (USD)<input type="number" readOnly={descriptionOnly} min="0" max="999999.99" step="0.01" aria-invalid={priceInvalid} aria-describedby={priceInvalid ? priceErrorId : undefined} value={price} onChange={(event) => { if (!descriptionOnly && !editBlocked()) setPrice(event.target.value); }} className={fieldClass} /></label>{!licensesEnabled&&<label className="text-sm font-semibold text-gray-900">Your license<input readOnly={descriptionOnly} value={license} onChange={(event) => { if (!descriptionOnly && !editBlocked()) setLicense(event.target.value); }} maxLength={500} className={fieldClass} /></label>}</div>
+          {priceInvalid && <p id={priceErrorId} role="alert" className="text-sm text-red-800">Enter $0 for a free listing or $25 to $999,999.99 for a paid listing, with no more than two decimal places.</p>}
+          {onSave ? <div className="space-y-3">{snapshot!==savedSnapshot&&<button type="button" disabled={saving || priceInvalid || descriptionInvalid || snapshot === savedSnapshot} onClick={()=>requestSave("save")} className={buttonClass}>{saving ? 'Saving draft…' : 'Save private draft'}</button>}<p role="status" className="text-sm text-gray-600">{snapshot === savedSnapshot ? 'Draft saved to your account.' : 'You have unsaved changes.'} Saving does not publish your listing.</p>{saveError && <p role="alert" className="text-sm text-red-800">{saveError}{alreadyPublished&&<> <StartAnotherListingAction/></>}</p>}<p className="text-xs text-gray-500">{descriptionOnly ? "Saves your description to your private draft." : "Saves your listing fields, brief, price and license. Chat and unaccepted suggestions stay in this Workspace only. Save your file choices separately in Choose your files."}</p></div> : <p className="text-xs leading-5 text-gray-500">Your edits stay here when you switch Workspace sections. They are not saved to your account yet and will be lost if you reload or leave the Workspace. Save your draft and file choices before reviewing and publishing.</p>}
         </div>
-        <aside className="space-y-4 lg:sticky lg:top-5" aria-label="Allai listing assistant">
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="font-semibold text-indigo-950">Review {label.toLowerCase()} with Allai</p><p className="mt-2 text-sm text-indigo-900">Ask her to change the wording, refine the tags, or explain a suggestion.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!draft[activeField].trim()} onClick={() => { setReviewed((current) => [...new Set([...current, activeField])]); const index = fields.findIndex(([field]) => field === activeField); setActiveField(fields[Math.min(index + 1, fields.length - 1)][0]); }} className={buttonClass}>Looks good</button><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask(`Help me improve the ${label.toLowerCase()}. Ask what I would like changed if needed.`)} className={buttonClass}>Change it with Allai</button></div>{!draft[activeField].trim()&&<p className="mt-2 text-xs text-indigo-900">Add or accept {label.toLowerCase()} text before marking it reviewed.</p>}</div>
-          <p className="text-sm text-gray-600">See Allai’s suggested changes in the boxes on the left, under each field.</p><div className="overflow-hidden rounded-xl bg-[#18234B] text-white"><div className="border-b border-white/10 px-4 py-4"><h3 className="font-semibold">Allai</h3><p className="mt-1 text-xs text-indigo-200">Your listing assistant</p></div><div className="max-h-[480px] space-y-4 overflow-y-auto p-4" aria-live="polite">{!requested && <p className="text-sm leading-6 text-indigo-100">Tell me about your offering. I can draft the description and tags, then work through each field with you.</p>}{messages.map((item, index) => <p key={index} className={`whitespace-pre-wrap break-words rounded-lg p-3 text-sm leading-6 ${item.role === "user" ? "bg-indigo-500/30" : "border border-white/15"}`}>{item.content}</p>)}{isStreaming && <p role="status" className="text-sm text-indigo-200">Allai is preparing suggestions…</p>}{!assistant && <p className="text-sm leading-6 text-indigo-200">Allai listing assistance is not connected yet. You can edit the draft here while this is being completed.</p>}</div><form onSubmit={(event) => { event.preventDefault(); const text = message.trim(); if (text) { setMessage(''); void ask(text); } }} className="border-t border-white/10 p-4"><label htmlFor="seller-allai-message" className="sr-only">Message Allai about your listing</label><textarea id="seller-allai-message" rows={3} maxLength={4000} value={message} onChange={(event) => setMessage(event.target.value)} className="w-full rounded-lg border border-white/20 bg-white/5 p-3 text-sm text-white placeholder:text-indigo-200" placeholder="Make the description more concise…" /><button type="submit" disabled={!assistant || isStreaming || !message.trim()} className="mt-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#18234B] disabled:opacity-50">Send to Allai</button></form></div>
+        {!descriptionOnly && <aside className="space-y-4 lg:sticky lg:top-5" aria-label="allAI listing assistant">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="font-semibold text-indigo-950">Review {label.toLowerCase()} with allAI</p><p className="mt-2 text-sm text-indigo-900">Ask her to change the wording, refine the tags, or explain a suggestion.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!draft[activeField].trim()} onClick={() => { setReviewed((current) => [...new Set([...current, activeField])]); const index = fields.findIndex(([field]) => field === activeField); setActiveField(fields[Math.min(index + 1, fields.length - 1)][0]); }} className={buttonClass}>Looks good</button><button type="button" disabled={!assistant || isStreaming || !brief.trim()} onClick={() => ask(`Help me improve the ${label.toLowerCase()}. Ask what I would like changed if needed.`)} className={buttonClass}>Change it with allAI</button></div>{!draft[activeField].trim()&&<p className="mt-2 text-xs text-indigo-900">Add or accept {label.toLowerCase()} text before marking it reviewed.</p>}</div>
+          <p className="text-sm text-gray-600">See allAI’s suggested changes in the boxes on the left, under each field.</p><div className="overflow-hidden rounded-xl bg-[#18234B] text-white"><div className="border-b border-white/10 px-4 py-4"><h3 className="font-semibold">allAI</h3><p className="mt-1 text-xs text-indigo-200">Your listing assistant</p></div><div className="max-h-[480px] space-y-4 overflow-y-auto p-4" aria-live="polite">{!requested && <p className="text-sm leading-6 text-indigo-100">Tell me about your offering. I can draft the description and tags, then work through each field with you.</p>}{messages.map((item, index) => <p key={index} className={`whitespace-pre-wrap break-words rounded-lg p-3 text-sm leading-6 ${item.role === "user" ? "bg-indigo-500/30" : "border border-white/15"}`}>{item.content}</p>)}{isStreaming && <p role="status" className="text-sm text-indigo-200">allAI is preparing suggestions…</p>}{!assistant && <p className="text-sm leading-6 text-indigo-200">allAI listing assistance is not connected yet. You can edit the draft here while this is being completed.</p>}</div><form onSubmit={(event) => { event.preventDefault(); const text = message.trim(); if (text) { setMessage(''); void ask(text); } }} className="border-t border-white/10 p-4"><label htmlFor={messageId} className="sr-only">Message allAI about your listing</label><textarea id={messageId} rows={3} maxLength={4000} value={message} onChange={(event) => setMessage(event.target.value)} className="w-full rounded-lg border border-white/20 bg-white/5 p-3 text-sm text-white placeholder:text-indigo-200" placeholder="Make the description more concise…" /><button type="submit" disabled={!assistant || isStreaming || !message.trim()} className="mt-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#18234B] disabled:opacity-50">Send to allAI</button></form></div>
           {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-        </aside>
-      </div>
-      {sourceVersion!==undefined && (sourceVersion===null || descriptionSourceVersion!==sourceVersion) && <div role="status" className="space-y-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"><p>Your files changed after this description was written</p><div className="flex flex-wrap gap-3"><button type="button" disabled={!assistant||isStreaming||!brief.trim()||sourceVersion===null} onClick={()=>void ask('Update my description to match my current saved files.')} className={buttonClass}>Ask Allai to update it</button><button type="button" disabled={sourceVersion===null||!draft.description.trim()} onClick={()=>setDescriptionSourceVersion(sourceVersion??null)} className={buttonClass}>This description matches my files</button></div>{sourceVersion===null?<p>Choose and save your files before confirming this description.</p>:!draft.description.trim()?<p>Add a description before confirming it.</p>:!assistant?<p>Allai is unavailable. Edit the description and confirm it matches your files.</p>:!brief.trim()?<p>Add a brief above before asking Allai to update it.</p>:null}</div>}
-      {onSave&&(flow||onNext)&&<><button type="button" disabled={saving||priceInvalid||descriptionInvalid} onClick={async()=>{if(!await save())return; if(flow){const missing=flow.stepsForContent(JSON.parse(snapshot)).slice(0,4).find(s=>s.state!=='done'&&s.state!=='skipped');if(missing){setSaveError(missing.reason);return;} flow.navigate('review');}else onNext?.();}} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: Review →</button>{priceInvalid&&<p className="text-sm text-amber-900">{PRICE_REASON}</p>}</>}
-      <button type="button" aria-expanded={previewOpen} aria-controls="seller-listing-preview" onClick={() => setPreviewOpen(current => !current)} className={buttonClass}>{previewOpen ? 'Hide listing preview' : 'Preview my listing'}</button>
-      {previewOpen && <div id="seller-listing-preview"><ListingPreview draft={{ ...draft, price, license:licensesEnabled?(licenseSelection?`${licenseSelection.kind==='standard'?`ai.market Standard Data Licence v${licenseSelection.version}`:"Seller's own licence"} · AI/ML training ${licenseSelection.ai_training?'allowed':'not allowed'}`:'Choose a licence'):license }} /></div>}
+        </aside>}
+      </EditorFields>
+      {!descriptionOnly && sourceVersion!==undefined && (sourceVersion===null || descriptionSourceVersion!==sourceVersion) && <div role="status" className="space-y-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"><p>Your files changed after this description was written</p><div className="flex flex-wrap gap-3"><button type="button" disabled={editorReadOnly||!assistant||isStreaming||!brief.trim()||sourceVersion===null} onClick={()=>void ask('Update my description to match my current saved files.')} className={buttonClass}>Ask allAI to update it</button><button type="button" disabled={editorReadOnly||sourceVersion===null||!draft.description.trim()} onClick={()=>setDescriptionSourceVersion(sourceVersion??null)} className={buttonClass}>This description matches my files</button></div>{sourceVersion===null?<p>Choose and save your files before confirming this description.</p>:!draft.description.trim()?<p>Add a description before confirming it.</p>:!assistant?<p>allAI is unavailable. Edit the description and confirm it matches your files.</p>:!brief.trim()?<p>Add a brief above before asking allAI to update it.</p>:null}</div>}
+      {onSave&&(flow||onNext)&&<><button type="button" disabled={editorReadOnly||saving||priceInvalid||descriptionInvalid} onClick={()=>requestSave("next")} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Next: Review →</button>{priceInvalid&&<p className="text-sm text-amber-900">{PRICE_REASON}</p>}</>}
+      <button type="button" aria-expanded={previewOpen} aria-controls={previewId} onClick={() => setPreviewOpen(current => !current)} className={buttonClass}>{previewOpen ? 'Hide listing preview' : 'Preview my listing'}</button>
+      {previewOpen && <div id={previewId}><ListingPreview draft={{ ...draft, price, license:licensesEnabled?(licenseSelection?`${licenseSelection.kind==='standard'?`ai.market Standard Data Licence v${licenseSelection.version}`:"Seller's own licence"} · AI/ML training ${licenseSelection.ai_training?'allowed':'not allowed'}`:'Choose a licence'):license }} /></div>}
+      {saveConfirmation && <WorkspaceConfirmation label={polishCopy.confirmSave}>
+        <p>{polishCopy.confirmSave}</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={buttonClass} disabled={polish.busy || saving}
+            onClick={() => { const destination = saveConfirmation; setSaveConfirmation(null); void finishSave(destination); }}>
+            {polishCopy.save}
+          </button>
+          <button type="button" className={buttonClass} onClick={() => setSaveConfirmation(null)}>{polishCopy.cancel}</button>
+        </div>
+      </WorkspaceConfirmation>}
     </section>
-    <ListingDocumentsEditor listingId={flow?.publication?.publication?.listing_id}/>
+    {!listingPolish?.published && (listingPolish ? <fieldset disabled={editorReadOnly} className="contents">
+      <ListingDocumentsEditor listingId={flow?.publication?.publication?.listing_id}/>
+    </fieldset> : <ListingDocumentsEditor listingId={flow?.publication?.publication?.listing_id}/>)}
     </>
   );
 }

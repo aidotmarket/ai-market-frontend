@@ -1,3 +1,4 @@
+import { SectionRecovery } from '@/lib/section-recovery';
 import type { PendingProfileChange, ProfileRecoveryPort } from '@/api/support';
 
 export interface RecoveryView {
@@ -20,30 +21,38 @@ export class ProfileRecovery {
   private clearFocus() {if (this.focusTimer!==null) clearTimeout(this.focusTimer);this.focusTimer=null;}
   // One trailing read per focus burst. Explicit reads and decisions stay immediate.
   backgroundRead=() => {
-    if (!this.alive() || this.focusTimer!==null) return;
+    if (!this.alive() || this.recovery.stopped || this.focusTimer!==null) return;
     const generation=this.generation;
-    this.focusTimer=setTimeout(()=>{this.focusTimer=null;if (generation===this.generation && this.alive()) void this.read();},250);
+    this.focusTimer=setTimeout(()=>{this.focusTimer=null;if (generation===this.generation && this.alive() && !this.recovery.stopped) void this.load(false);},250);
+  };
+  private recovery=new SectionRecovery();
+  sessionRecovered=() => {
+    if (!this.alive() || this.view.submitted) return;
+    if (!this.view.busy && !this.view.error) return;
+    this.recovery.sessionChanged();
+    if (!this.view.busy && this.view.error && this.recovery.recover(new Error(this.view.error))) void this.load(false);
   };
   private listeners=new Set<() => void>();
   constructor(private port: ProfileRecoveryPort, private current: () => boolean) {}
   subscribe=(fn:()=>void) => {this.listeners.add(fn);return ()=>{this.listeners.delete(fn);};};
   getSnapshot=() => this.view;
   private emit(next:Partial<RecoveryView>) {this.view={...this.view,...next};this.listeners.forEach(fn=>fn());}
-  activate=() => {if (this.current()) {this.clearFocus();this.retired=false;this.generation++;this.fresh.clear();this.emit(empty());}};
-  retire=() => {this.clearFocus();this.retired=true;this.generation++;this.fresh.clear();this.view=empty();this.listeners.forEach(fn=>fn());};
+  activate=() => {if (this.current()) {this.clearFocus();this.retired=false;this.recovery.reset();this.generation++;this.fresh.clear();this.emit(empty());}};
+  retire=() => {this.clearFocus();this.retired=true;this.recovery.reset();this.generation++;this.fresh.clear();this.view=empty();this.listeners.forEach(fn=>fn());};
   private alive() {return !this.retired && this.current();}
   isFresh=(row:PendingProfileChange) => this.fresh.has(key(row));
   canDecide=(row:PendingProfileChange) => this.alive() && !this.view.busy && !this.view.reconcile
     && this.fresh.has(key(row)) && row.state==='pending' && row.ready_to_reconfirm
     && this.view.rows.some(r=>key(r)===key(row) && r.state==='pending' && r.ready_to_reconfirm);
-  read=() => this.load(false);
-  readMore=() => this.load(true);
+  read=() => {this.recovery.reset();return this.load(false);};
+  readMore=() => {this.recovery.reset();return this.load(true);};
   private async load(more:boolean) {
     const cursor=more ? this.view.nextPending : null;
     if (!this.alive() || this.view.busy || (more && !cursor)) return;
     this.clearFocus();
     const g=++this.generation, submitted=this.view.submitted;
     this.emit({busy:true,reconcile:true,error:null});
+    let failure:unknown=null;
     try {
       // At most one pending page and one exact submitted-intent read. No crawl,
       // dispatch or retry follows a response. Apply both reads atomically.
@@ -105,6 +114,7 @@ export class ProfileRecovery {
           : superseded ? 'Your earlier decision did not apply; a newer change replaced it. Decide explicitly on the current change.'
           : outcome && outcome.state!=='pending' ? 'Current decision: '+outcome.state+'.' : null});
     } catch (error) {
+      failure=error;
       const status=(error as {response?:{status?:number}} | null)?.response?.status;
       const known=this.view.rows.some(r=>r.state==='pending') || submitted!==null;
       if (this.alive() && g===this.generation) {
@@ -114,7 +124,12 @@ export class ProfileRecovery {
           : known ? 'Current status could not be read. The last known change is shown; read again before deciding.'
           : 'Account changes could not be checked. You can read again later.'});
       }
-    } finally {if (this.alive() && g===this.generation) this.emit({busy:false});}
+    } finally {
+      if (this.alive() && g===this.generation) {
+        this.emit({busy:false});
+        if (this.recovery.recover(failure) && this.view.error) void this.load(false);
+      }
+    }
   }
   async decide(row:PendingProfileChange, action:'reconfirm'|'cancel') {
     if (!this.canDecide(row)) return;

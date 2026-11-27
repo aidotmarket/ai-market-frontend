@@ -1,11 +1,14 @@
+import { customerRefusal } from './customerMessages';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from './action-auth-error';
+import { SELLER_SETUP_STEPS } from './seller-setup-steps';
 
-export const LISTING_ACTION_FALLBACK = 'The change could not be confirmed. Refresh your listings and try again.';
+export const LISTING_ACTION_FALLBACK = "We couldn't update your listing just now. Try again, or contact support if it keeps happening.";
 export const LISTING_ACTION_WORKSPACE = 'Manage this listing in Seller Workspace.';
 
 interface ListingActionError {
   message: string;
   workspaceHref?: '/dashboard/seller-workspace';
+  setupHref?: '/dashboard';
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -13,33 +16,51 @@ function record(value: unknown): Record<string, unknown> | undefined {
     ? value as Record<string, unknown> : undefined;
 }
 
-export function formatListingActionError(error: unknown): ListingActionError {
+export function formatListingActionError(error: unknown, action: 'update' | 'delete' = 'update'): ListingActionError {
   if (isLegacyActionAuthError(error)) return { message: ACTION_AUTH_REFRESH };
 
-  const data = record(record(record(error)?.response)?.data);
+  const responseData = record(record(error)?.response)?.data;
+  const data = record(responseData);
   const detail = data?.detail;
-  if (record(detail)?.code === 'capability_required' || data?.code === 'capability_required') {
+  const capabilityFailure = [record(detail), data].find(value =>
+    value?.code === 'capability_required' || value?.error === 'capability_required');
+  if (capabilityFailure) {
+    const missingSteps = capabilityFailure.missing_steps;
+    if (Array.isArray(missingSteps) && missingSteps.length) {
+      const labels = [...new Set(missingSteps.map(id =>
+        SELLER_SETUP_STEPS.find(step => step.id === id)?.label ?? 'remaining setup steps'))];
+      return {
+        message: `Finish seller setup first: ${labels.join(', ')}, then try again.`,
+        setupHref: '/dashboard',
+      };
+    }
     return { message: LISTING_ACTION_WORKSPACE, workspaceHref: '/dashboard/seller-workspace' };
   }
 
   const draftFailure = listingDraftError(error);
   if (draftFailure) return { message: draftFailure.message };
 
-  // Only plain text detail is eligible for display. Never coerce response data.
-  if (isPlainListingMessage(detail)) {
-    return { message: detail };
-  }
-  return { message: LISTING_ACTION_FALLBACK };
+  const workspaceMessage = customerRefusal(error, {
+    'This listing is managed in Seller Workspace. To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.': 'To stop new sales, open Seller Workspace, choose Manage listings, then Pause new sales.',
+    'This listing is managed in Seller Workspace. To sell it again, open Seller Workspace, choose Manage listings, then Resume sales.': 'To sell this listing again, open Seller Workspace, choose Manage listings, then Resume sales.',
+  }, '');
+  if (workspaceMessage) return { message: workspaceMessage, workspaceHref: '/dashboard/seller-workspace' };
+  console.error('Listing action failed', error);
+  return { message: action === 'delete' ? "We couldn't delete your listing just now. Try again, or contact support if it keeps happening." : LISTING_ACTION_FALLBACK };
 }
 
 export function isPlainListingMessage(message:unknown):message is string {
   return typeof message==='string'&&!!message.trim()&&!/[<>\u0000-\u001f\u007f]/.test(message)&&!/^\s*[\[{]/.test(message)&&!message.includes('[object Object]');
 }
 
+export const DRAFT_SUPERSEDED_MESSAGE='This import was replaced by a newer import or a new listing. Reload the current draft in Seller Workspace.';
+
 export function listingDraftError(error:unknown):{message:string;alreadyPublished:boolean}|null {
   const detail=record(record(record(record(error)?.response)?.data)?.detail);
+  if(detail?.code==='CURRENT_DRAFT_CHANGED')return {message:'Your listing draft changed. Reload the current draft before saving your files again.',alreadyPublished:false};
+  if(detail?.code==='DRAFT_SUPERSEDED')return {message:DRAFT_SUPERSEDED_MESSAGE,alreadyPublished:false};
   if(!detail||!['DRAFT_IN_PROGRESS','DRAFT_ALREADY_PUBLISHED'].includes(typeof detail.code==='string'?detail.code:''))return null;
   const message=detail.message;
   if(!isPlainListingMessage(message))return null;
-  return {message,alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
+  return {message:detail.code==='DRAFT_ALREADY_PUBLISHED'?'This draft has already been published. Start another listing to choose new files.':'You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.',alreadyPublished:detail.code==='DRAFT_ALREADY_PUBLISHED'};
 }

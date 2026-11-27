@@ -172,3 +172,15 @@ describe('actual SettingsPage account and visit ownership', () => {
     expect(screen.queryByLabelText('Company name')).toBeNull();
   });
 });
+
+it('re-reads failed Settings capabilities after token-only session recovery while preserving the profile draft', async () => {
+  mocks.capabilities.mockRejectedValueOnce(new Error('initial session failure'));
+  render(<Page />); await settle(); expect(screen.getByText(/Couldn.t load account type/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Retained draft' } });
+  act(() => { const previous = state; state = { ...state, token: 'valid-recovered-token' };
+    for (const listener of [...listeners]) listener(state, previous); });
+  await settle();
+  expect(mocks.capabilities).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText(/Couldn.t load account type/)).toBeNull();
+  expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Retained draft');
+});

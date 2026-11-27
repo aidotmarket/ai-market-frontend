@@ -399,7 +399,7 @@ export default function GatewayVerificationFlow({ listingId, sellerId, verifier,
       {(runningStates.has(epoch.state) || epoch.reconciliation_required) && <p role="status">{epoch.reconciliation_required ? 'We are confirming your payment. Please wait before starting again.' : 'Verification is in progress. You can return to this page to check it.'}</p>}
       {epoch.state === 'CAPTURED' && <>
         <h3 ref={findingsRef} tabIndex={-1} className="font-semibold">Review your findings</h3><p>These findings are private. Buyers can see them only if you publish them.</p><p>Charged: ${epoch.captured_usd}</p>
-        {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The complete findings are not available to review yet. Please check again before deciding whether to publish.</p>}
+        {fullReview ? <ScanFindingsBadge scanFindings={fullReview} /> : <p>The full data check results are not ready yet. Refresh the status before deciding whether to publish.</p>}
         <div className={buttonRowClass}><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('publish')}>Publish all findings</button><button className={secondaryButtonClass} disabled={busy || !canReview} onClick={() => setConfirmAction('decline')}>Decline publication</button></div>
       </>}
       {epoch.state === 'PUBLISHED' && <><p>These findings are published. Publishing a new verification will replace the previous findings.</p><div className={buttonRowClass}><button className={dangerSecondaryButtonClass} disabled={busy || !hasBinding} onClick={() => setConfirmAction('withdraw')}>Withdraw findings</button></div></>}

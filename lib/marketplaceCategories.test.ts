@@ -16,7 +16,7 @@ describe('getMarketplaceCategories', () => {
     expect(categories.map(({ name, value, count }) => ({ name, value, count }))).toEqual([
       { name: 'Healthcare', value: 'healthcare', count: 2 },
       {
-        name: 'Natural Language Processing',
+        name: 'Natural language processing',
         value: 'natural-language-processing',
         count: 1,
       },
@@ -39,20 +39,26 @@ describe('getMarketplaceCategories', () => {
 });
 
 it.each([
-  ['financial-data', 'Financial Data'],
-  ['alternative-data', 'Alternative Data'],
-  ['consumer-retail', 'Consumer & Retail'],
-  ['healthcare-life-sciences', 'Healthcare & Life Sciences'],
-  ['geospatial-location', 'Geospatial & Location'],
-  ['environmental-climate', 'Environmental & Climate'],
-  ['technology-web', 'Technology & Web'],
-  ['government-public', 'Government & Public'],
-  ['energy-utilities', 'Energy & Utilities'],
-  ['transportation-logistics', 'Transportation & Logistics'],
-  ['real-estate-property', 'Real Estate & Property'],
-  ['ai-machine-learning', 'AI & Machine Learning'],
-  ['future-category', 'Future Category'],
+  ['financial-data', 'Financial data'],
+  ['alternative-data', 'Alternative data'],
+  ['consumer-retail', 'Consumer & retail'],
+  ['healthcare-life-sciences', 'Healthcare & life sciences'],
+  ['geospatial-location', 'Geospatial & location'],
+  ['environmental-climate', 'Environmental & climate'],
+  ['technology-web', 'Technology & web'],
+  ['government-public', 'Government & public'],
+  ['energy-utilities', 'Energy & utilities'],
+  ['transportation-logistics', 'Transportation & logistics'],
+  ['real-estate-property', 'Real estate & property'],
+  ['ai-machine-learning', 'AI & machine learning'],
+  ['future-category', 'Future category'],
   ['finance', 'Finance'],
 ])('labels category %s', (slug, label) => {
   expect(formatMarketplaceCategoryName(slug)).toBe(label);
+});
+
+it('formats listing category codes and unknown categories for customers', () => {
+  expect(formatMarketplaceCategoryName('ai-machine-learning')).toBe('AI & machine learning');
+  expect(formatMarketplaceCategoryName('other')).toBe('Other');
+  expect(formatMarketplaceCategoryName('climate-research')).toBe('Climate research');
 });

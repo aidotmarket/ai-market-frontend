@@ -1,14 +1,34 @@
 'use client';
 
 import { api } from './client';
+import type { AxiosRequestConfig } from 'axios';
+import { privateReadOptions } from './privateReads';
 import type {LicenseSelection} from './listingLicenses';
 import type { ListingAuthorityReferences } from './listingAuthority';
 
 import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse, SellerListingItem } from '@/types';
 import type { TableFormat } from '@/components/gateways/fileMetadata';
 
-export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title' | 'status'> & ListingAuthorityReferences;
+export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title'> & ListingAuthorityReferences & {
+  status: SellerListingItem['status'] | 'hidden' | 'withdrawn' | 'held';
+  price?: number | null;
+  updated_at?: ListingDetail['updated_at'];
+  license_display?: ListingDetail['license_display'];
+  at_a_glance?: ListingDetail['at_a_glance'];
+  structured_metadata?: unknown;
+  raw_metadata?: { object_count?: number | null; file_size_bytes?: number | null } | null;
+};
 export type ListingWithAuthority = ListingDetail & ListingAuthorityReferences;
+
+export interface ListingAccessWindowResponse { listing_id: string; access_window_days: number }
+export interface ListingAccessWindowReadResponse extends ListingAccessWindowResponse { authority_version_id: string | null }
+export async function getListingAccessWindow(id: string): Promise<ListingAccessWindowReadResponse> {
+  return (await api.get<ListingAccessWindowReadResponse>(`/listings/${encodeURIComponent(id)}/access-window`, privateReadOptions)).data;
+}
+// PATCH has the original response shape. It must never replace owner GET state.
+export async function updateListingAccessWindow(id: string, access_window_days: number): Promise<ListingAccessWindowResponse> {
+  return (await api.patch<ListingAccessWindowResponse>(`/listings/${encodeURIComponent(id)}/access-window`, {access_window_days})).data;
+}
 
 type FulfillmentTypeParam = FulfillmentType | FulfillmentType[];
 
@@ -44,12 +64,12 @@ export async function getListing(id: string): Promise<ListingWithAuthority> {
 // Owner-facing fields from the existing single-listing endpoint. Call only
 // after establishing ownership; the public detail type omits listing status.
 export async function getSellerListing(id: string): Promise<SellerListingSummary> {
-  const res = await api.get<SellerListingSummary>(`/listings/${id}`);
+  const res = await api.get<SellerListingSummary>(`/listings/${encodeURIComponent(id)}`, privateReadOptions);
   return res.data;
 }
 
 export async function getListingOwnership(id: string): Promise<boolean> {
-  const res = await api.get<{ is_owner?: unknown }>(`/listings/${id}/ownership`);
+  const res = await api.get<{ is_owner?: unknown }>(`/listings/${encodeURIComponent(id)}/ownership`, privateReadOptions);
   return res.data?.is_owner === true;
 }
 
@@ -114,6 +134,8 @@ export interface MyListingsPaging {
   limit?: number;
 }
 
+export type OwnerListingItem = SellerListingItem & {authority_version_id?: string | null};
+
 // Preserve the overview's no-argument request and the existing array response.
 export const getMyListings = (paging?: MyListingsPaging) => paging === undefined
   ? api.get('/listings/mine')
@@ -127,8 +149,9 @@ export interface PendingSellerTermsListing extends ListingAuthorityReferences {
   license_status: 'pending_seller_terms';
 }
 
-export const getPendingSellerTermsListings = () =>
+export const getPendingSellerTermsListings = (options?: Pick<AxiosRequestConfig, 'timeout' | 'signal' | 'validateStatus'>) =>
   api.get<{ count: number; listings: PendingSellerTermsListing[] }>('/sellers/me/listings', {
+    ...options,
     params: { license_status: 'pending_seller_terms' },
   });
 export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);

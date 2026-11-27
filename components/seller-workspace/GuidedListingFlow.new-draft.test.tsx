@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {useState} from 'react';
-import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {GuidedListingFlow,useListingFlow} from './GuidedListingFlow';
 import {DraftChangedError,SellerListingDraftProvider,resetSellerListingDraftOwnerForTests,useSellerListingDraft} from './SellerListingDraftStore';
@@ -11,6 +11,7 @@ import {api} from '@/api/client';
 import {nativeClient} from '@/api/connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {sessionCsrf} from '@/lib/session-csrf';
+import {listingPolish as polishCopy} from '@/lib/i18n/listing-polish';
 import {EMPTY_LISTING_DRAFT} from '@/api/sellerListingDraft';
 import {createStandardSelection} from '@/api/listingLicenses';
 import {categoryRows,guidedCapabilities,guidedConnection} from '@/tests/guidedListingFixture';
@@ -18,23 +19,27 @@ const mocks=vi.hoisted(()=>({source:vi.fn(),review:vi.fn(),publication:vi.fn(),c
 const sampleObject=vi.hoisted(()=>({key:'data/example.csv',version_id:null,etag:'example',size:42,last_modified:null,format_candidate:'csv'}));
 vi.mock('@/api/sellerWorkspace',async original=>({...await original<object>(),listWorkspaceObjects:vi.fn(async()=>({objects:[sampleObject],next_cursor:null}))}));
 vi.mock('@/api/sellerLegalIdentity',async original=>({...await original<object>(),getSellerLegalIdentity:vi.fn(async()=>({status:'known',source:'stripe_connect',legal_name:'Sam Seller Ltd',jurisdiction:'US',version:4,seller_editable:false}))}));
-vi.mock('@/api/sellerListingSource',()=>({readListingSource:mocks.source,readSellerCategories:mocks.categories}));
+vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.source(id),current_draft_id:id??null}),readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',async original=>({...await original<object>(),readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
 const oldDraft={draft_id:'00000000-0000-4000-8000-000000000002',version:4,updated_at:'2026-10-01T00:00:00Z',content:{...EMPTY_LISTING_DRAFT,title:'Old listing',description_source_version:1,description:'Description',category:'financial-data',tags:'sales',price:'25',license_selection:{...createStandardSelection(),seller_acceptance:{signer_name:'Sam',signer_title:'Owner',authority_confirmed:true}}}};
 const newDraft={draft_id:'00000000-0000-4000-8000-000000000003',version:1,updated_at:'2026-11-01T00:00:00Z',content:EMPTY_LISTING_DRAFT};
+const publishedRefusal={isAxiosError:true,response:{status:409,data:{detail:{
+ code:'DRAFT_ALREADY_PUBLISHED',message:'This listing is already published. Use Start another listing to begin a new one.',
+}}}};
 const navigate=vi.fn();
 let store:ReturnType<typeof useSellerListingDraft>;
 function Probe(){
  store=useSellerListingDraft();const flow=useListingFlow();const [local,setLocal]=useState('');
  return <><input aria-label="Local file choice" value={local} onChange={e=>{setLocal(e.target.value);flow?.setFilesDirty(true);flow?.setLicenceDirty(true);}}/>
- <button onClick={flow?.startAnotherListing}>Start from panel</button>
+ <button onClick={()=>flow?.startAnotherListing()}>Start from panel</button>
  <output aria-label="Draft identity">{store.draft?.draft_id}</output><output aria-label="Licence saved">{store.draft?.content.license_selection?'yes':'no'}</output>
  <output aria-label="Source saved">{flow?.source?'yes':'no'}</output><output aria-label="Review saved">{flow?.review?'yes':'no'}</output></>;
 }
 function Harness({panels=false}:{panels?:boolean}){return <SellerListingDraftProvider enabled sampleCapability><GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="listing" navigate={navigate}><Probe/><SavedListingEditor active/>{panels&&<><SavedLicenseStep/><SavedWorkspaceData enabled connections={[guidedConnection]}/></>}</GuidedListingFlow></SellerListingDraftProvider>;}
 beforeEach(()=>{
+ vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED','');
  resetSellerListingDraftOwnerForTests();useAuthStore.setState({token:'native-test-session'});
  vi.spyOn(api,'get').mockResolvedValue({data:{draft:oldDraft}});
  mocks.source.mockImplementation(async(id?:string)=>id===newDraft.draft_id?null:{version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[sampleObject],version_mode:'current'}});
@@ -42,7 +47,7 @@ beforeEach(()=>{
  mocks.review.mockResolvedValue({draft_version:4,source_version:1,missing_fields:[],approval:{id:'approval'}});
  mocks.publication.mockResolvedValue({publication_available:true,publication:{slug:'old-listing',approval_id:'approval'}});
 });
-afterEach(()=>{cleanup();vi.restoreAllMocks();vi.clearAllMocks();resetSellerListingDraftOwnerForTests();});
+afterEach(()=>{cleanup();vi.restoreAllMocks();vi.clearAllMocks();vi.unstubAllEnvs();resetSellerListingDraftOwnerForTests();});
 it('posts one native new-draft request, adopts its content and resets panels before navigating to data',async()=>{
  let finish!:(value:unknown)=>void;
  const post=vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
@@ -66,21 +71,60 @@ it('posts one native new-draft request, adopts its content and resets panels bef
  expect(post).toHaveBeenCalledOnce();
  expect(screen.getByLabelText('Title').matches(':disabled')).toBe(false);
 });
-it('offers Start another listing on a published-draft save and clears dirty file and licence state',async()=>{
- const message='This listing is already published. Use Start another listing to begin a new one.';
- vi.spyOn(api,'put').mockRejectedValue({isAxiosError:true,response:{status:409,data:{detail:{code:'DRAFT_ALREADY_PUBLISHED',message}}}});
- vi.spyOn(nativeClient,'post').mockResolvedValue({data:{draft:newDraft}});
+it.each([false,true])('recovers from a published-draft save refusal with Polish enabled=%s',async enabled=>{
+ vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED',enabled?'true':'');
+ vi.spyOn(api,'put').mockRejectedValue(publishedRefusal);
+ const post=vi.spyOn(nativeClient,'post').mockResolvedValue({data:{draft:newDraft}});
+ const confirm=vi.spyOn(window,'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
  render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
  fireEvent.change(screen.getByLabelText('Local file choice'),{target:{value:'old file'}});
- fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Changed'}});
+ fireEvent.change(screen.getByLabelText('Description'),{target:{value:'Keep my description unless I confirm'}});
  fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
- const alert=await screen.findByRole('alert');expect(alert.textContent).toBe(message+' Start another listing');
+ const alert=await screen.findByRole('alert');expect(alert.textContent).toBe('This draft has already been published. Start another listing to choose new files. Start another listing');
  expect(alert.textContent).not.toContain('[object Object]');expect(alert.textContent).not.toContain('{');
  expect(screen.queryByRole('button',{name:/refresh/i})).toBeNull();
- fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));
+ const start=within(alert).getByRole('button',{name:'Start another listing'});
+ if(enabled){
+   fireEvent.click(start);
+   expect(confirm).toHaveBeenCalledExactlyOnceWith(polishCopy.discardPublishedEdits);
+   expect(post).not.toHaveBeenCalled();
+   expect(navigate).not.toHaveBeenCalled();
+   expect(screen.getByLabelText('Description')).toHaveProperty('value','Keep my description unless I confirm');
+   expect(screen.getByLabelText('Local file choice')).toHaveProperty('value','old file');
+ }
+ fireEvent.click(start);
  await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
+ expect(confirm).toHaveBeenCalledTimes(enabled?2:0);
+ expect(post).toHaveBeenCalledOnce();
+ expect(screen.getByLabelText('Draft identity').textContent).toBe(newDraft.draft_id);
  expect((screen.getByLabelText('Local file choice') as HTMLInputElement).value).toBe('');
+ expect(screen.getByLabelText('Description')).toHaveProperty('value','');
  expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
+});
+
+it('retries a failed start after a published-draft refusal with the same request ID',async()=>{
+ vi.stubEnv('NEXT_PUBLIC_LISTING_REVIEW_ENABLED','true');
+ const save=vi.spyOn(api,'put').mockRejectedValue(publishedRefusal);
+ const post=vi.spyOn(nativeClient,'post').mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({data:{draft:newDraft}});
+ const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
+ render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
+ fireEvent.change(screen.getByLabelText('Description'),{target:{value:'Keep these edits until creation succeeds'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save private draft'}));
+ const refusal=await screen.findByRole('alert');
+ fireEvent.click(within(refusal).getByRole('button',{name:'Start another listing'}));
+ const retry=await screen.findByRole('button',{name:'Retry'});
+ expect(post).toHaveBeenCalledOnce();
+ expect(navigate).not.toHaveBeenCalled();
+ expect(screen.getByLabelText('Description')).toHaveProperty('value','Keep these edits until creation succeeds');
+ fireEvent.click(retry);
+ await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
+ expect(post).toHaveBeenCalledTimes(2);
+ expect(post.mock.calls[1][1]).toEqual(post.mock.calls[0][1]);
+ expect(confirm.mock.calls).toEqual([[polishCopy.discardPublishedEdits],[polishCopy.discardPublishedEdits]]);
+ expect(save).toHaveBeenCalledOnce();
+ expect(screen.queryByText(polishCopy.dirtyStartAnother)).toBeNull();
+ expect(screen.getByLabelText('Draft identity').textContent).toBe(newDraft.draft_id);
+ expect(screen.getByLabelText('Description')).toHaveProperty('value','');
 });
 
 it.each([1,oldDraft.version])('discards queued old licence, signer, samples and fields after delayed creation (new version %s)',async version=>{
@@ -120,7 +164,7 @@ it('disables licence, sample and source controls during creation and restores th
  let reject!:(error:unknown)=>void;
  vi.spyOn(nativeClient,'post').mockImplementation(()=>new Promise((_,fail)=>{reject=fail;}));
  const put=vi.spyOn(api,'put');
- render(<Harness panels/>);await screen.findByRole('link',{name:'Published: view your listing'});
+ render(<Harness panels/>);
  const sample=await screen.findByRole('checkbox',{name:/Offer example.csv.*free sample/});
  const signer=screen.getByLabelText('Signer full name');
  const source=screen.getByRole('checkbox',{name:'Select data/example.csv'});

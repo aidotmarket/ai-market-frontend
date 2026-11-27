@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, type ReactNode } from 'react';
 import type { ConversationMessage, MessageRole } from '@/types';
 
 const ROLE_STYLES: Record<MessageRole, { bg: string; label: string; align: string }> = {
@@ -10,13 +10,16 @@ const ROLE_STYLES: Record<MessageRole, { bg: string; label: string; align: strin
   system: { bg: 'bg-yellow-50 border-yellow-200', label: 'System', align: 'mx-8' },
 };
 
-interface Props {
-  messages: ConversationMessage[];
+interface Props<Message extends ConversationMessage> {
+  messages: Message[];
   viewerRole: 'buyer' | 'seller';
   showTypingIndicator?: boolean;
+  renderContent?: (message: Message) => ReactNode;
 }
 
-export default function ConversationThread({ messages, viewerRole, showTypingIndicator }: Props) {
+export default function ConversationThread<Message extends ConversationMessage>({
+  messages, viewerRole, showTypingIndicator, renderContent,
+}: Props<Message>) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export default function ConversationThread({ messages, viewerRole, showTypingInd
         const style = isOwn
           ? { bg: 'bg-[#E8EAF6] border-[#C5CAE9]', label: 'You', align: 'ml-8' }
           : ROLE_STYLES[msg.role] || ROLE_STYLES.system;
+        const content = renderContent?.(msg);
 
         return (
           <div key={msg.id} className={`rounded-lg border p-3 ${style.bg} ${style.align}`}>
@@ -39,7 +43,11 @@ export default function ConversationThread({ messages, viewerRole, showTypingInd
                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
-            <p className="text-sm text-gray-900 whitespace-pre-wrap">{msg.content}</p>
+            {content == null ? (
+              <p className="text-sm text-gray-900 whitespace-pre-wrap">{msg.content}</p>
+            ) : (
+              <div className="text-sm text-gray-900 break-words">{content}</div>
+            )}
           </div>
         );
       })}

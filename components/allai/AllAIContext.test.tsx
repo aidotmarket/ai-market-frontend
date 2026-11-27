@@ -34,7 +34,7 @@ const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
 const STATUS_URL = 'http://localhost:8000/api/allai/support/anonymous/status';
 const GENERIC_ERROR = 'Sorry, something went wrong. Please try again.';
-const LIMIT_ERROR = "You've reached the message limit for this session. Please try again later.";
+const LIMIT_ERROR = "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.";
 
 type ContextValue = ReturnType<typeof useAllAI>;
 type FetchMock = ReturnType<typeof vi.fn<typeof fetch>>;
@@ -61,7 +61,7 @@ function RenderedMessages() {
 
 function renderProvider(storedSessionId = 'stale-session', showMessages = false) {
   sessionStorage.setItem(SESSION_KEY, storedSessionId);
-  render(
+  return render(
     <AllAIProvider>
       <Probe />
       {showMessages && <RenderedMessages />}
@@ -118,12 +118,18 @@ function sseEvents(...events: Record<string, unknown>[]) {
   } as unknown as Response;
 }
 
-function streamReadFailure(error = new Error('stream read failed')) {
+function streamReadFailure(error = new Error('stream read failed'), partial?: string) {
   const reader = {
     read: vi.fn().mockRejectedValue(error),
     releaseLock: vi.fn(),
     cancel: vi.fn(),
   };
+  if (partial) {
+    reader.read.mockResolvedValueOnce({
+      done: false,
+      value: new TextEncoder().encode(`data: ${JSON.stringify({ text: partial })}\n\n`),
+    });
+  }
   return {
     status: 200,
     ok: true,
@@ -586,7 +592,8 @@ describe('anonymous initial-message stale-session recovery', () => {
     expect(messageCalls()).toHaveLength(2);
     expect(creationCalls()).toHaveLength(1);
     expect(routing404.json).not.toHaveBeenCalled();
-    expectSinglePair(GENERIC_ERROR);
+    expectSinglePair('');
+    expect(context().messages.at(-1)?.listingFailure).toBe('error');
   });
 
   it('does not retry the message when replacement-session creation fails', async () => {
@@ -603,7 +610,8 @@ describe('anonymous initial-message stale-session recovery', () => {
 
     expect(messageCalls()).toHaveLength(1);
     expect(creationCalls()).toHaveLength(1);
-    expectSinglePair(GENERIC_ERROR);
+    expectSinglePair('');
+    expect(context().messages.at(-1)?.listingFailure).toBe('error');
   });
 
   it.each([
@@ -629,7 +637,8 @@ describe('anonymous initial-message stale-session recovery', () => {
 
     expect(messageCalls()).toHaveLength(2);
     expect(creationCalls()).toHaveLength(1);
-    expectSinglePair(GENERIC_ERROR);
+    expectSinglePair('');
+    expect(context().messages.at(-1)?.listingFailure).toBe('error');
   });
 
   it('keeps the original controller while aborted during replacement creation and does not add an error', async () => {
@@ -671,12 +680,12 @@ describe('anonymous initial-message stale-session recovery', () => {
   });
 
   it.each([
-    ['HTTP 500', () => response(500), GENERIC_ERROR],
-    ['HTTP 429', () => response(429), LIMIT_ERROR],
-    ['a network rejection', () => Promise.reject(new Error('network failure')), GENERIC_ERROR],
-    ['an abort', () => Promise.reject(abortError()), ''],
-    ['a stream-read failure', () => streamReadFailure(), GENERIC_ERROR],
-  ])('does not recover or replay after initial %s', async (_label, initialResult, expectedContent) => {
+    ['HTTP 500', () => response(500), '', 'error'],
+    ['HTTP 429', () => response(429), LIMIT_ERROR, undefined],
+    ['a network rejection', () => Promise.reject(new Error('network failure')), '', 'error'],
+    ['an abort', () => Promise.reject(abortError()), '', undefined],
+    ['a stream-read failure', () => streamReadFailure(), '', 'error'],
+  ])('does not recover or replay after initial %s', async (_label, initialResult, expectedContent, expectedFailure) => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
       if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
@@ -690,6 +699,7 @@ describe('anonymous initial-message stale-session recovery', () => {
     expect(messageCalls()).toHaveLength(1);
     expect(creationCalls()).toHaveLength(0);
     expectSinglePair(expectedContent);
+    expect(context().messages.at(-1)?.listingFailure).toBe(expectedFailure);
   });
 });
 
@@ -1044,6 +1054,77 @@ const accountNextSteps = [
   { action: 'view_account', url: '/dashboard' },
 ].map((step) => ({ ...step, label: step.action, requires_account: true }));
 
+describe('signed-out gateway help', () => {
+  const pages = ['/support', '/aim-data'];
+  const guideUrl = '/aim-data#gateway-setup';
+  const setupQuestion = 'Do I need Docker Compose before signing up, and where do I get the pairing code?';
+  const gatewayError = 'Unable to answer. [Network requirements](/aim-data#network-requirements)';
+
+  function mount(path: string, reply: Response) {
+    mocks.pathname = path;
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === MESSAGE_URL) return reply;
+      if (String(input) === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    renderProvider('stale-session', true);
+  }
+
+  it.each(pages)('renders the verified AIM Data next step on %s', async (path) => {
+    mount(path, sseEvents({
+      type: 'answer',
+      text: 'Verified network instructions.',
+      next_step: { action: 'view_aim_data', url: '/aim-data', label: 'View AIM Data', requires_account: false },
+    }));
+    await send('Which ports do I need to open?');
+    expect(screen.getByText('Verified network instructions.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View AIM Data' }).getAttribute('href')).toBe('/aim-data');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(messagePayload(messageCalls()[0]).context).toEqual({ page: path });
+  });
+
+  it.each(pages.flatMap((path) => [
+    '502 Bad Gateway while downloading my purchase',
+    'installment payments',
+    'payment gateway declined my card',
+    setupQuestion,
+    'Which ports do I need to open?',
+  ].map((question) => [path, question] as const)))(
+    'uses page context for HTTP failure recovery on %s for %s', async (path, question) => {
+      mount(path, response(503));
+      await send(question);
+      expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
+      expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href')))
+        .toEqual(path === '/aim-data' ? [guideUrl] : []);
+      if (path === '/aim-data') expect(screen.getByRole('link', { name: 'AIM Data setup guide' })).toBeTruthy();
+    }
+  );
+
+  it.each(pages)('preserves ordinary safe-failure recovery on %s', async (path) => {
+    mount(path, sseEvents({ type: 'safe_failure', outcome: 'answer_unverified', text: gatewayError }));
+    await send(setupQuestion);
+    expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes.answer_unverified)).toBeTruthy();
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/find-data',
+      '/register?redirect=%2Frequests%2Fnew',
+      ...(path === '/aim-data' ? [guideUrl] : []),
+    ]);
+  });
+
+  it.each(pages.flatMap((path) => ([
+    ['stream error', () => sseEvents({ type: 'error', message: gatewayError })],
+    ['empty stream', () => sseEvents({ type: 'done' })],
+  ] as const).map(([failure, reply]) => [path, failure, reply] as const)))(
+    'preserves ordinary recovery on %s after a %s', async (path, _failure, reply) => {
+      mount(path, reply());
+      await send(setupQuestion);
+      expect(screen.getByText(GENERIC_ERROR)).toBeTruthy();
+      expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href')))
+        .toEqual(path === '/aim-data' ? [guideUrl] : []);
+    }
+  );
+});
+
 describe('mounted anonymous next-step navigation', () => {
   async function mountAnswer(nextStep: Record<string, unknown>, safeFailure = false) {
     mocks.pathname = '/';
@@ -1115,9 +1196,339 @@ describe('mounted anonymous next-step navigation', () => {
   it.each(publicNextSteps.slice(4))('hides $action after a safe failure even with a supplied next step', async (step) => {
     await mountAnswer(step, true);
     await send();
-    expect(screen.getByText('Unable to verify this answer.')).not.toBeNull();
+    expect(screen.getByText(anonymousAllAIResources(context().locale).safeOutcomes.answer_unverified)).not.toBeNull();
+    expect(screen.queryByText('Unable to verify this answer.')).toBeNull();
     expect(context().messages.at(-1)?.safeOutcome).toBe('answer_unverified');
     expect(screen.queryByTestId('allai-next-step')).toBeNull();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('link', { name: step.label })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Search listings directly' }).getAttribute('href')).toBe('/find-data');
+    expect(screen.getByRole('link', { name: 'Post a request and sellers will come to you' }).getAttribute('href')).toBe('/register?redirect=%2Frequests%2Fnew');
+  });
+});
+
+
+describe('customer reply copy and recovery links', () => {
+  it.each(['before', 'after'])('keeps the homepage destinations when switching to Spanish %s the response', async (order) => {
+    mocks.pathname = '/';
+    const pendingMessage = deferred<Response>();
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return pendingMessage.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const view = renderProvider('stale-session', true);
+    await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage('What data do you have about climate and energy?'); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+    expect(messagePayload(messageCalls()[0]).locale).toBe('en');
+    if (order === 'before') act(() => context().setLocale('es'));
+    await act(async () => {
+      pendingMessage.resolve(sseEvents({
+        type: 'safe_failure', outcome: 'answer_unverified', locale: 'en',
+        text: 'Could not verify an answer. [Search the catalogue](/listings?q=clima%20%26%20energ%C3%ADa), ' +
+          '[post a data request](/requests/new) or ask about a specific sector. ' +
+          '<img src=x onerror=alert(1)> [External](https://example.test/requests/new)',
+      }));
+      await sending;
+    });
+
+    if (order === 'after') {
+      expect(screen.getByRole('link', { name: 'Search listings directly' }).getAttribute('href')).toBe('/search?q=clima%20%26%20energ%C3%ADa');
+      expect(screen.getByRole('link', { name: 'Post a request' }).getAttribute('href')).toBe('/requests/new');
+      act(() => context().setLocale('es'));
+    }
+    expect(screen.getByText(/Prueba a preguntar por un sector concreto/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Buscar anuncios directamente' }).getAttribute('href')).toBe('/search?q=clima%20%26%20energ%C3%ADa');
+    expect(screen.getByRole('link', { name: 'Publicar una solicitud' }).getAttribute('href')).toBe('/requests/new');
+    expect(screen.queryByText(/Could not verify an answer|<img src=x/)).toBeNull();
+    expect(view.container.querySelector('img')).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+  });
+
+  it.each(['before', 'after'])('keeps the listing panel support destination when switching to Spanish %s the response', async (order) => {
+    const pendingMessage = deferred<Response>();
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return pendingMessage.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage('What is the license?'); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+    expect(messagePayload(messageCalls()[0]).locale).toBe('en');
+    if (order === 'before') act(() => context().setLocale('es'));
+    await act(async () => {
+      pendingMessage.resolve(sseEvents({
+        type: 'safe_failure', outcome: 'answer_unverified', locale: 'en',
+        text: 'Could not verify an answer. [Contact support](/support)',
+      }));
+      await sending;
+    });
+
+    if (order === 'after') {
+      expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe('/support');
+      act(() => context().setLocale('es'));
+    }
+    expect(screen.getByText(/Prueba con una pregunta más concreta/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+    expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
+    expect(screen.queryByText(/Could not verify an answer/)).toBeNull();
+  });
+
+  it.each([
+    ['network failure', () => Promise.reject(new Error('English network error'))],
+    ['empty stream', () => sseEvents({ type: 'progress' }, { type: 'done' })],
+    ['stream timeout', () => streamReadFailure(new Error('Stream read timeout'))],
+    ['partial stream timeout', () => streamReadFailure(new Error('Stream read timeout'), 'Respuesta parcial.')],
+  ])('renders actionable Spanish listing-panel recovery after %s', async (mode, result) => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return result();
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    act(() => context().setLocale('es'));
+    await send();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain(mode.endsWith('timeout')
+      ? 'La respuesta está tardando más de lo esperado.' : 'No pudimos obtener una respuesta.');
+    expect(alert.textContent).toContain('Prueba con una pregunta más concreta');
+    expect(screen.getByRole('link', { name: 'Buscar en el catálogo' }).getAttribute('href')).toBe('/search');
+    expect(screen.getByRole('link', { name: 'Contactar con soporte' }).getAttribute('href')).toBe('/support');
+    expect(screen.queryByText(/English network error|Please try again/)).toBeNull();
+    if (mode === 'partial stream timeout') expect(screen.getByText('Respuesta parcial.')).toBeTruthy();
+  });
+
+  const replies = [
+    ['answer_unverified', "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you."],
+    ['retrieval_unavailable', "I couldn't check the marketplace results right now, so I won't guess. You can search listings directly, or post a request and sellers will come to you."],
+    ['no_matches', 'No listings match yet. Try different words, or post a request so sellers can find you.'],
+    ['rate_limited', LIMIT_ERROR],
+  ] as const;
+
+  it.each(replies.flatMap(([outcome, copy]) => [true, false].map(serverText => ({ outcome, copy, serverText }))))(
+    'renders $outcome copy and navigation (server text: $serverText)', async ({ outcome, copy, serverText }) => {
+      mocks.pathname = '/';
+      fetchMock.mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === STATUS_URL) return response(200, {
+          available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+        });
+        if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+        if (url === MESSAGE_URL) return sseEvents({
+          type: 'safe_failure', outcome, ...(serverText ? { text: 'Older server copy.' } : {}),
+        });
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      renderProvider('stale-session', true);
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+      act(() => context().setLocale('en'));
+      await send();
+      expect(screen.getByText(copy)).not.toBeNull();
+      expect(screen.queryByText('Older server copy.')).toBeNull();
+      const label = outcome === 'no_matches' ? 'Post a request' : 'Post a request and sellers will come to you';
+      expect(screen.getByRole('link', { name: label }).getAttribute('href')).toBe('/register?redirect=%2Frequests%2Fnew');
+      expect(screen.getByText(anonymousAllAIResources('en').accountRequired)).not.toBeNull();
+      expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+      if (outcome !== 'no_matches') {
+        expect(screen.getByRole('link', { name: 'Search listings directly' }).getAttribute('href')).toBe('/find-data');
+      }
+    }
+  );
+
+  it.each(
+    ['/', '/find-data', '/search', '/pricing'].flatMap(page =>
+      [false, true].flatMap(signedIn =>
+        ['http', 'safe_failure'].flatMap(transport =>
+          ANONYMOUS_ALLAI_LOCALES.map(locale => ({ page, signedIn, transport, locale }))
+        )
+      )
+    )
+  )('renders rate-limit recovery on $page (signed in: $signedIn, $transport, $locale)', async ({ page, signedIn, transport, locale }) => {
+    mocks.pathname = page;
+    if (signedIn) {
+      mocks.auth.user = { role: 'buyer' };
+      mocks.auth.token = 'signed-in-token';
+    }
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return transport === 'http'
+        ? response(429)
+        : sseEvents({ type: 'safe_failure', outcome: 'rate_limited', text: 'Sign up free to keep chatting.' });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    if (context().anonymousSurfaceActive) {
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    }
+    act(() => context().setLocale(locale));
+    await send();
+    const resources = anonymousAllAIResources(locale);
+    expect(context().messages.at(-1)?.safeOutcome).toBe('rate_limited');
+    expect(screen.getByText(resources.safeOutcomes.rate_limited)).not.toBeNull();
+    expect(screen.queryByText('Sign up free to keep chatting.')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+    const search = screen.queryByRole('link', { name: resources.recoveryLinks.searchListings });
+    if (page === '/find-data') expect(search).toBeNull();
+    else expect(search?.getAttribute('href')).toBe('/find-data');
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href')).toBe(
+      signedIn ? '/requests/new' : '/register?redirect=%2Frequests%2Fnew'
+    );
+    if (signedIn) expect(screen.queryByText(resources.accountRequired)).toBeNull();
+    else expect(screen.getByText(resources.accountRequired)).not.toBeNull();
+  });
+
+  it.each(
+    [false, true].flatMap(signedIn =>
+      ANONYMOUS_ALLAI_LOCALES.flatMap(locale =>
+        ['turn_input', 'session_message', 'session_token', 'daily_cost', 'unknown', 'missing', 'invalid_json'].map(dimension => ({ signedIn, locale, dimension }))
+      )
+    )
+  )('renders HTTP 429 dimension $dimension (signed in: $signedIn, $locale)', async ({ signedIn, locale, dimension }) => {
+    mocks.pathname = '/';
+    if (signedIn) {
+      mocks.auth.user = { role: 'buyer' };
+      mocks.auth.token = 'signed-in-token';
+    }
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) {
+        const result = response(429, dimension === 'missing' ? {} : { detail: { error: 'rate_limited', dimension } });
+        if (dimension === 'invalid_json') vi.mocked(result.json).mockRejectedValue(new SyntaxError('Invalid JSON'));
+        return result;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    if (context().anonymousSurfaceActive) await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    act(() => context().setLocale(locale));
+    await send();
+    const resources = anonymousAllAIResources(locale);
+    const outcome = dimension === 'turn_input' ? 'message_too_long' : 'rate_limited';
+    expect(context().messages.at(-1)?.safeOutcome).toBe(outcome);
+    expect(screen.getByText(resources.safeOutcomes[outcome])).not.toBeNull();
+    expect(context().isStreaming).toBe(false);
+    expect(messageCalls()).toHaveLength(1);
+    if (dimension === 'turn_input') {
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+      expect(screen.queryByText(resources.safeOutcomes.rate_limited)).toBeNull();
+      expect(screen.queryByText(resources.accountRequired)).toBeNull();
+    } else {
+      expect(screen.getByRole('link', { name: resources.recoveryLinks.searchListings }).getAttribute('href')).toBe('/find-data');
+      expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href')).toBe(
+        signedIn ? '/requests/new' : '/register?redirect=%2Frequests%2Fnew'
+      );
+    }
+  });
+
+  it.each(
+    [false, true].flatMap(signedIn =>
+      ANONYMOUS_ALLAI_LOCALES.flatMap(locale =>
+        ['client', 'http422'].map(source => ({ signedIn, locale, source }))
+      )
+    )
+  )('renders message_too_long from $source and re-localises (signed in: $signedIn, $locale)', async ({ signedIn, locale, source }) => {
+    mocks.pathname = '/';
+    if (signedIn) {
+      mocks.auth.user = { role: 'buyer' };
+      mocks.auth.token = 'signed-in-token';
+    }
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return response(422, {
+        detail: [{
+          type: 'string_too_long', loc: ['body', 'message'],
+          msg: 'String should have at most 4000 characters',
+          input: 'a'.repeat(4001), ctx: { max_length: 4000 },
+        }],
+      });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderProvider('stale-session', true);
+    if (context().anonymousSurfaceActive) await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    act(() => context().setLocale(locale));
+    // Whitespace is trimmed before checking the cap; the 422 uses a short send
+    // so the server-validation fallback is exercised independently of the guard.
+    await send(source === 'client' ? `  ${'a'.repeat(4001)}  ` : 'hello');
+    expect(context().messages.at(-1)?.safeOutcome).toBe('message_too_long');
+    expect(context().isStreaming).toBe(false);
+    expect(messageCalls()).toHaveLength(source === 'client' ? 0 : 1);
+    if (source === 'client') expect(creationCalls()).toHaveLength(0);
+    expect(screen.getByText(anonymousAllAIResources(locale).safeOutcomes.message_too_long)).not.toBeNull();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    for (const nextLocale of ANONYMOUS_ALLAI_LOCALES) {
+      act(() => context().setLocale(nextLocale));
+      expect(screen.getByText(anonymousAllAIResources(nextLocale).safeOutcomes.message_too_long)).not.toBeNull();
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+    }
+  });
+
+  it.each([
+    { detail: [{ type: 'string_too_long', loc: ['body', 'context'] }] },
+    { detail: [{ type: 'string_too_short', loc: ['body', 'message'] }] },
+    { detail: [{ type: 'string_too_long', loc: ['message', 'other'] }] },
+    { detail: [{ type: 'string_too_long', loc: 'message' }] },
+    { detail: [null, 'message', {}] },
+    { detail: { type: 'string_too_long', loc: ['body', 'message'] } },
+    {},
+    null,
+    'invalid_json',
+  ])('keeps unrelated or malformed 422 errors generic (%j)', async body => {
+    mocks.pathname = '/support';
+    mocks.auth.user = { role: 'buyer' };
+    mocks.auth.token = 'signed-in-token';
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      const result = response(422, body);
+      if (body === 'invalid_json') vi.mocked(result.json).mockRejectedValue(new SyntaxError('Invalid JSON'));
+      return result;
+    });
+    renderProvider('stale-session', true);
+    act(() => context().setLocale('en'));
+    await send();
+    expect(screen.getByText(GENERIC_ERROR)).not.toBeNull();
+    expect(context().messages.at(-1)?.safeOutcome).toBeUndefined();
+    expect(context().isStreaming).toBe(false);
+  });
+
+  it('sends a trimmed message at the 4000-character boundary', async () => {
+    mocks.auth.user = { role: 'buyer' };
+    mocks.auth.token = 'signed-in-token';
+    fetchMock.mockImplementation(async (input) => String(input) === MESSAGE_URL
+      ? sseResponse('Accepted.') : response(200, { messages: [] }));
+    renderProvider('stale-session', true);
+    await send(`  ${'a'.repeat(4000)}  `);
+    expect(messageCalls()).toHaveLength(1);
+    expect(messagePayload(messageCalls()[0]).message).toBe('a'.repeat(4000));
+    expect(screen.getByText('Accepted.')).not.toBeNull();
+  });
+
+  it.each(['Alex', ''])('greets the signed-in seller warmly in one sentence (name: %s)', async first_name => {
+    mocks.auth.user = { role: 'seller', first_name };
+    fetchMock.mockResolvedValue(response(200, { messages: [] }));
+    renderProvider('stale-session', true);
+    act(() => context().open());
+    expect(screen.getByText(`Hey${first_name ? ' ' + first_name : ''}, would you like help with your listings, marketplace trends, or questions about ai.market?`)).not.toBeNull();
   });
 });

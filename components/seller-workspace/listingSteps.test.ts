@@ -14,7 +14,7 @@ describe('guided listing saved progress',()=>{
   const boundaries=[{...base,source:null,draft:null,connections:[]},{...base,source:null,draft:null},{...base,draft:null},base,{...base,review},{...base,review,publication:{approval_id:'a'} as PublicationReceipt}];
   expect(boundaries.map(b=>listingSteps(b).filter(s=>s.next).length)).toEqual([1,1,1,1,1,0]);
   expect(boundaries.map(b=>listingSteps(b).find(s=>s.next)?.view)).toEqual(['storage','data','license','review','publish',undefined]);
-  boundaries.forEach(b=>listingSteps(b).forEach(s=>{if(s.state!=='done')expect(s.reason.trim()).not.toBe('');}));
+  boundaries.forEach(b=>listingSteps(b).forEach(s=>{if(s.state==='done'||s.state==='skipped')expect(s.next).toBe(false);if(s.state!=='done')expect(s.reason.trim()).not.toBe('');}));
  });
  it('distinguishes work available to do from blocked dependencies',()=>{const steps=listingSteps({...base,connections:[],source:null,draft:null});expect(steps[2].state).toBe('to do');expect(steps[1].state).toBe('blocked');});
  it('skips licence choice when off',()=>{expect(listingSteps({...base,licensesEnabled:false,draft:null})[2].state).toBe('skipped');});
@@ -23,7 +23,7 @@ describe('guided listing saved progress',()=>{
  it('requires a title and description',()=>{expect(step4({title:' '}).reason).toContain('Add a title');expect(step4({description:''}).reason).toContain('Add a description');});
  it('requires a category slug and at least one comma-separated tag',()=>{expect(step4({category:'Financial Data'}).reason).toContain('Choose a category from the list');expect(step4({tags:' , , '}).reason).toContain('Add at least one tag');});
  it('requires the exact saved source stamp after change or manual editing',()=>{expect(step4({description_source_version:1}).state).not.toBe('done');expect(step4({description_source_version:null as never}).state).not.toBe('done');});
- it('preserves a matching existing approval on a pre-stamp draft without a save',()=>{const steps=listingSteps({...base,review,draft:{...draft,content:{...draft.content,description_source_version:null as never}}});expect(steps[3].state).not.toBe('done');expect(steps[3].reason).toContain('Your files changed');expect(steps[4].state).toBe('done');});
+ it('preserves a matching existing approval on a pre-stamp draft without a save',()=>{const steps=listingSteps({...base,review,draft:{...draft,content:{...draft.content,description_source_version:null as never}}});expect(steps[3].state).not.toBe('done');expect(steps[3].reason).toBe('Your files changed after this description was written. Update it with allAI or confirm it matches your files, then save.');expect(steps[4].state).toBe('done');});
  it('uses the current server refusal even when local checks pass',()=>{const steps=listingSteps({...base,review:{...review,missing_fields:['tags']}});expect(steps[3].state).toBe('current');expect(steps[3].reason).toContain('Add at least one tag');expect(steps[4].state).toBe('blocked');});
  it('shows an unexpected server reason and withdraws description completion',()=>{expect(listingSteps({...base,reviewReason:'Review refused: source_connection_changed.'})[3].reason).toBe('Review refused: source_connection_changed.');});
  it('ignores approval for another draft or source',()=>{expect(listingSteps({...base,review:{...review,draft_version:2}})[4].state).not.toBe('done');expect(listingSteps({...base,review:{...review,source_version:1}})[4].state).not.toBe('done');});

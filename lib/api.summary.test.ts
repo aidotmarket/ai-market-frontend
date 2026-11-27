@@ -33,8 +33,8 @@ it('fetches public summaries without browser caching or credentials and omits ab
   const fetch = vi.fn().mockResolvedValueOnce({ok: true, json: async () => ({at_a_glance: summary})}).mockResolvedValueOnce({ok: true, json: async () => ({})}).mockResolvedValueOnce({ok: false});
   vi.stubGlobal('fetch', fetch);
   const signal = new AbortController().signal;
-  expect(await fetchBuyerSummary('a/b', signal)).toEqual(summary);
+  expect(await fetchBuyerSummary('a/b', signal)).toEqual({at_a_glance: summary, license_display: null});
   expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/public/listings/a%2Fb'), {cache: 'no-store', credentials: 'omit', signal});
-  expect(await fetchBuyerSummary('a/b', signal)).toBeNull();
+  expect(await fetchBuyerSummary('a/b', signal)).toEqual({at_a_glance: null, license_display: null});
   await expect(fetchBuyerSummary('a/b', signal)).rejects.toThrow('Summary could not be refreshed');
 });

@@ -31,6 +31,38 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('private request conversation', () => {
+  it('shows an empty state after a successful selector and clears it when an authorized response arrives', async () => {
+    const pending = deferred<ReturnType<typeof selector>>();
+    mocks.selector.mockReturnValueOnce(pending.promise);
+    const view = render(<RequestConversation requestId="request" requestStatus="open" />);
+    expect(screen.getByText('Loading conversations…')).toBeTruthy();
+    expect(screen.queryByText(/No private conversations are available/)).toBeNull();
+
+    await act(async () => pending.resolve(selector({ threads: [] })));
+    expect(screen.getByRole('status').textContent)
+      .toBe('No private conversations are available to you. Available conversations will appear with the corresponding response.');
+    expect(mocks.history).not.toHaveBeenCalled();
+
+    view.rerender(<RequestConversation requestId="request" requestStatus="responses_received" quoteRevision={1} />);
+    await screen.findByRole('option', { name: 'Response 1 · one' });
+    expect(screen.queryByText(/No private conversations are available/)).toBeNull();
+    await select();
+    expect(mocks.history).toHaveBeenCalledExactlyOnceWith('request', 'one');
+  });
+
+  it.each([
+    ['closed', 'enabled', 'This request is closed. New messages cannot be sent.'],
+    ['open', 'off', 'Private messaging is turned off for this request. You can still read any available conversations.'],
+    ['open', 'unavailable', 'Sending private messages is unavailable right now. Check this page again for updates.'],
+  ])('keeps empty-selector wording accurate for %s with messaging %s', async (status, availability, notice) => {
+    mocks.selector.mockResolvedValue(selector({ availability, threads: [] }));
+    await mount(status);
+    expect(screen.getByText('No private conversations are available to you.')).toBeTruthy();
+    expect(screen.getByText(notice)).toBeTruthy();
+    expect(screen.queryByText(/Available conversations will appear/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send private message' })).toBeNull();
+  });
+
   it.each(['principal', 'owner', 'signout'])('quarantines a private history read after %s changes', async kind => {
     const slow = deferred<ReturnType<typeof history>>(); mocks.history.mockReturnValueOnce(slow.promise);
     await mount(); fireEvent.change(screen.getByRole('combobox'), { target: { value: 'one' } }); await waitFor(() => expect(mocks.history).toHaveBeenCalledOnce());
@@ -149,6 +181,7 @@ describe('private request conversation', () => {
     mocks.send.mockRejectedValueOnce(new Error('Lost'));
     const view = await mount(); await select(); write(); await screen.findByText(/We could not confirm/);
     view.rerender(<RequestConversation requestId="request" requestStatus={state} />);
+    expect(screen.getByText(`This request is ${state}. New messages cannot be sent. You can still read existing history for available responses.`)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retry same message' })).toHaveProperty('disabled', true); expect(mocks.send).toHaveBeenCalledTimes(1);
   });
   it('keeps an authorized in-app conversation usable while email is proof-blocked, with internal metadata excluded', async () => {
@@ -159,14 +192,18 @@ describe('private request conversation', () => {
   it('allows matched active requests when the server authorizes messages, independent of publication', async () => {
     await mount('matched'); await select(); write(); await screen.findByText(/Message sent/);
   });
-  it('honors server refusal for an apparently active request', async () => {
-    mocks.history.mockResolvedValue(history('one', { can_send: false })); await mount('open'); await select();
+  it.each(['selector', 'history'])('explains a send refusal from %s for an active request', async source => {
+    if (source === 'selector') mocks.selector.mockResolvedValue(selector({ threads: [{ response_id: 'one', can_send: false }] }));
+    else mocks.history.mockResolvedValue(history('one', { can_send: false }));
+    await mount('open'); await select();
+    expect(screen.getByText(/This response isn't accepting new messages. Refresh the conversation/)).toBeTruthy();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Draft retained' } });
     expect(screen.getByRole('button', { name: 'Send private message' })).toHaveProperty('disabled', true); expect(mocks.send).not.toHaveBeenCalled();
   });
   it('reauthorizes an exact deep link and does not fall back after denial', async () => {
     window.history.replaceState({}, '', '/requests/example?response_id=denied'); mocks.selector.mockRejectedValue(new Error('Private denial'));
     render(<RequestConversation requestId="request" requestStatus="open" />); await screen.findByText('Private conversations are currently unavailable.');
+    expect(screen.queryByText(/No private conversations are available/)).toBeNull();
     expect(mocks.selector).toHaveBeenCalledWith('request', 'denied'); expect(mocks.history).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
   });
   it('selects an authorized exact deep link with no extra authentication step', async () => {
@@ -176,7 +213,10 @@ describe('private request conversation', () => {
   });
   it.each(['off', 'unavailable', 'unknown'])('truthfully disables new messages for %s while leaving authorized reads available', async availability => {
     mocks.selector.mockResolvedValue(selector({ availability })); await mount(); await select();
-    expect(screen.getByText('Sending private messages is currently unavailable.')).not.toBeNull(); write(); expect(mocks.send).not.toHaveBeenCalled();
+    const copy = availability === 'off'
+      ? 'Private messaging is turned off for this request. You can still read any available conversations.'
+      : 'Sending private messages is unavailable right now. Check this page again for updates.';
+    expect(screen.getByText(copy)).not.toBeNull(); write(); expect(mocks.send).not.toHaveBeenCalled();
   });
   it.each(['?response_id=', '?response_id=one&response_id=two'])('rejects ambiguous or empty deep links %s before reading any thread', async search => {
     window.history.replaceState({}, '', '/requests/example' + search); render(<RequestConversation requestId="request" requestStatus="open" />);

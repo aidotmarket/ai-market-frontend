@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -17,6 +18,7 @@ type ListingTypeFilter = 'all' | 'data' | 'models';
 
 interface MarketplaceSearchExperienceProps {
   mode: SearchMode;
+  headingLevel?: 1 | 2;
 }
 
 function sortItems(items: ResultItem[], sort: string, semanticMode: boolean) {
@@ -76,7 +78,9 @@ const PRICE_DEBOUNCE_MS = 500;
 
 export function MarketplaceSearchExperience({
   mode,
+  headingLevel = 1,
 }: MarketplaceSearchExperienceProps) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -106,6 +110,8 @@ export function MarketplaceSearchExperience({
     items: rawItems,
     facets,
     total,
+    suggestedQuery,
+    hint,
     semanticMode,
     isLoading,
     isError,
@@ -143,7 +149,8 @@ export function MarketplaceSearchExperience({
   const priceStats = facets?.price || null;
   const isFormatFiltered = listingCategory === 'data' && Boolean(dataType);
   const selectedDataTypeIsMissing = Boolean(dataType) && !dataTypeCounts.some(([value]) => value === dataType);
-  const resultCount = semanticMode && !isFormatFiltered ? total : items.length;
+  const usesSemanticTotal = semanticMode && !isFormatFiltered;
+  const resultCount = usesSemanticTotal ? total : items.length;
   const typeLabel = listingCategory === 'data' ? 'Data' : listingCategory === 'models' ? 'Models' : 'Marketplace';
   const searchPlaceholder = listingCategory === 'models'
     ? 'Search models by provider, task, capability, or category'
@@ -151,12 +158,13 @@ export function MarketplaceSearchExperience({
       ? 'Search data by topic, company, geography, or format'
       : 'Search data and models by topic, provider, geography, or capability';
   const browseDescription = listingCategory === 'models'
-    ? 'Explore model listings with URL-driven filters, sorting, and incremental loading.'
+    ? 'Use filters and sorting to find model listings.'
     : listingCategory === 'data'
-      ? 'Explore data listings with URL-driven filters, sorting, and incremental loading.'
-      : 'Explore marketplace listings with URL-driven filters, sorting, and incremental loading.';
+      ? 'Use filters and sorting to find data listings.'
+      : 'Browse every listing. Pick a category or sort to narrow it down.';
   const emptyLabel = listingCategory === 'data' ? 'data' : listingCategory === 'models' ? 'models' : 'listings';
-  const hasSemanticSuggestions = semanticMode && Boolean(q) && !isLoading && !isError && items.length > 0;
+  const showQueryHints = semanticMode && Boolean(q) && !isLoading && !isError;
+  const hasSemanticSuggestions = showQueryHints && items.length > 0;
 
   const updateParams = useCallback((updates: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -215,15 +223,17 @@ export function MarketplaceSearchExperience({
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
-                  {mode === 'search' ? `Search ${typeLabel}` : `Browse ${typeLabel}`}
-                </p>
-                <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                {mode === 'browse' && (
+                  <p className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-[#0F6E56]">
+                    Browse {typeLabel}
+                  </p>
+                )}
+                <Heading className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                   {mode === 'search' ? `Search ${typeLabel}` : 'Browse Marketplace'}
-                </h1>
+                </Heading>
                 <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
                   {mode === 'search'
-                    ? 'Search across marketplace listings with semantic ranking and refine the result set with filters.'
+                    ? 'Describe what you need in your own words, then narrow the results with filters.'
                     : browseDescription}
                 </p>
               </div>
@@ -402,11 +412,26 @@ export function MarketplaceSearchExperience({
                 <p className="mt-1 text-sm text-slate-500">
                   {isLoading ? 'Loading results...' : (
                     <>
+                      {!usesSemanticTotal && hasNextPage ? 'Showing ' : ''}
                       {resultCount} {hasSemanticSuggestions ? 'suggestion' : 'result'}{resultCount === 1 ? '' : 's'}
                       {listingCategory === 'data' && dataType ? ` filtered to ${dataType.toUpperCase()}` : ''}
                     </>
                   )}
                 </p>
+                {showQueryHints && suggestedQuery && (
+                  <p className="mt-2 text-sm text-slate-600">
+                    <button
+                      type="button"
+                      onClick={() => updateParams({ q: suggestedQuery })}
+                      className="text-left font-medium text-[#3F51B5] underline"
+                    >
+                      Did you mean {suggestedQuery}?
+                    </button>
+                  </p>
+                )}
+                {showQueryHints && hint === 'no_results_try_other_words' && (
+                  <p className="mt-2 text-sm text-slate-600">Try searching with different words.</p>
+                )}
                 {hasSemanticSuggestions && (
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                     Suggestions are ranked by meaning and may be related rather than exact. Refine your search text or filters if they do not fit.
@@ -446,7 +471,7 @@ export function MarketplaceSearchExperience({
               <div className="mt-6 rounded-3xl border border-red-200 bg-red-50 px-6 py-16 text-center shadow-sm">
                 <p className="text-lg font-semibold text-red-900">Something went wrong</p>
                 <p className="mt-2 text-sm text-red-600">
-                  {error instanceof Error ? error.message : 'Failed to load results. Please try again.'}
+                  {customerLoadError("search results")}
                 </p>
                 <button
                   type="button"
@@ -504,6 +529,15 @@ export function MarketplaceSearchExperience({
                   <p className="text-sm text-slate-400">You&apos;ve reached the end of the results.</p>
                 )}
               </div>
+            )}
+
+            {hasSemanticSuggestions && (
+              <p className="mt-4 text-center text-sm text-slate-600">
+                Not what you need?{' '}
+                <Link href="/requests/new" className="font-medium text-[#3F51B5] underline">
+                  Post a data request
+                </Link>.
+              </p>
             )}
           </section>
         </div>

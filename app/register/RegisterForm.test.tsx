@@ -39,8 +39,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({ children, href, className, prefetch }: { children: React.ReactNode; href: string; className?: string; prefetch?: boolean }) => (
+    <a href={href} className={className} data-prefetch={prefetch === undefined ? undefined : String(prefetch)}>
       {children}
     </a>
   ),
@@ -74,8 +74,8 @@ describe('RegisterForm', () => {
     expect(screen.queryByLabelText(/company name/i)).toBeNull();
     expect(screen.getByTestId('oauth-buttons').textContent).toBe('register');
 
-    const dashboardLink = screen.getByRole('link', { name: 'dashboard' });
-    expect(dashboardLink.getAttribute('href')).toBe('/dashboard');
+    expect(screen.getByText('Want to sell data? You can enable selling from your dashboard after you sign up.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'dashboard' })).toBeNull();
   });
 
   it.each(['a%26b', 'a%23b', 'retail%20sales'])('preserves request query %s in the provider handoff', (value) => {
@@ -129,7 +129,7 @@ describe('RegisterForm', () => {
 
       render(<RegisterForm />);
       const loginHref = `/login?redirect=${encodeURIComponent(connectorPath)}`;
-      await waitFor(() => expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref));
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe(loginHref));
       expect(readConnectorContinuation()?.initiated).toBe(true);
       submitRegistration();
       expect((await screen.findByRole('link', { name: 'sign in' })).getAttribute('href')).toBe(loginHref);
@@ -148,14 +148,16 @@ describe('RegisterForm', () => {
     expect(screen.getByText(/account or signing in does not charge you/i)).not.toBeNull();
     expect(screen.getByText(/after you sign in, you will return to this listing/i)).not.toBeNull();
     expect(screen.getByText(/final total, including payment-provider costs and applicable tax/i)).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Back to listing' }).getAttribute('href')).toBe(listingRedirect);
+    const listingLink = screen.getByRole('link', { name: 'Back to listing' });
+    expect(listingLink.getAttribute('href')).toBe(listingRedirect);
+    expect(listingLink.getAttribute('data-prefetch')).toBe('false');
     expect(screen.getByRole('link', { name: 'Pricing' }).getAttribute('href')).toBe('/pricing');
     expect(screen.getByRole('link', { name: 'Fees and terms' }).getAttribute('href')).toBe(
       `/legal/terms?redirect=${encodeURIComponent(listingRedirect)}#fees`
     );
 
     const loginHref = `/login?redirect=${encodeURIComponent(listingRedirect)}`;
-    expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref);
+    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe(loginHref);
 
     submitRegistration();
 
@@ -182,7 +184,7 @@ describe('RegisterForm', () => {
     expect(screen.queryByText(/account or signing in does not charge you/i)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Back to listing' })).toBeNull();
     const loginHref = `/login?redirect=${encodeURIComponent(redirect)}`;
-    expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe(loginHref);
+    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe(loginHref);
 
     submitRegistration();
 
@@ -200,7 +202,7 @@ describe('RegisterForm', () => {
 
     expect(screen.queryByText(/account or signing in does not charge you/i)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Back to listing' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Log in' }).getAttribute('href')).toBe('/login');
+    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/login');
 
     submitRegistration();
 

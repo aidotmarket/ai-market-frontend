@@ -64,34 +64,73 @@ export default function AimDataPage() {
           <section className="rounded-2xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900">You choose what to describe</h2>
             <p className="mt-3 leading-7 text-gray-600">
-              The gateway automatically sends opaque file IDs, keyed content commitments, file size,
-              media type, and timestamps. It sends your display alias only if you set one; otherwise
-              it uses a neutral name. Confirm each file before it sends
-              column names, types, row count, bucketed null rates and distinct counts, and its
-              raw SHA-256. No data values go to ai.market in these messages. You can separately
-              publish a public sample on your listing. The gateway sends delivery receipts and
-              signed audit entries for every outbound message.
+              The gateway automatically sends generated file references, fingerprints made with a secret key,
+              file sizes, formats, and timestamps. It uses a neutral name unless you choose a display name.
+              After you confirm a file, the gateway sends a checksum of the file. For file formats it can summarize,
+              it also sends the row count and the names and types of the columns you include. For each included column,
+              it reports roughly how much is missing and a range for the number of different values.
+              No data values go to ai.market in these messages. You can separately publish a public sample on your
+              listing. The gateway sends delivery receipts and signed audit entries for every outbound message.
             </p>
           </section>
           <section className="rounded-2xl border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900">Locked down by design</h2>
             <p className="mt-3 leading-7 text-gray-600">
-              The gateway refuses to start as root or the wrong user, with a writable root filesystem,
-              any capability, no-new-privileges off, or a mounted socket. You must allow outbound
-              access only to api.ai.market:443 using a restricted proxy or firewall and DNS. Its egress
-              canary reports open access, which blocks publishing and new permissions. Images are
-              signed and reproducible.
+              The gateway container refuses to start as root or the wrong user, with a writable root
+              filesystem, any capability, no-new-privileges off, a mounted socket, or access to the
+              host network or process namespace. Images are signed and reproducible.
             </p>
           </section>
         </div>
 
-        <section className="mt-10 rounded-2xl bg-[#F7FCFA] p-6">
+        <section id="gateway-setup" className="mt-10 scroll-mt-20 rounded-2xl bg-[#F7FCFA] p-6">
           <h2 className="text-xl font-semibold text-gray-900">Set up your gateway</h2>
-          <p className="mt-3 leading-7 text-gray-600">
-            In Sell Data, open Gateways and choose Add a gateway. You get a one-time pairing code
-            and a Docker Compose file. Manage listings, prices, licences, and payouts on the website.
+          <h3 className="mt-4 font-semibold text-gray-900">Before you create an account</h3>
+          <p className="mt-2 leading-7 text-gray-600">
+            Prepare a Linux host with Docker and Docker Compose. Use a dedicated folder for the files
+            you intend to sell and mount it read-only. Provide a persistent writable state volume for
+            the gateway.
           </p>
+          <p className="mt-3 leading-7 text-gray-600">
+            Check the <a href="#network-requirements" className="font-semibold text-[#0F6E56] underline">network requirements</a>{' '}
+            for public HTTPS delivery and restricted outbound access.
+          </p>
+
+          <h3 className="mt-4 font-semibold text-gray-900">Pair your gateway</h3>
+          <ol className="mt-2 list-decimal space-y-2 pl-5 leading-7 text-gray-600">
+            <li>Create a free ai.market account or sign in.</li>
+            <li>
+              If you’re new to selling, choose <strong>Start selling</strong> in <strong>Overview</strong>.
+              In the seller dashboard, select <strong>Gateways</strong>. If prompted, finish the seller
+              setup steps shown there. Then choose <strong>Add a gateway</strong>.
+            </li>
+            <li>
+              Use the one-time pairing code and generated Docker Compose snippet. Follow the install
+              guide shown there to start the gateway on your host.
+            </li>
+          </ol>
           <SellDataCta variant="self-hosted" className="mt-6" />
+          <p className="mt-4 leading-7 text-gray-600">
+            Manage listings, prices, licences, and payouts on the website.
+          </p>
+        </section>
+
+        <section id="network-requirements" className="mt-10 scroll-mt-20 rounded-2xl border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900">Network requirements</h2>
+          <p className="mt-3 leading-7 text-gray-600">
+            Buyers download files through one seller-controlled HTTPS delivery endpoint. ai.market
+            also uses it for a signed reachability probe. For your own HTTPS setup, give the
+            endpoint a stable, publicly reachable hostname and a valid TLS certificate for that
+            hostname. Allow inbound TCP 443 through your firewall to your reverse proxy.
+            The proxy terminates TLS and forwards requests to the gateway over private HTTP on
+            port 8080. Keep 8080 private. Delivery requires no other public inbound ports.
+          </p>
+          <p className="mt-3 leading-7 text-gray-600">
+            Restrict outbound gateway access to api.ai.market:443 using an allowlisting proxy
+            or firewall and restricted DNS. The gateway’s egress canary deliberately tests
+            connections that must fail. If the canary reports open access, ai.market blocks
+            publishing and new permissions.
+          </p>
         </section>
 
         <p className="mt-8 text-sm leading-6 text-gray-600">

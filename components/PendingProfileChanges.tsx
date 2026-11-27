@@ -15,9 +15,12 @@ export function PendingProfileChanges() {
   const view=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot);
   useEffect(()=>{
     if (!principal) return;
+    let previousToken=useAuthStore.getState().token;
     const retire=()=>{
       const state=useAuthStore.getState();
       if (authSessionOwner()!==owner || !state.token || state.user?.id!==principal || !state.isAuthenticated || !state.hydrated || state.isLoading) controller.retire();
+      else if (state.token!==previousToken) controller.sessionRecovered();
+      previousToken=state.token;
     };
     const unsubscribe=useAuthStore.subscribe(retire);
     const unsubscribeOwner=subscribeAuthSessionOwner(retire);
@@ -34,6 +37,7 @@ export function PendingProfileChanges() {
     {pending.length>0 && <p>Email changes last read as pending are shown below. Confirm or cancel explicitly after a current read. Old mailbox proof is not restored by cancellation.</p>}
     {view.readAt && <p>Last read: {new Date(view.readAt).toLocaleString()}. Read again for current readiness.</p>}
     <button disabled={view.busy} onClick={()=>void controller.read()}>Read current changes</button>
+    {view.error && <button disabled={view.busy} onClick={()=>void controller.read()}>Try again</button>}
     {view.nextPending && <button disabled={view.busy} onClick={()=>void controller.readMore()}>Read more pending changes</button>}
     {view.nextPending && <p>More pending changes may be available. Each click reads one page.</p>}
     {view.error && <p role="status">{view.error}</p>}

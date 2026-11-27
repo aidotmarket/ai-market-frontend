@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationDetail } from '@/types';
 import { AxiosError } from 'axios';
@@ -8,6 +8,7 @@ import { AxiosError } from 'axios';
 const mocks = vi.hoisted(() => ({
   auth: { isAuthenticated: false, user: { id: 'viewer' }, token: 'synthetic' },
   createInquiry: vi.fn(),
+  getConversation: vi.fn(),
   replyToConversation: vi.fn(),
   updateSince: vi.fn(),
 }));
@@ -19,6 +20,7 @@ vi.mock('@/store/auth', async (importOriginal) => ({
 
 vi.mock('@/api/conversations', () => ({
   createInquiry: mocks.createInquiry,
+  getConversation: mocks.getConversation,
   replyToConversation: mocks.replyToConversation,
 }));
 
@@ -26,7 +28,11 @@ vi.mock('@/hooks/useConversationPoll', () => ({
   useConversationPoll: () => ({ updateSince: mocks.updateSince }),
 }));
 
+vi.mock('next/navigation', () => ({ usePathname: () => '/listings/weather-observations' }));
+
 import InquiryWidget from './InquiryWidget';
+import ListingPurchaseAdvisory from './ListingPurchaseAdvisory';
+import { AllAIProvider, useAllAI } from './allai/AllAIContext';
 
 const SESSION_URL = 'http://localhost:8000/api/allai/support/anonymous/session';
 const MESSAGE_URL = 'http://localhost:8000/api/allai/support/anonymous/message';
@@ -83,7 +89,7 @@ function progressiveSseResponse(firstText: string, secondText: string) {
   };
 }
 
-function completedSseResponse(text: string) {
+function completedSseResponse(text: string, event: Record<string, unknown> = {}) {
   let readCount = 0;
   const reader = {
     read: vi.fn(async () => {
@@ -92,7 +98,7 @@ function completedSseResponse(text: string) {
         return {
           done: false,
           value: new TextEncoder().encode(
-            `event: delta\ndata: ${JSON.stringify({ text })}\n\n`
+            `data: ${JSON.stringify({ text, ...event })}\n\n`
           ),
         };
       }
@@ -129,19 +135,38 @@ function pendingSseResponse() {
   };
 }
 
-function renderWidget() {
+function renderWidget(links?: Pick<React.ComponentProps<typeof InquiryWidget>, 'schemaHref' | 'documentationHref' | 'sampleHref'>) {
   return render(
     <InquiryWidget
       listingId="listing-123"
       listingSlug="weather-observations"
       listingTitle="Weather Observations"
+      {...links}
     />
   );
 }
 
+function renderWidgetWithLanguagePicker() {
+  function LanguagePicker() {
+    const { setLocale } = useAllAI();
+    return <button onClick={() => setLocale('es')}>Español</button>;
+  }
+  render(
+    <AllAIProvider>
+      <LanguagePicker />
+      <InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />
+    </AllAIProvider>
+  );
+}
+
+function renderSpanishWidget() {
+  renderWidgetWithLanguagePicker();
+  fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+}
+
 function typeQuestion(question: string) {
   fireEvent.change(screen.getByRole('textbox'), { target: { value: question } });
-  fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+  fireEvent.click(screen.getByRole('button', { name: mocks.auth.isAuthenticated ? 'Submit Question' : 'Ask allAI' }));
 }
 
 function clickWithoutNavigation(link: HTMLElement) {
@@ -152,6 +177,7 @@ function clickWithoutNavigation(link: HTMLElement) {
 beforeEach(() => {
   mocks.auth.isAuthenticated = false;
   mocks.createInquiry.mockReset();
+  mocks.getConversation.mockReset();
   mocks.replyToConversation.mockReset();
   mocks.updateSince.mockReset();
   fetchMock = vi.fn<typeof fetch>();
@@ -166,6 +192,289 @@ afterEach(() => {
 });
 
 describe('InquiryWidget', () => {
+  it.each([
+    [false, 'allAI answers using public listing information. If you need an answer from the seller, you must'],
+    [true, 'allAI looks for an answer in the public listing information first. If it can’t answer, ai.market passes your question to the seller.'],
+  ])('explains the question route before writing when signed in is %s', (signedIn, copy) => {
+    mocks.auth.isAuthenticated = signedIn;
+    renderWidget();
+
+    const question = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const disclosure = document.getElementById(question.getAttribute('aria-describedby')!)!;
+    expect(question.value).toBe('');
+    expect(disclosure.textContent).toContain(copy);
+    expect(disclosure.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: signedIn ? 'Submit Question' : 'Ask allAI' })).toBeTruthy();
+    const signIn = screen.queryByRole('link', { name: 'sign in to contact them through ai.market' });
+    if (signedIn) {
+      expect(signIn).toBeNull();
+    } else {
+      expect(signIn?.getAttribute('href')).toBe('/login?redirect=/listings/weather-observations');
+      expect(signIn!.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('lets a signed-in buyer send a restored question directly to the seller', () => {
+    mocks.auth.isAuthenticated = true;
+    mocks.createInquiry.mockReturnValue(deferred<ConversationDetail>().promise);
+    sessionStorage.setItem('inquiry_draft_listing-123', 'What are the join keys?');
+    renderWidget();
+
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('What are the join keys?');
+    expect(mocks.createInquiry).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send to seller' }));
+    expect(mocks.createInquiry).toHaveBeenCalledWith('listing-123', 'What are the join keys?', true);
+  });
+
+  it.each([
+    ['no_matches', true, 'allAI couldn’t find a reliable answer in the public listing information.'],
+    ['no_matches', false, 'allAI couldn’t find a reliable answer in the public listing information.'],
+    ['retrieval_unavailable', true, 'allAI couldn’t check the public listing information right now.'],
+  ])('offers a seller handoff for %s when public links are available (%s)', async (outcome, hasPublicInfo, copy) => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce(completedSseResponse('Safe failure', { type: 'safe_failure', outcome }));
+    renderWidget(hasPublicInfo ? { schemaHref: '#listing-schema', documentationHref: '#listing-documentation', sampleHref: '#listing-sample-files' } : undefined);
+    typeQuestion('What are the join keys?');
+
+    expect(await screen.findByText(copy)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'View field names and types' })?.getAttribute('href'))
+      .toBe(hasPublicInfo ? '#listing-schema' : undefined);
+    expect(screen.queryByRole('link', { name: 'View public documentation' })?.getAttribute('href'))
+      .toBe(hasPublicInfo ? '#listing-documentation' : undefined);
+    expect(screen.queryByRole('link', { name: 'View the public sample' })?.getAttribute('href'))
+      .toBe(hasPublicInfo ? '#listing-sample-files' : undefined);
+    clickWithoutNavigation(screen.getByRole('link', { name: 'Sign in to ask the seller.' }));
+    expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe('What are the join keys?');
+    expect(mocks.createInquiry).not.toHaveBeenCalled();
+  });
+
+  it('keeps the question for the seller when sign-in completes while allAI finds no answer', async () => {
+    const firstRead = deferred<ReadableStreamReadResult<Uint8Array>>();
+    let reads = 0;
+    const reader = {
+      read: vi.fn(() => {
+        reads += 1;
+        return reads === 1 ? firstRead.promise : Promise.resolve({ done: true, value: undefined });
+      }),
+      cancel: vi.fn(),
+      releaseLock: vi.fn(),
+    };
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce({ status: 200, ok: true, body: { getReader: () => reader }, json: vi.fn() } as unknown as Response);
+    mocks.createInquiry.mockReturnValue(deferred<ConversationDetail>().promise);
+    const view = renderWidget();
+    typeQuestion('What are the join keys?');
+    await waitFor(() => expect(reader.read).toHaveBeenCalled());
+
+    mocks.auth.isAuthenticated = true;
+    view.rerender(<InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />);
+    await act(async () => {
+      firstRead.resolve({
+        done: false,
+        value: new TextEncoder().encode(`data: ${JSON.stringify({ text: 'Safe failure', type: 'safe_failure', outcome: 'no_matches' })}\n\n`),
+      });
+    });
+
+    expect(await screen.findByText('allAI couldn’t find a reliable answer in the public listing information.')).toBeTruthy();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('What are the join keys?');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to seller' }));
+    expect(mocks.createInquiry).toHaveBeenCalledTimes(1);
+    expect(mocks.createInquiry).toHaveBeenCalledWith('listing-123', 'What are the join keys?', true);
+  });
+
+  it('keeps the question for the seller when the deadline passes after a no-answer fallback', async () => {
+    vi.useFakeTimers();
+    try {
+      let reads = 0;
+      const reader = {
+        read: vi.fn(() => {
+          reads += 1;
+          return reads === 1
+            ? Promise.resolve({
+              done: false,
+              value: new TextEncoder().encode(`data: ${JSON.stringify({ text: 'Safe failure', type: 'safe_failure', outcome: 'no_matches' })}\n\n`),
+            })
+            : new Promise<ReadableStreamReadResult<Uint8Array>>(() => {});
+        }),
+        cancel: vi.fn(),
+        releaseLock: vi.fn(),
+      };
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce({ status: 200, ok: true, body: { getReader: () => reader }, json: vi.fn() } as unknown as Response);
+      mocks.createInquiry.mockReturnValue(deferred<ConversationDetail>().promise);
+      const view = renderWidget();
+      typeQuestion('What are the join keys?');
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(reads).toBeGreaterThanOrEqual(2);
+
+      mocks.auth.isAuthenticated = true;
+      view.rerender(<InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+
+      expect(screen.getByText('allAI couldn’t find a reliable answer in the public listing information.')).toBeTruthy();
+      expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('What are the join keys?');
+      fireEvent.click(screen.getByRole('button', { name: 'Send to seller' }));
+      expect(mocks.createInquiry).toHaveBeenCalledTimes(1);
+      expect(mocks.createInquiry).toHaveBeenCalledWith('listing-123', 'What are the join keys?', true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not hand an earlier question to a different account after the deadline', async () => {
+    vi.useFakeTimers();
+    const originalUser = mocks.auth.user;
+    const originalToken = mocks.auth.token;
+    (mocks.auth as { user: { id: string } | null }).user = null;
+    (mocks.auth as { token: string | null }).token = null;
+    try {
+      let reads = 0;
+      const reader = {
+        read: vi.fn(() => {
+          reads += 1;
+          return reads === 1
+            ? Promise.resolve({
+              done: false,
+              value: new TextEncoder().encode(`data: ${JSON.stringify({ text: 'Safe failure', type: 'safe_failure', outcome: 'no_matches' })}\n\n`),
+            })
+            : new Promise<ReadableStreamReadResult<Uint8Array>>(() => {});
+        }),
+        cancel: vi.fn(),
+        releaseLock: vi.fn(),
+      };
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce({ status: 200, ok: true, body: { getReader: () => reader }, json: vi.fn() } as unknown as Response);
+      const view = renderWidget();
+      typeQuestion('What are the join keys?');
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(reads).toBeGreaterThanOrEqual(2);
+
+      const rerender = () => view.rerender(<InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />);
+      mocks.auth.isAuthenticated = true;
+      mocks.auth.user = { id: 'first-account' };
+      mocks.auth.token = 'synthetic-first';
+      rerender();
+      mocks.auth.user = { id: 'second-account' };
+      mocks.auth.token = 'synthetic-second';
+      rerender();
+      await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+
+      expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+      expect(screen.queryByRole('button', { name: 'Send to seller' })).toBeNull();
+      expect(mocks.createInquiry).not.toHaveBeenCalled();
+    } finally {
+      mocks.auth.user = originalUser;
+      mocks.auth.token = originalToken;
+      vi.useRealTimers();
+    }
+  });
+
+  it('targets the question heading so the guidance and sign-in link precede the input', () => {
+    render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
+    renderWidget();
+
+    const advisory = screen.getByRole('complementary', { name: 'Review before buying' });
+    const link = screen.getByRole('link', { name: 'Ask a question about this listing' });
+    const heading = screen.getByRole('heading', { name: 'Ask a Question' });
+    const fragment = link.getAttribute('href');
+
+    expect(advisory.contains(link)).toBe(true);
+    expect(fragment).toBe('#ask-a-question');
+    expect(document.querySelector(fragment!)).toBe(heading);
+    heading.focus();
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('sends the selected language and shows actionable Spanish guidance on a network failure', async () => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockRejectedValueOnce(new Error('English network error'));
+    renderSpanishWidget();
+    typeQuestion('¿Qué formato tiene?');
+
+    const alert = await screen.findByRole('alert');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).locale).toBe('es');
+    expect(alert.textContent).toContain('allAI no pudo consultar la información pública del anuncio en este momento.');
+    expect(alert.textContent).not.toMatch(/English network error|couldn't get an answer/);
+    const sellerLink = within(alert).getByRole('link', { name: 'Inicia sesión para preguntar al vendedor.' });
+    expect(sellerLink.getAttribute('href')).toBe('/login?redirect=/listings/weather-observations');
+    clickWithoutNavigation(sellerLink);
+    expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe('¿Qué formato tiene?');
+  });
+
+  it('localizes the timeout guidance and retains the question and sign-in handoff', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce(pendingSseResponse().response);
+      renderSpanishWidget();
+      typeQuestion('¿Cuál es la licencia?');
+      await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+
+      expect(screen.getByRole('alert').textContent).toContain('La respuesta está tardando más de lo esperado.');
+      expect(screen.queryByText(/longer than expected/)).toBeNull();
+      const sellerLink = screen.getByRole('link', { name: 'Inicia sesión para preguntar al vendedor.' });
+      clickWithoutNavigation(sellerLink);
+      expect(sessionStorage.getItem('inquiry_draft_listing-123')).toBe('¿Cuál es la licencia?');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['/support', 'https://ai.market/support'])('renders the internal backend support link from %s', async (href) => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce(completedSseResponse(
+        `No pude verificar una respuesta. [Contacta con soporte](${href}). [Externo](//example.test/support)`,
+        { type: 'safe_failure', outcome: 'answer_unverified', locale: 'es' },
+      ));
+    renderSpanishWidget();
+    typeQuestion('¿Qué significan las valoraciones?');
+
+    expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
+    expect(screen.queryByText(/No pude verificar una respuesta/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Externo' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it.each(['before', 'after'])('keeps the support destination when switching to Spanish %s the response', async (order) => {
+    const pendingMessage = deferred<Response>();
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockReturnValueOnce(pendingMessage.promise);
+    renderWidgetWithLanguagePicker();
+    typeQuestion('What do the ratings mean?');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).locale).toBe('en');
+    const switchToSpanish = () => fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+    if (order === 'before') switchToSpanish();
+    pendingMessage.resolve(completedSseResponse(
+      'Could not verify an answer. [Contact support](/support)',
+      { type: 'safe_failure', outcome: 'answer_unverified', locale: 'en' },
+    ));
+
+    if (order === 'after') {
+      expect((await screen.findByRole('link', { name: 'Contact support' })).getAttribute('href')).toBe('/support');
+      switchToSpanish();
+    }
+    expect((await screen.findByRole('link', { name: 'Contactar con soporte' })).getAttribute('href')).toBe('/support');
+    expect(screen.getByText(/allAI no pudo encontrar una respuesta fiable/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
+    expect(screen.queryByText(/Could not verify an answer/)).toBeNull();
+  });
+
+  it.each(['https://ai.market.example/support', '/\\example.test/support', 'javascript:alert(1)'])(
+    'retains localized safe-failure copy when a backend link targets %s', async (href) => {
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce(completedSseResponse(
+          `[Untrusted](${href})`, { type: 'safe_failure', outcome: 'answer_unverified' },
+        ));
+      renderSpanishWidget();
+      typeQuestion('¿Qué significan las valoraciones?');
+
+      expect(await screen.findByText(/allAI no pudo encontrar una respuesta fiable/)).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Untrusted' })).toBeNull();
+    },
+  );
+
   it('creates an anonymous session, sends listing context, and renders streamed deltas', async () => {
     const stream = progressiveSseResponse('It contains ', 'daily readings.');
     fetchMock.mockImplementation(async (input) => {
@@ -208,6 +517,36 @@ describe('InquiryWidget', () => {
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
   });
 
+  it('renders allAI answers with Markdown while showing the buyer question verbatim', async () => {
+    const listingUrl = 'https://ai.market/listings/x';
+    const question = `**Sales &#38; Transactions** <${listingUrl}>`;
+    const { container } = renderWidget();
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce(completedSseResponse([
+        'Sales &#38; Transactions &#40;10k&#41;',
+        'Synthetic Retail Sales &#38; Transactions &#40;10k &#43; 730k rows&#41;',
+        'CC BY 4&#46;0',
+        '&#91;x&#93;&#40;https://evil.example&#41;',
+        '&#33;&#91;i&#93;&#40;https://evil.example/p.png&#41;',
+        '<img src="https://evil.example/raw.png">',
+        `<${listingUrl}>`,
+      ].join('\n\n')));
+
+    typeQuestion(question);
+
+    expect(await screen.findByText('Sales & Transactions (10k)')).toBeTruthy();
+    expect(screen.getByText('Synthetic Retail Sales & Transactions (10k + 730k rows)')).toBeTruthy();
+    expect(screen.getByText('CC BY 4.0')).toBeTruthy();
+    expect(screen.getByText('[x](https://evil.example)')).toBeTruthy();
+    expect(screen.getByText('![i](https://evil.example/p.png)')).toBeTruthy();
+    expect(container.querySelector('a[href*="evil.example"], img[src*="evil.example"]')).toBeNull();
+    const link = screen.getByRole('link', { name: listingUrl });
+    expect(link.getAttribute('href')).toBe(listingUrl);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(screen.getByText(question).textContent).toBe(question);
+  });
+
   it('drops a cached session after a message 404 and creates a fresh session on retry', async () => {
     const requestOrder: string[] = [];
     let sessionAttempt = 0;
@@ -232,12 +571,12 @@ describe('InquiryWidget', () => {
     typeQuestion('Can I recover from an expired session?');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      "We couldn't get an answer. Please try again."
+      "allAI couldn’t check the public listing information right now."
     );
-    expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask allAI' })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ask allAI' }));
 
     expect(await screen.findByText('Recovered with a fresh session.')).toBeTruthy();
     expect(requestOrder).toEqual([SESSION_URL, MESSAGE_URL, SESSION_URL, MESSAGE_URL]);
@@ -262,9 +601,7 @@ describe('InquiryWidget', () => {
 
     try {
       renderWidget();
-      expect(screen.getByText(
-        'allAI checks current public information to answer questions about this listing.'
-      )).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'sign in to contact them through ai.market' })).toBeTruthy();
       expect(screen.queryByText(/your question will be forwarded to the seller/i)).toBeNull();
       const status = screen.getByRole('status');
       expect(status.textContent).toBe('');
@@ -303,7 +640,7 @@ describe('InquiryWidget', () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       expect(screen.getByText('It contains daily readings.')).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Ask allAI' })).toBeTruthy();
       expect(status.textContent).toBe('');
       expect(status.className).toBe('sr-only');
     } finally {
@@ -346,9 +683,10 @@ describe('InquiryWidget', () => {
       });
 
       expect(screen.getByRole('alert').textContent).toContain(
-        "We couldn't get an answer. Please try again."
+        "allAI couldn’t check the public listing information right now."
       );
       expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Send to seller' })).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
@@ -418,7 +756,7 @@ describe('InquiryWidget', () => {
       });
 
       const alert = screen.getByRole('alert');
-      expect(alert.textContent).toContain('This is taking longer than expected. Please try again');
+      expect(alert.textContent).toContain('This is taking longer than expected.');
       expect(screen.queryByText(
         'Will a stalled request release the form?',
         { selector: 'p' }
@@ -427,9 +765,9 @@ describe('InquiryWidget', () => {
       expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
         'Will a stalled request release the form?'
       );
-      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Ask allAI' })).toBeTruthy();
       expect(requestSignal.aborted).toBe(true);
-      const sellerLink = screen.getByRole('link', { name: 'sign in to ask the seller.' });
+      const sellerLink = screen.getByRole('link', { name: 'Sign in to ask the seller.' });
       expect(sellerLink.getAttribute('href')).toBe(
         '/login?redirect=/listings/weather-observations'
       );
@@ -460,7 +798,7 @@ describe('InquiryWidget', () => {
       });
 
       fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Q2' } });
-      const sellerLink = screen.getByRole('link', { name: 'sign in to ask the seller.' });
+      const sellerLink = screen.getByRole('link', { name: 'Sign in to ask the seller.' });
       expect(sellerLink.getAttribute('href')).toBe(
         '/login?redirect=/listings/weather-observations'
       );
@@ -498,10 +836,10 @@ describe('InquiryWidget', () => {
       });
       expect(firstSignal.aborted).toBe(true);
       expect(screen.getByRole('alert').textContent).toContain(
-        'This is taking longer than expected. Please try again'
+        'This is taking longer than expected.'
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ask allAI' }));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
@@ -552,7 +890,7 @@ describe('InquiryWidget', () => {
 
       expect(screen.getByText('The listing is still available.')).toBeTruthy();
       expect(screen.queryByRole('alert')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Ask allAI' })).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
@@ -576,10 +914,10 @@ describe('InquiryWidget', () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       expect(screen.getByRole('alert').textContent).toContain(
-        "We couldn't get an answer. Please try again."
+        "allAI couldn’t check the public listing information right now."
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'Submit Question' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ask allAI' }));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(40_000);
       });
@@ -600,7 +938,7 @@ describe('InquiryWidget', () => {
 
       expect(screen.getByText('The retry succeeded.')).toBeTruthy();
       expect(screen.queryByRole('alert')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Ask allAI' })).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
@@ -638,7 +976,7 @@ describe('InquiryWidget', () => {
       });
 
       expect(screen.getByRole('alert').textContent).toContain(
-        'This is taking longer than expected. Please try again'
+        'This is taking longer than expected.'
       );
       expect(screen.getAllByRole('link', { name: /sign in to ask the seller/i })).toHaveLength(1);
     } finally {
@@ -667,11 +1005,13 @@ describe('InquiryWidget', () => {
       });
 
       expect(screen.getByRole('alert').textContent).toContain(
-        "We couldn't get an answer. Please try again."
+        "allAI couldn’t check the public listing information right now."
       );
-      expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Ask allAI' })).toBeTruthy();
       expect(screen.getByRole('status').textContent).toBe('');
       expect(screen.getByRole('status').className).toBe('sr-only');
+      // Next's links schedule an idle visibility check in jsdom.
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
@@ -743,7 +1083,7 @@ describe('InquiryWidget', () => {
     }
   });
 
-  it('keeps authenticated submission on the existing inquiry path', async () => {
+  it('keeps authenticated submission on the existing inquiry path and targets the conversation heading', async () => {
     const conversation: ConversationDetail = {
       id: 'conversation-1',
       listing_id: 'listing-123',
@@ -760,12 +1100,21 @@ describe('InquiryWidget', () => {
         role: 'buyer',
         content: 'Is this current?',
         created_at: '2026-08-05T10:00:00Z',
+      }, {
+        id: 'message-2',
+        conversation_id: 'conversation-1',
+        role: 'seller',
+        content: '**Updated daily** &#38; <https://ai.market/listings/x>',
+        created_at: '2026-08-05T10:00:00Z',
       }],
       created_at: '2026-08-05T10:00:00Z',
     };
     mocks.auth.isAuthenticated = true;
     mocks.createInquiry.mockResolvedValue(conversation);
+    mocks.replyToConversation.mockResolvedValue({ success: true, message_id: 'reply-1' });
+    mocks.getConversation.mockRejectedValue(new Error('Refresh failed'));
 
+    render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
     renderWidget();
     typeQuestion('Is this current?');
 
@@ -773,7 +1122,20 @@ describe('InquiryWidget', () => {
       expect(mocks.createInquiry).toHaveBeenCalledWith('listing-123', 'Is this current?');
     });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(await screen.findByText('Your Inquiry')).toBeTruthy();
+    const heading = await screen.findByRole('heading', { name: 'Your Inquiry' });
+    const sellerReply = '**Updated daily** &#38; <https://ai.market/listings/x>';
+    expect(screen.getByText(sellerReply).textContent).toBe(sellerReply);
+    const reply = screen.getByRole('textbox') as HTMLInputElement;
+    fireEvent.change(reply, { target: { value: 'How often is it updated?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await screen.findByRole('alert');
+    expect(reply.disabled).toBe(true);
+
+    const link = screen.getByRole('link', { name: 'Ask a question about this listing' });
+    expect(document.querySelector(link.getAttribute('href')!)).toBe(heading);
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    heading.focus();
+    expect(document.activeElement).toBe(heading);
   });
 
   it('keeps an authenticated mediation rejection visible after submission ends', async () => {
@@ -789,7 +1151,7 @@ describe('InquiryWidget', () => {
     typeQuestion('Please contact me at 555-0100.');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Message held for review. Please revise.'
+      "Please revise your message before sending it again."
     );
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
@@ -816,24 +1178,45 @@ describe('InquiryWidget', () => {
     typeQuestion('short');
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Failed to submit question.'
+      "We couldn't send your question. Try sending it again."
     );
     expect(screen.getByRole('button', { name: 'Submit Question' })).toBeTruthy();
   });
 
-  it('surfaces an anonymous failure and preserves the typed question', async () => {
-    fetchMock.mockResolvedValue(response(500));
+  it('shows public information and seller handoff instead of a raw answer error', async () => {
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockRejectedValueOnce(new Error('Private request error details'));
 
-    renderWidget();
+    renderWidget({ schemaHref: '#listing-schema', documentationHref: '#technical-documentation', sampleHref: '#listing-sample-files' });
     typeQuestion('Please do not lose this question');
 
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      "We couldn't get an answer. Please try again."
-    );
+    const fallback = await screen.findByRole('alert');
+    expect(fallback.textContent).toContain('allAI couldn’t check the public listing information right now.');
+    expect(fallback.textContent).not.toMatch(/Private request error details|Try a narrower question/);
+    expect(within(fallback).getByRole('link', { name: 'View field names and types' }).getAttribute('href')).toBe('#listing-schema');
+    expect(within(fallback).getByRole('link', { name: 'View public documentation' }).getAttribute('href')).toBe('#technical-documentation');
+    expect(within(fallback).getByRole('link', { name: 'View the public sample' }).getAttribute('href')).toBe('#listing-sample-files');
+    expect(within(fallback).getByRole('link', { name: 'Sign in to ask the seller.' }).getAttribute('href'))
+      .toBe('/login?redirect=/listings/weather-observations');
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
       'Please do not lose this question'
     );
     expect(screen.queryByText('Want to contact the seller?')).toBeNull();
     expect(mocks.createInquiry).not.toHaveBeenCalled();
   });
+});
+
+it.each([
+ ['Listing is not published', "This listing isn't available for questions right now. Browse similar data.", true],
+ ['Cannot inquire about your own listing', "This is your own listing, so you can't send it a question.", false],
+])('guides an authenticated question refused with %s', async (detail, message, browse) => {
+ mocks.auth.isAuthenticated = true;
+ const error = new AxiosError('refused');
+ error.response = {status:400, data:{detail}} as typeof error.response;
+ mocks.createInquiry.mockRejectedValue(error);
+ renderWidget();
+ typeQuestion('Is this listing current?');
+ expect((await screen.findByRole('alert')).textContent).toBe(message);
+ const link = screen.queryByRole('link', {name:'Browse similar data.'});
+ expect(link?.getAttribute('href')).toBe(browse ? '/find-data' : undefined);
 });

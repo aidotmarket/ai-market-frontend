@@ -8,6 +8,7 @@ export type AnonymousSafeOutcome =
   | 'answer_unverified'
   | 'surface_disabled'
   | 'rate_limited'
+  | 'message_too_long'
   | 'unsupported_language';
 
 interface AnonymousAllAIResources {
@@ -22,6 +23,26 @@ interface AnonymousAllAIResources {
   historicalAnswer: string;
   accountRequired: string;
   genericError: string;
+  homepageFallbackGuidance: string;
+  aimDataSetupGuide: string;
+  listingRecovery: {
+    error: string;
+    timeout: string;
+    guidance: string;
+    search: string;
+    support: string;
+    signIn: string;
+    noAnswer: string;
+    retrievalUnavailable: string;
+    schema: string;
+    documentation: string;
+    sample: string;
+  };
+  recoveryLinks: {
+    searchListings: string;
+    postRequest: string;
+    postRequestWithSellers: string;
+  };
   safeOutcomes: Record<AnonymousSafeOutcome, string>;
 }
 
@@ -41,12 +62,33 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: 'Earlier session — facts will be checked again when you ask a new question.',
     accountRequired: 'An account is required for this step.',
     genericError: 'Sorry, something went wrong. Please try again.',
+    homepageFallbackGuidance: "I couldn't verify that answer against current listings. Try asking about a specific sector.",
+    aimDataSetupGuide: 'AIM Data setup guide',
+    listingRecovery: {
+      error: "We couldn't get an answer.",
+      timeout: 'This is taking longer than expected.',
+      guidance: 'Try a narrower question about the listing description, data format, or license.',
+      search: 'Search the catalogue',
+      support: 'Contact support',
+      signIn: 'Sign in to ask the seller.',
+      noAnswer: 'allAI couldn’t find a reliable answer in the public listing information.',
+      retrievalUnavailable: 'allAI couldn’t check the public listing information right now.',
+      schema: 'View field names and types',
+      documentation: 'View public documentation',
+      sample: 'View the public sample',
+    },
+    recoveryLinks: {
+      searchListings: 'Search listings directly',
+      postRequest: 'Post a request',
+      postRequestWithSellers: 'Post a request and sellers will come to you',
+    },
     safeOutcomes: {
-      no_matches: 'No matches were found for this query at this time. Try refining the query or browse the public Request Board.',
-      retrieval_unavailable: "I couldn't verify the marketplace results right now. Please try again.",
-      answer_unverified: "I couldn't verify that answer against current public information, so I won't show it.",
+      no_matches: 'No listings match yet. Try different words, or post a request so sellers can find you.',
+      retrieval_unavailable: "I couldn't check the marketplace results right now, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
+      answer_unverified: "I couldn't check that answer against current listings, so I won't guess. You can search listings directly, or post a request and sellers will come to you.",
       surface_disabled: 'The AI assistant is temporarily unavailable.',
-      rate_limited: 'The anonymous usage limit has been reached. Please try again later.',
+      rate_limited: "You've reached the chat limit for now. Please try again later. Meanwhile you can search listings directly, or post a request and sellers will come to you.",
+      message_too_long: 'That message is too long. Please shorten it and send it again.',
       unsupported_language: "That language isn't supported yet. Please choose English, Spanish, or Simplified Chinese.",
     },
   },
@@ -62,12 +104,33 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: 'Sesión anterior: los datos se comprobarán de nuevo cuando hagas una pregunta nueva.',
     accountRequired: 'Necesitas una cuenta para realizar este paso.',
     genericError: 'Ha ocurrido un error. Inténtalo de nuevo.',
+    homepageFallbackGuidance: 'No pude contrastar esa respuesta con los anuncios actuales. Prueba a preguntar por un sector concreto.',
+    aimDataSetupGuide: 'Guía de configuración de AIM Data',
+    listingRecovery: {
+      error: 'No pudimos obtener una respuesta.',
+      timeout: 'La respuesta está tardando más de lo esperado.',
+      guidance: 'Prueba con una pregunta más concreta sobre la descripción del anuncio, el formato de los datos o la licencia.',
+      search: 'Buscar en el catálogo',
+      support: 'Contactar con soporte',
+      signIn: 'Inicia sesión para preguntar al vendedor.',
+      noAnswer: 'allAI no pudo encontrar una respuesta fiable en la información pública del anuncio.',
+      retrievalUnavailable: 'allAI no pudo consultar la información pública del anuncio en este momento.',
+      schema: 'Ver nombres y tipos de campos',
+      documentation: 'Ver documentación pública',
+      sample: 'Ver la muestra pública',
+    },
+    recoveryLinks: {
+      searchListings: 'Buscar anuncios directamente',
+      postRequest: 'Publicar una solicitud',
+      postRequestWithSellers: 'Publicar una solicitud para que los vendedores contacten contigo',
+    },
     safeOutcomes: {
-      no_matches: 'No se encontraron resultados para esta consulta en este momento. Prueba a concretar la búsqueda o consulta el tablón público de solicitudes.',
-      retrieval_unavailable: 'No pude verificar los resultados del mercado ahora mismo. Inténtalo de nuevo.',
-      answer_unverified: 'No pude verificar esa respuesta con la información pública actual, por lo que no la mostraré.',
+      no_matches: 'Todavía no hay anuncios que coincidan. Prueba con otras palabras o publica una solicitud para que los vendedores te encuentren.',
+      retrieval_unavailable: 'No pude comprobar los resultados del mercado ahora mismo, así que no voy a adivinar. Puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
+      answer_unverified: 'No pude contrastar esa respuesta con los anuncios actuales, así que no voy a adivinar. Puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
       surface_disabled: 'El asistente de IA no está disponible temporalmente.',
-      rate_limited: 'Se alcanzó el límite de uso anónimo. Inténtalo de nuevo más tarde.',
+      rate_limited: 'Has alcanzado el límite del chat por ahora. Inténtalo de nuevo más tarde. Mientras tanto, puedes buscar anuncios directamente o publicar una solicitud para que los vendedores contacten contigo.',
+      message_too_long: 'Ese mensaje es demasiado largo. Acórtalo y envíalo de nuevo.',
       unsupported_language: 'Ese idioma aún no es compatible. Elige inglés, español o chino simplificado.',
     },
   },
@@ -83,12 +146,33 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
     historicalAnswer: '较早的会话——提出新问题时会重新核对事实。',
     accountRequired: '此步骤需要账户。',
     genericError: '抱歉，出现了问题。请重试。',
+    homepageFallbackGuidance: '无法根据当前商品核实该回答。请尝试询问具体行业。',
+    aimDataSetupGuide: 'AIM Data 设置指南',
+    listingRecovery: {
+      error: '暂时无法获取答案。',
+      timeout: '回答所需的时间比预期更长。',
+      guidance: '请尝试就商品描述、数据格式或许可提出更具体的问题。',
+      search: '搜索目录',
+      support: '联系支持',
+      signIn: '登录后向卖家提问。',
+      noAnswer: 'allAI 未能从商品公开信息中找到可靠答案。',
+      retrievalUnavailable: 'allAI 暂时无法查看商品的公开信息。',
+      schema: '查看字段名称和类型',
+      documentation: '查看公开文档',
+      sample: '查看公开样本',
+    },
+    recoveryLinks: {
+      searchListings: '直接搜索商品',
+      postRequest: '发布需求',
+      postRequestWithSellers: '发布需求，让卖家联系你',
+    },
     safeOutcomes: {
-      no_matches: '目前未找到与此查询匹配的结果。请尝试细化查询，或浏览公开的数据请求板。',
-      retrieval_unavailable: '目前无法验证市场检索结果，请稍后重试。',
-      answer_unverified: '无法根据当前公开信息验证该回答，因此不会显示该回答。',
+      no_matches: '暂时没有匹配的商品。请尝试其他关键词，或发布需求，让卖家找到你。',
+      retrieval_unavailable: '目前无法核实市场搜索结果，所以我不会猜测。你可以直接搜索商品，或发布需求，让卖家联系你。',
+      answer_unverified: '无法根据当前商品核实该回答，所以我不会猜测。你可以直接搜索商品，或发布需求，让卖家联系你。',
       surface_disabled: 'AI 助手暂时不可用。',
-      rate_limited: '匿名使用额度已达到上限，请稍后重试。',
+      rate_limited: '你目前已达到聊天使用上限，请稍后重试。在此期间，你可以直接搜索商品，或发布需求，让卖家联系你。',
+      message_too_long: '这条消息太长了。请缩短后重新发送。',
       unsupported_language: '暂不支持该语言。请选择英语、西班牙语或简体中文。',
     },
   },
@@ -96,6 +180,10 @@ export const ANONYMOUS_ALLAI_RESOURCES: Record<
 
 export function anonymousAllAIResources(locale: AnonymousAllAILocale) {
   return ANONYMOUS_ALLAI_RESOURCES[locale];
+}
+
+export function isAnonymousSafeOutcome(value: unknown): value is AnonymousSafeOutcome {
+  return typeof value === 'string' && Object.hasOwn(ANONYMOUS_ALLAI_RESOURCES.en.safeOutcomes, value);
 }
 
 export function preferredAnonymousAllAILocale(language?: string): AnonymousAllAILocale {

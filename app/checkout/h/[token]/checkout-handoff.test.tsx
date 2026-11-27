@@ -18,6 +18,7 @@ vi.mock('@/components/legal/TermsGate', () => ({ useTermsGate: () => ({ ensureTe
 vi.mock('@/components/legal/VersionedTermsCopy', () => ({ useServedTermsVersion: () => '1.2' }));
 vi.mock('@/components/ListingLicenseDisclosure', () => ({ default: ({ onVerificationChange }: { onVerificationChange: (verified: boolean) => void }) => <button onClick={() => onVerificationChange(true)}>Verify licence</button> }));
 vi.mock('@/api/listings', () => ({ getListing: mocks.listing }));
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 vi.mock('@/components/BuyButton', async importOriginal => {
   const original = await importOriginal<typeof import('@/components/BuyButton')>();
   return { ...original, default: (props: React.ComponentProps<typeof original.default>) => {
@@ -71,7 +72,11 @@ it('removes the purchase form when the displayed handoff expires', async () => {
 it.each([{ license: { ...license, sha256: 'd'.repeat(64) } }, { license: { ...license, covenant_sha256: 'd'.repeat(64) } },
   { license: { ...license, rider_sha256: 'd'.repeat(64) } }, { pricing: { price: 15, pricing_type: 'one_time' } }, { license: null }])('blocks changed snapshots %j', async fields => {
   mocks.listing.mockResolvedValue({ ...listing, ...fields }); render(<CheckoutHandoffReview />);
-  await screen.findByText('The terms changed'); expect(mocks.buy).not.toHaveBeenCalled();
+  await screen.findByText('The terms changed');
+  const listingLink = screen.getByRole('link', { name: 'Review the current listing' });
+  expect(listingLink.getAttribute('href')).toBe('/listings/listing-slug');
+  expect(listingLink.getAttribute('data-prefetch')).toBe('false');
+  expect(mocks.buy).not.toHaveBeenCalled();
 });
 it.each(['reserved', 'provider_unknown', 'failed', 'payment_conflict', 'refunded'] as const)('renders consumed %s without a fresh purchase or provider continuation', async checkout_status => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status, checkout_url: 'https://checkout.stripe.com/pay', order_id: 'order' });
@@ -174,11 +179,17 @@ it.each(['finalised', 'failed', 'payment_conflict', 'refunded'] as const)('never
   expect(mocks.buy).not.toHaveBeenCalled();
   await waitFor(() => expect(sessionStorage.getItem(key)).toBeNull());
 });
-it.each(['https://checkout.stripe.com/c/pay/test', 'https://evil.test/c/pay/test', null])('allows only a finalised safe provider URL: %s', async checkout_url => {
+it.each([
+  ['https://checkout.stripe.com/c/pay/test', true],
+  ['https://pay.ai.market/c/pay/test', true],
+  ['https://evil.test/c/pay/test', false],
+  ['https://pay.ai.market.evil.com/c/pay/test', false],
+  [null, false],
+] as const)('allows only a finalised safe provider URL: %s', async (checkout_url, allowed) => {
   mocks.get.mockResolvedValue({ ...handoff, status: 'consumed', checkout_status: 'finalised', checkout_url, order_id: 'order' });
   render(<CheckoutHandoffReview />); await screen.findByRole('link', { name: 'View order' });
   const payment = screen.queryByRole('link', { name: 'Continue to payment' });
-  expect(!!payment).toBe(checkout_url?.startsWith('https://checkout.stripe.com/') === true);
+  expect(!!payment).toBe(allowed);
   if (payment) expect(payment.getAttribute('referrerpolicy')).toBe('no-referrer');
 });
 it('requires sign-in and preserves only the handoff route without automatic purchase', async () => {
@@ -200,7 +211,8 @@ it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENC
   const error = new AxiosError('blocked');
   error.response = { status: 409, data: { detail: { code, web_path: '/listings/listing' } }, statusText: 'Conflict', headers: {}, config: {} as never };
   mocks.get.mockRejectedValue(error); render(<CheckoutHandoffReview />);
-  await screen.findByRole('link', { name: 'Review listing' });
+  const listingLink = await screen.findByRole('link', { name: 'Review listing' });
+  expect(listingLink.getAttribute('data-prefetch')).toBe('false');
   expect(screen.getByRole('alert').textContent).toContain('Checkout is blocked'); expect(mocks.buy).not.toHaveBeenCalled();
 });
 it('keeps the new route inert when the flag is off', () => {

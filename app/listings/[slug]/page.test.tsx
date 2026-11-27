@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import {CORRECTION_NOTICE, CORRECTION_NOTICE_BUYER} from '@/lib/publicPresentation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,16 +8,26 @@ import { within } from '@testing-library/react';
 import type { ListingDetail, ListingVersion } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
 import {documentFixture} from '@/tests/listingDocumentsFixture';
+import { renderListingMetadataHead } from '@/tests/listingMetadataHead';
+import { conflictingShortDescription, listingSummaryCases, markdownDescription, projectedSummary } from '@/tests/listingSummaryFixture';
 import type { ListingWithSamples } from './SampleFiles';
 import composed from '@/tests/fixtures/s1922-composed-detail.json';
 import {verifyCurrentListing} from '@/lib/publicPresentation';
+import { headers } from 'next/headers';
+
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock('next/font/local', () => ({ default: () => ({ className: 'font' }) }));
 
 const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
 });
+const permanentRedirect = vi.fn(() => {
+  throw new Error('NEXT_PERMANENT_REDIRECT');
+});
+const redirect = vi.fn();
 
 const fetchPublicListing = vi.fn();
-const fetchPublicListingDocuments = vi.fn<() => Promise<ListingDocument[]>>().mockResolvedValue([]);
+const fetchPublicListingDocuments = vi.fn<(listingId: string) => Promise<ListingDocument[]>>().mockResolvedValue([]);
 const fetchListingVersions = vi.fn();
 const fetchListingAccessWindowDays = vi.fn();
 const resolveListingUUID = vi.fn();
@@ -49,7 +60,8 @@ vi.mock('@/components/listings/BuyerAtAGlance', async (importOriginal) => {
 vi.mock('next/navigation', () => ({
   useRouter: () => ({refresh: vi.fn()}),
   notFound,
-  redirect: vi.fn(),
+  permanentRedirect,
+  redirect,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -78,17 +90,19 @@ vi.mock('@/components/UsdcLargePurchaseRequest', () => ({
   },
 }));
 
-const { default: ListingDetailPage, generateMetadata } = await import('./page');
+const { default: ListingDetailPage } = await import('./page');
+const {generateMetadata} = await import('./page');
+const documentationGuidance = 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
 
 describe('corrected backend 1ad9300 real composed detail wire',()=>{
   afterEach(()=>{vi.unstubAllGlobals();fetchPublicListing.mockReset();fetchListingVersions.mockReset();fetchPublicListingDocuments.mockReset().mockResolvedValue([]);});
-  it.each(composed.detail)('accepts actual builder/serializer $slug through strict fetch, page and metadata, preserving documents',async wire=>{
+  it.each(composed.detail.flatMap(wire => [wire, {...wire, approved_presentation: {...wire.approved_presentation, approved_display_html: '<h2>Approved coverage</h2><ul><li>Region</li></ul>', presentation_display_version: 'approved-display-v1'}}]))('accepts actual builder/serializer $slug through strict fetch, page and metadata, preserving documents',async wire=>{
     const before=JSON.stringify(wire);
     const actual=await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
     fetchPublicListing.mockImplementation(actual.fetchPublicListing);
     fetchListingVersions.mockResolvedValue([]);
     fetchPublicListingDocuments.mockResolvedValue([documentFixture()]);
-    const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>wire});
+    const fetch=vi.fn().mockImplementation(async()=>Response.json({...wire,summary:projectedSummary}));
     vi.stubGlobal('fetch',fetch);
     await expect(verifyCurrentListing(wire)).resolves.toBeUndefined();
     const params=Promise.resolve({slug:wire.slug});
@@ -99,8 +113,8 @@ describe('corrected backend 1ad9300 real composed detail wire',()=>{
     const docs=within(document.body).getByRole('region',{name:'Documentation'});
     expect(frame.compareDocumentPosition(docs)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(frame.getAttribute('srcdoc')).not.toContain('Technical guide');
-    expect(document.body.textContent).toContain('Platform-corrected licence display; original seller approval retained');
-    expect(await generateMetadata({params})).toMatchObject({title:wire.title,description:wire.description.slice(0,200)});
+    expect(document.body.textContent).toContain(CORRECTION_NOTICE_BUYER);
+    expect(await generateMetadata({params})).toMatchObject({title:wire.title,description:projectedSummary});
     for(const [,options] of fetch.mock.calls)expect(options).toEqual({cache:'no-store'});
     expect(JSON.stringify(wire)).toBe(before);
   });
@@ -175,6 +189,102 @@ function makeListing(overrides: Partial<ListingWithSamples> = {}): ListingWithSa
   };
 }
 
+describe('listing description metadata', () => {
+  afterEach(() => fetchPublicListing.mockReset());
+
+  it.each(listingSummaryCases())('resolves the page head for $state', async ({ summary }) => {
+    const listing = makeListing({ description: markdownDescription, short_description: conflictingShortDescription, summary });
+    fetchPublicListing.mockResolvedValue(await Response.json(listing).json());
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) });
+    const { metadata: root } = await import('../../layout');
+    const expected = summary === undefined ? conflictingShortDescription : summary;
+
+    for (const fields of [metadata, metadata.openGraph, metadata.twitter]) {
+      if (expected === null) expect(fields).not.toHaveProperty('description');
+      else expect(fields).toHaveProperty('description', expected);
+    }
+    const headDescription = expected === null ? root.description : expected || null;
+    expect(await renderListingMetadataHead(root, metadata, listing.slug)).toEqual(Array(3).fill(headDescription));
+  });
+
+  it('keeps the Markdown fallback for an old backend with empty short copy', async () => {
+    const description = `${markdownDescription} ${'More details. '.repeat(20)}`;
+    const listing = makeListing({ description, short_description: '' });
+    fetchPublicListing.mockResolvedValue(await Response.json(listing).json());
+    expect(await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) }))
+      .toHaveProperty('description', description.slice(0, 200));
+  });
+});
+
+describe('SSR listing harness User-Agent forwarding', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(headers).mockResolvedValue(new Headers());
+    fetchPublicListing.mockReset();
+    fetchListingAccessWindowDays.mockReset();
+    fetchListingVersions.mockReset();
+    fetchPublicListingDocuments.mockReset().mockResolvedValue([]);
+  });
+
+  it.each([
+    ['harness UA', 'Mozilla/5.0 ai-market-e2e-harness/0.1 private-browser-detail', true],
+    ['mixed-case harness UA (backend parity)', 'Mozilla/5.0 AI-MARKET-E2E-HARNESS/0.1', true],
+    ['normal UA', 'Mozilla/5.0 ordinary-browser', false],
+    ['missing UA', null, false],
+    ['partial token', 'ai-market-e2e', false],
+    ['similar token', 'ai-market-e2e-harnes/0.1', false],
+  ] as const)('forwards only the fixed token for %s across detail, metadata and access-window reads', async (_label, userAgent, harness) => {
+    const incoming = new Headers({
+      cookie: 'session=private-cookie',
+      authorization: 'Bearer private-auth',
+      'x-private-header': 'private-value',
+      'x-harness': 'ai-market-e2e-harness',
+    });
+    if (userAgent) incoming.set('user-agent', userAgent);
+    vi.mocked(headers).mockResolvedValue(incoming);
+
+    // Exercise the real API helpers through both server-component entry points.
+    const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListing.mockImplementation(actual.fetchPublicListing);
+    fetchListingAccessWindowDays.mockImplementation(actual.fetchListingAccessWindowDays);
+    fetchListingVersions.mockResolvedValue([{ id: 'version-1' }]);
+    const listing = makeListing();
+    const backendFetch = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ ...listing, access_window_days: 30 }),
+    });
+    vi.stubGlobal('fetch', backendFetch);
+    const params = Promise.resolve({ slug: listing.slug });
+
+    expect((await generateMetadata({ params })).title).toBe(listing.title);
+    await ListingDetailPage({ params });
+
+    expect(backendFetch).toHaveBeenCalledTimes(3);
+    const publicOptions = harness
+      ? { cache: 'no-store', headers: { 'User-Agent': 'ai-market-e2e-harness' } }
+      : { cache: 'no-store' };
+    expect(backendFetch).toHaveBeenNthCalledWith(1, expect.stringContaining(`/public/listings/${listing.slug}`), publicOptions);
+    expect(backendFetch).toHaveBeenNthCalledWith(2, expect.stringContaining(`/public/listings/${listing.slug}`), publicOptions);
+    expect(backendFetch).toHaveBeenNthCalledWith(3, expect.stringContaining(`/api/v1/listings/${listing.id}`),
+      harness ? publicOptions : { next: { revalidate: 10 } });
+    // Exact outgoing header equality also excludes cookies, auth and custom headers.
+    for (const [, options] of backendFetch.mock.calls) {
+      expect(options.headers).toEqual(harness ? { 'User-Agent': 'ai-market-e2e-harness' } : undefined);
+    }
+  });
+
+  it('uses the same successful full read for the page and metadata without reading the listing again', async () => {
+    const listing = makeListing({title: 'Forwarded listing title'});
+    vi.mocked(headers).mockResolvedValue(new Headers({
+      'x-aim-listing-data': encodeURIComponent(JSON.stringify(listing)),
+    }));
+    fetchListingVersions.mockResolvedValue([]);
+    const params = Promise.resolve({slug: listing.slug});
+    expect((await generateMetadata({params})).title).toBe(listing.title);
+    expect(renderToStaticMarkup(await ListingDetailPage({params}))).toContain(listing.title);
+    expect(fetchPublicListing).not.toHaveBeenCalled();
+  });
+});
+
 async function renderPage(listing: ListingDetail | null, versions: ListingVersion[] = []): Promise<string> {
   fetchPublicListing.mockResolvedValueOnce(listing);
   fetchListingVersions.mockResolvedValueOnce(versions);
@@ -184,6 +294,62 @@ async function renderPage(listing: ListingDetail | null, versions: ListingVersio
   });
   return renderToStaticMarkup(element);
 }
+
+describe('listing UUID canonical redirect', () => {
+  beforeEach(() => {
+    permanentRedirect.mockClear();
+    redirect.mockClear();
+    notFound.mockClear();
+    resolveListingUUID.mockReset();
+    fetchPublicListing.mockReset();
+    fetchListingVersions.mockReset();
+  });
+
+  it('permanently redirects an id-form request to the resolved slug', async () => {
+    const id = '123e4567-e89b-42d3-a456-426614174000';
+    const resolved = { slug: 'resolved-dataset' };
+    resolveListingUUID.mockResolvedValueOnce(resolved);
+
+    await expect(ListingDetailPage({ params: Promise.resolve({ slug: id }) }))
+      .rejects.toThrow('NEXT_PERMANENT_REDIRECT');
+
+    expect(resolveListingUUID).toHaveBeenCalledExactlyOnceWith(id);
+    expect(permanentRedirect).toHaveBeenCalledExactlyOnceWith(`/listings/${resolved.slug}`);
+    expect(fetchPublicListing).not.toHaveBeenCalled();
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it('renders a slug-form request without redirecting', async () => {
+    const html = await renderPage(makeListing());
+
+    expect(html).toContain('Test Dataset');
+    expect(resolveListingUUID).not.toHaveBeenCalled();
+    expect(permanentRedirect).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+it('disables purchase when the first of repeated version values is superseded', async () => {
+  const listing = makeListing();
+  const version = { published_at: '2026-06-01T00:00:00Z', object_count: 1, total_size_bytes: 100 };
+  buyButtonProps.mockClear();
+  fetchPublicListing.mockResolvedValueOnce(listing);
+  fetchListingVersions.mockResolvedValueOnce([
+    { ...version, version_id: 'active', version_label: 'v2', status: 'active' },
+    { ...version, version_id: 'superseded', version_label: 'v1', status: 'superseded' },
+  ]);
+
+  const html = renderToStaticMarkup(await ListingDetailPage({
+    params: Promise.resolve({ slug: listing.slug }),
+    searchParams: Promise.resolve({ version: ['superseded', 'active'] }),
+  }));
+
+  expect(html).toContain('value="superseded" selected=""');
+  expect(buyButtonProps).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    disabledReason: 'This version has been superseded and is shown for provenance only.',
+    versionId: undefined,
+  }));
+});
 
 function extractJsonLdScripts(html: string): string[] {
   return Array.from(
@@ -202,7 +368,9 @@ describe('seller presentation on the real listing route', () => {
     expect(html).toContain('Synthetic Co');
     expect(html).toContain('Stripe connected');
     expect(html).toContain('12 completed purchases');
+    expect(html).toContain('This count covers genuine completed paid purchases across this seller’s public listings');
     expect(html).toContain('4.7/5 from 9 ratings');
+    expect(html).toContain('Only eligible buyer ratings from genuine completed paid purchases across this seller’s public listings count.');
     expect(html).not.toContain('Privacy Score');
     expect(html).not.toContain('Trust Level');
   });
@@ -214,11 +382,13 @@ describe('seller presentation on the real listing route', () => {
     expect(absent).not.toMatch(/>Publisher<|completed purchases|No ratings yet|Stripe connected/);
   });
 
-  it('titles the legacy license card License', async () => {
+  it('shows the legacy CC-BY-4.0 license card without licensor attribution', async () => {
     document.body.innerHTML = await renderPage(makeListing());
     const page = within(document.body);
     const heading = page.getByRole('heading', { name: 'License', level: 3 });
     expect(within(heading.parentElement!).getByText('CC-BY-4.0')).toBeTruthy();
+    expect(page.queryByText('Licensor: verified seller via ai.market')).toBeNull();
+    expect(page.queryByText("The licensor's legal identity is recorded in the signed licence held by ai.market.")).toBeNull();
     expect(page.queryByRole('heading', { name: 'Trust Metrics' })).toBeNull();
   });
 
@@ -243,6 +413,78 @@ describe('real public listing route sample composition', () => {
   afterEach(() => {
     composition.enabled = false;
     document.body.innerHTML = '';
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['a document lookup returning 503', 503, []],
+    ['a successful empty list', 200, []],
+    ['a PDF with an invalid URL', 200, [documentFixture('data_sheet_pdf', {pdf_url: 'http://cdn.example.com/spec.pdf'})]],
+    ['a PDF with a missing URL', 200, [documentFixture('data_sheet_pdf', {pdf_url: null})]],
+  ] as const)('shows guidance and no documentation link for %s', async (_case, status, documents) => {
+    composition.enabled = false;
+    const api = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+    fetchPublicListingDocuments.mockImplementationOnce(api.fetchPublicListingDocuments);
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json(documents, {status}));
+    vi.stubGlobal('fetch', fetch);
+
+    document.body.innerHTML = await renderPage(makeListing({fulfillment_type: 'file_download'}));
+
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/documents'), {cache: 'no-store'});
+    const page = within(document.body);
+    expect(page.getByText(documentationGuidance)).toBeTruthy();
+    expect(page.queryByRole('link', {name: /public technical documentation|open data sheet/i})).toBeNull();
+    expect(page.queryByRole('button', {name: 'View sample'})).toBeNull();
+  });
+
+  it('links a valid PDF on its own and hides the guidance', async () => {
+    composition.enabled = false;
+    fetchPublicListingDocuments.mockResolvedValueOnce([documentFixture('data_sheet_pdf')]);
+    document.body.innerHTML = await renderPage(makeListing());
+
+    const page = within(document.body);
+    expect(page.getByRole('link', {name: /Open data sheet/}).getAttribute('href')).toBe('https://cdn.example.com/spec.pdf');
+    expect(page.getByRole('link', {name: 'Find the public data sheet'}).getAttribute('href')).toBe('#listing-documentation');
+    expect(document.getElementById('listing-documentation')?.contains(page.getByRole('link', {name: /Open data sheet/}))).toBe(true);
+    expect(page.queryByText(documentationGuidance)).toBeNull();
+  });
+
+  it('links public technical documentation and the public data sheet without the fallback notice', async () => {
+    fetchPublicListingDocuments.mockResolvedValueOnce([documentFixture(), documentFixture('data_sheet_pdf')]);
+    document.body.innerHTML = await renderPage(makeListing());
+
+    const page = within(document.body);
+    expect(page.getByRole('link', {name: 'Read public technical documentation'}).getAttribute('href')).toBe('#technical-documentation');
+    expect(document.getElementById('technical-documentation')?.textContent).toContain('Technical guide');
+    expect(page.getByRole('link', {name: /Open data sheet/}).getAttribute('href')).toBe('https://cdn.example.com/spec.pdf');
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+  });
+
+  it('links public sample files without the fallback notice', async () => {
+    document.body.innerHTML = await renderPage(makeListing({
+      sample_files: [{index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'available', url: 'https://sample.example/sample.csv'}],
+    }));
+
+    expect(within(document.body).getByRole('link', {name: 'sample.csv'}).getAttribute('href')).toBe('https://sample.example/sample.csv');
+    expect(document.getElementById('listing-sample-files')?.querySelector('a')?.textContent).toBe('sample.csv');
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: undefined}));
+  });
+
+  it('shows one availability notice when every sample file is unavailable', async () => {
+    const listing = makeListing({
+      schema_summary: null,
+      fulfillment_type: 'file_download',
+      sample_files: [
+        { index: 0, key_basename: 'sample.csv', size: 12, binding: 'manifest', state: 'unavailable', url: '/sample/0' },
+        { index: 1, key_basename: 'sample.json', size: 48, binding: 'manifest', state: 'unavailable', url: '/sample/1' },
+      ],
+    });
+    document.body.innerHTML = await renderPage(listing);
+
+    expect(within(document.body).getAllByText('The seller’s sample is currently unavailable.')).toHaveLength(1);
+    expect(within(document.body).queryByRole('heading', { name: /free sample/i })).toBeNull();
+    expect(within(document.body).queryByText(/free to download/i)).toBeNull();
+    expect(composition.sampleProps).toHaveBeenCalledWith(expect.objectContaining({emptyNotice: documentationGuidance}));
   });
 
   it.each(['normal', 'approved Workspace'] as const)(
@@ -329,7 +571,7 @@ describe('real public listing route sample composition', () => {
       }));
       expect(composition.sampleProps).toHaveBeenCalledTimes(1);
       expect(composition.sampleProps.mock.calls[0][0]).toEqual({
-        slug: listing.slug, listingId: listing.id,
+        slug: listing.slug, listingId: listing.id, emptyNotice: documentationGuidance,
       });
 
       const page = within(document.body);
@@ -338,6 +580,8 @@ describe('real public listing route sample composition', () => {
       expect(page.getAllByText('The seller can request a verified scan of this data.', {exact: true})).toHaveLength(1);
       const schemaHeading = page.getByRole('heading', { name: 'Schema Information', level: 2 });
       const schemaBlock = schemaHeading.parentElement!;
+      const schemaLink = page.getByRole('link', {name: 'View field names and types'});
+      expect(document.querySelector(schemaLink.getAttribute('href')!)).toBe(schemaBlock);
       expect(within(schemaBlock).getByRole('table')).toBeTruthy();
       expect(within(schemaBlock).getByText('region', { exact: true })).toBeTruthy();
       expect(within(schemaBlock).getByText('10 rows', { exact: true })).toBeTruthy();
@@ -369,6 +613,7 @@ it('marks inherited listings unavailable and preserves seller licence provenance
   expect(html).not.toContain('View sample');
   expect(html).not.toContain('Sample availability');
   expect(html).not.toContain('Free sample:');
+  expect(html).toContain(documentationGuidance);
 });
 
 it('keeps inherited seller provenance visible after terms acceptance', async () => {
@@ -459,7 +704,32 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
       license: 'ODC-BY-1.0',
       dataFormat: 'json_lines',
       fulfillmentType: 'file_download',
+      downloadDescription: '1 file (1.02 KB)',
     }));
+  });
+
+  it.each([
+    ['csv', '1 file'],
+    ['.zip', 'one ZIP archive'],
+  ])('uses the public format %s when it identifies the download package', async (format, label) => {
+    const html = await renderPage(makeListing({data_format: format, fulfillment_type: 'file_download'}), [{
+      version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z',
+      object_count: 1, total_size_bytes: 7_520_000, status: 'active',
+    }]);
+    expect(html).toContain(`${label[0].toUpperCase()}${label.slice(1)} (7.52 MB)`);
+    expect(buyButtonProps).toHaveBeenLastCalledWith(expect.objectContaining({downloadDescription: `${label} (7.52 MB)`}));
+  });
+
+  it('uses the same file count, formats and size in the version and purchase summaries', async () => {
+    const html = await renderPage(makeListing({ fulfillment_type: 'file_download', file_breakdown: [
+      { format: 'csv', count: 1, size_bytes: 4_000_000 },
+      { format: 'parquet', count: 2, size_bytes: 3_500_000 },
+    ] }), [{ version_id: 'v1', version_label: 'v1', published_at: '2026-06-01T00:00:00Z',
+      object_count: 3, total_size_bytes: 7_500_000, status: 'active' }]);
+
+    const label = '3 files (CSV, Parquet · 7.5 MB)';
+    expect(html).toContain(label);
+    expect(buyButtonProps).toHaveBeenLastCalledWith(expect.objectContaining({ downloadDescription: label }));
   });
 
   it('shows the absent-findings advisory on a paid listing without disabling purchase', async () => {
@@ -475,6 +745,7 @@ describe('ListingDetailPage Dataset JSON-LD', () => {
     expect(html).not.toContain('Not scored');
     expect(html).toContain('The seller can request a verified scan of this data.');
     expect(html).toContain('Review before buying');
+    expect(html).toMatch(/<a href="#ask-a-question"[^>]*>Ask a question about this listing<\/a>/);
     expect(html).toContain('No active scan findings are published for this listing');
     expect(html.toLowerCase()).not.toContain('quality score');
     expect(html).toContain('<button type="button">Buy</button>');
@@ -611,7 +882,7 @@ describe('fresh public payload transitions', () => {
     expect(page.queryByText('One current inventory record', {exact: true})).toBeNull();
     expect(fetchPublicListing).toHaveBeenCalledTimes(3);
     expect(fetchPublicListing.mock.calls).toEqual([
-      ['test-dataset'], ['test-dataset'], ['test-dataset'],
+      ['test-dataset', null], ['test-dataset', null], ['test-dataset', null],
     ]);
   });
 
@@ -626,7 +897,7 @@ describe('fresh public payload transitions', () => {
     expect(page.getByRole('region', {name: 'At a glance'})).toBeTruthy();
     expect(page.getByText('One recorded sale', {exact: true})).toBeTruthy();
     expect(fetchPublicListing).toHaveBeenCalledTimes(2);
-    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset'], ['test-dataset']]);
+    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset', null], ['test-dataset', null]]);
   });
 
   it('replaces scan findings on a later render of the same slug', async () => {
@@ -645,7 +916,7 @@ describe('fresh public payload transitions', () => {
     expect(page.getByText(second, {exact: true})).toBeTruthy();
     expect(page.queryByText(first, {exact: true})).toBeNull();
     expect(fetchPublicListing).toHaveBeenCalledTimes(2);
-    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset'], ['test-dataset']]);
+    expect(fetchPublicListing.mock.calls).toEqual([['test-dataset', null], ['test-dataset', null]]);
   });
 });
 
@@ -827,30 +1098,49 @@ describe('S1717 member_files and verification scope', () => {
   });
 });
 
-it.each([false,true])('shows one licence disclosure when seller terms are pending: %s',async pending=>{
- const license={code:'standard' as const,version:'1.0',params:{ai_training:true},summary:['Standard summary'],full_text_url:'/licenses/standard/1.0/ai-training',download_url:'/licenses/standard/1.0/ai-training?download=1',sha256:'a'.repeat(64),covenant_sha256:'b'.repeat(64),rider_sha256:null};
- const html=await renderPage(makeListing({license,license_status:pending?'pending_seller_terms':'bound'}));
- expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
+it.each([
+  ['bound', true],
+  ['pending_seller_terms', false],
+] as const)('shows one Standard licence disclosure and sets licensor visibility for %s', async (license_status, showLicensor) => {
+  const license = {
+    code: 'standard' as const,
+    version: '1.1',
+    params: { ai_training: true },
+    summary: ['Standard summary'],
+    full_text_url: '/licenses/standard/1.1/ai-training',
+    download_url: '/licenses/standard/1.1/ai-training?download=1',
+    sha256: 'a'.repeat(64),
+    covenant_sha256: 'b'.repeat(64),
+    rider_sha256: null,
+  };
+  const html = await renderPage(makeListing({ license, license_status }));
+  expect(html.match(/aria-label="Licence terms"/g)).toHaveLength(1);
+  expect(html.includes('Licensor: verified seller via ai.market')).toBe(showLicensor);
+  expect(html.includes('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.')).toBe(showLicensor);
+});
+
+it('shows the licensor attribution for a seller listing with a custom licence', async () => {
+  const sha256 = 'a'.repeat(64);
+  const license = {
+    code: 'custom' as const,
+    version: '1.0',
+    params: { ai_training: true },
+    summary: [],
+    full_text_url: `/licenses/custom/${sha256}`,
+    download_url: `/licenses/custom/${sha256}?download=1`,
+    sha256,
+    covenant_sha256: 'b'.repeat(64),
+    rider_sha256: 'c'.repeat(64),
+  };
+  const html = await renderPage(makeListing({ license }));
+  expect(html).toContain('Licensor: verified seller via ai.market');
+  expect(html).toContain('The licensor&#x27;s legal identity is recorded in the signed licence held by ai.market.');
 });
 
 it('uses the same UTC Published date in the header and version card near midnight',async()=>{
  const timestamp='2026-09-27T23:30:00Z';
  const html=await renderPage(makeListing({published_at:timestamp}),[{version_id:'v1',version_label:'v1',published_at:timestamp,object_count:1,total_size_bytes:1024,status:'active'}]);
  expect(html.match(/Published Sep 27, 2026/g)).toHaveLength(2);
-});
-
-
-it.each([null, 'https://ai.market/l/Code/card.png'])('uses share_card_url in both social metadata images when present: %s', async share_card_url => {
-  fetchPublicListing.mockResolvedValue(makeListing({ share_card_url }));
-  const metadata = await generateMetadata({ params: Promise.resolve({ slug: 'test-dataset' }) });
-  expect(metadata.openGraph).toHaveProperty('title');
-  if (share_card_url) {
-    expect(metadata.openGraph).toHaveProperty('images', [share_card_url]);
-    expect(metadata.twitter).toHaveProperty('images', [share_card_url]);
-  } else {
-    expect(metadata.openGraph).not.toHaveProperty('images');
-    expect(metadata.twitter).not.toHaveProperty('images');
-  }
 });
 
 it('renders the backend description instead of parsing buyer Markdown',async()=>{
@@ -876,7 +1166,7 @@ it('renders human category labels for primary, secondary and unknown categories'
     secondary_categories: ['ai-machine-learning', 'consumer-retail', 'future-category'],
   }));
   const page = within(document.body);
-  for (const label of ['Technology & Web', 'AI & Machine Learning', 'Consumer & Retail', 'Future Category']) {
+  for (const label of ['Technology & web', 'AI & machine learning', 'Consumer & retail', 'Future category']) {
     expect(page.getByText(label, {exact: true})).toBeTruthy();
   }
   expect(document.body.textContent).not.toMatch(/technology-web|ai-machine-learning|consumer-retail|future-category/);
@@ -958,8 +1248,9 @@ describe('S1922 actual current public rendering',()=>{
     const frame=container.querySelector('iframe[title="Listing with platform-corrected licence display"]');
     expect(frame?.getAttribute('srcdoc')).toBe(c.rendered_html);
     expect(frame?.getAttribute('sandbox')).toBe('');
-    expect(container.textContent).toContain('Platform-corrected licence display; original seller approval retained');
-    expect(container.textContent).toContain('Original seller evidence');
+    expect(container.textContent).toContain(CORRECTION_NOTICE_BUYER);
+    expect(container.querySelector('details')).toBeNull();
+    expect(container.textContent?.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
     expect(container.querySelector('iframe[title="Seller-approved listing"]')).toBeNull();
   });
   it('refuses partial or foreign correction HTML before producing an iframe',async()=>{
@@ -982,7 +1273,13 @@ it('emits actual backend current JSON-LD alongside unchanged original summary ev
  expect(jsonld.additionalProperty).toContainEqual(expect.objectContaining({name:'Licence display provenance',value:'Platform-corrected licence display; original seller approval retained',propertyID:c.correction_digest}));
  expect(fixture.at_a_glance.license.value).toBe('ai.market Standard Data Licence v1.0');
  expect(JSON.stringify(fixture.at_a_glance)).toBe(before);
- expect(html).toContain('Original approved summary evidence');
+ const container=document.createElement('div');container.innerHTML=html;
+ const glance=within(container).getByRole('region',{name:'At a glance'});
+ expect(glance.textContent).toContain('ai.market Standard Data Licence v1.1');
+ expect(glance.textContent).toContain(CORRECTION_NOTICE_BUYER);
+ expect(glance.textContent).not.toContain('v1.0');
+ expect(glance.textContent).not.toContain('provided by the seller');
+ expect(within(container).queryByText('Licensor: verified seller via ai.market')).toBeNull();
 });
 
 describe('C4 Documentation page integration', () => {
@@ -1011,5 +1308,104 @@ describe('C4 Documentation page integration', () => {
   it('keeps the legacy no-documents page unchanged', async () => {
     document.body.innerHTML = await renderPage(makeListing());
     expect(within(document.body).queryByRole('region', {name: 'Documentation'})).toBeNull();
+  });
+});
+
+it('shows the corrected licence in At a glance for an 801f3189-shaped public payload', async () => {
+  // Synthetic correction identifiers; the wire shape mirrors the reported listing.
+  const {default: fixture} = await import('@/tests/fixtures/s1931-listing-license-display.json');
+  const before = JSON.stringify(fixture);
+  const html = await renderPage(makeListing(fixture as Partial<ListingWithSamples>));
+  const container = document.createElement('div'); container.innerHTML = html;
+  expect(container.querySelector('meta[name="ai-market:licence-display-provenance"]')?.getAttribute('content')).toBe(CORRECTION_NOTICE);
+  const glance = within(container).getByRole('region', {name: 'At a glance'});
+  expect(glance.textContent).toContain('ai.market Standard Data Licence v1.1');
+  expect(glance.textContent).toContain(CORRECTION_NOTICE_BUYER);
+  expect(glance.textContent).not.toContain('v1.0');
+  expect(glance.textContent).not.toContain('provided by the seller');
+  expect(JSON.stringify(fixture)).toBe(before);
+});
+
+
+describe('S1950 approved description display', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it.each([false, true].flatMap(noindex =>
+    [false, true].flatMap(displayHtml =>
+      [false, true].flatMap(jsonLdEnabled =>
+        [false, true].map(jsonLdPresent => ({noindex, displayHtml, jsonLdEnabled, jsonLdPresent}))))))(
+    'carries observer provenance outside buyer text: %j', async ({noindex, displayHtml, jsonLdEnabled, jsonLdPresent}) => {
+      vi.stubEnv('NEXT_PUBLIC_ENABLE_DATASET_JSONLD', String(jsonLdEnabled));
+      vi.resetModules();
+      const {default: Page} = await import('./page');
+      const {default: wire} = await import('@/tests/fixtures/s1922-backend-wire.json');
+      const fixture = wire.public[2];
+      for (const corrected of [true, false]) {
+        const listing = makeListing({
+          id: fixture.corrected.listing_id, noindex,
+          jsonld: jsonLdPresent ? (corrected ? fixture.jsonld : makeListing().jsonld) : null,
+          approved_presentation: {
+            ...(corrected ? fixture.corrected : fixture.original),
+            ...(displayHtml ? {approved_display_html: '<p>Approved description</p>', presentation_display_version: 'approved-display-v1'} : {}),
+          } as ListingDetail['approved_presentation'],
+          ...(corrected ? {license: fixture.corrected.license_label, license_display: fixture.license_display as ListingDetail['license_display']} : {}),
+        });
+        fetchPublicListing.mockResolvedValueOnce(listing);
+        fetchListingVersions.mockResolvedValueOnce([]);
+        const html = renderToStaticMarkup(await Page({params: Promise.resolve({slug: listing.slug})}));
+        const container = document.createElement('div'); container.innerHTML = html;
+        const marker = container.querySelector('meta[name="ai-market:licence-display-provenance"]');
+        if (corrected) {
+          expect(html).toContain(CORRECTION_NOTICE);
+          expect(marker?.getAttribute('content')).toBe(CORRECTION_NOTICE);
+          expect(marker?.getAttribute('data-correction-digest')).toBe(fixture.license_display.correction_digest);
+        } else {
+          expect(html).not.toContain(CORRECTION_NOTICE);
+          expect(marker).toBeNull();
+        }
+        expect(extractJsonLdScripts(html)).toHaveLength(jsonLdEnabled && jsonLdPresent && !noindex ? 1 : 0);
+        container.querySelectorAll('script').forEach(script => script.remove());
+        expect(container.textContent).not.toContain(CORRECTION_NOTICE);
+        expect(container.querySelector('h1') == null).toBe(!displayHtml);
+      }
+    });
+
+  it.each([false, true])('renders formatted description through the normal path with collapsed immutable evidence (corrected: %s)', async corrected => {
+    const {default: wire} = await import('@/tests/fixtures/s1922-backend-wire.json');
+    const fixture = wire.public[2];
+    const presentation = corrected ? fixture.corrected : fixture.original;
+    const approved_display_html = '<h2>Coverage</h2><p>Approved <strong>description</strong>.</p><ul><li>First region</li><li>Second region</li></ul><ol><li>First step</li></ol>';
+    const listing = makeListing({
+      id: fixture.corrected.listing_id,
+      approved_presentation: {...presentation, approved_display_html, presentation_display_version: 'approved-display-v1'} as ListingDetail['approved_presentation'],
+      ...(corrected ? {license: fixture.corrected.license_label, license_display: fixture.license_display as ListingDetail['license_display']} : {}),
+    });
+    const container = document.createElement('div');
+    container.innerHTML = await renderPage(listing);
+    const description = container.querySelector('.prose.prose-sm');
+    expect(description?.querySelector('h2')?.textContent).toBe('Coverage');
+    expect(description?.querySelectorAll('ul li')).toHaveLength(2);
+    expect(description?.querySelector('ol li')?.textContent).toBe('First step');
+    expect(description?.firstElementChild?.className).not.toContain('whitespace-pre-wrap');
+    const details = container.querySelector('details');
+    const heading = within(container).getByRole('heading', {level: 1, name: listing.title});
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+    expect(heading.closest('details')).toBeNull();
+    expect(within(container).getByText('Business').closest('details')).toBeNull();
+    expect(within(container).getByText('test').closest('details')).toBeNull();
+    expect(details?.querySelector('summary')?.textContent).toBe('Original seller-approved version');
+    expect(details?.hasAttribute('open')).toBe(false);
+    expect(details?.querySelector('iframe')?.getAttribute('srcdoc')).toBe(presentation.rendered_html);
+    expect(details?.querySelector('iframe')?.getAttribute('sandbox')).toBe('');
+    expect(container.textContent?.split(CORRECTION_NOTICE_BUYER)).toHaveLength(corrected ? 2 : 1);
+  });
+
+  it('keeps invalid display markup out of the DOM using the existing validated fallback', async () => {
+    const {default: wire} = await import('@/tests/fixtures/s1922-backend-wire.json');
+    const container = document.createElement('div');
+    container.innerHTML = await renderPage(makeListing({approved_presentation: {
+      ...wire.public[2].original, approved_display_html: '<img src=x onerror=alert(1)>', presentation_display_version: 'approved-display-v1',
+    } as ListingDetail['approved_presentation']}));
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('.prose')?.textContent).toBe('Visible dataset description.');
   });
 });

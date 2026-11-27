@@ -4,7 +4,7 @@ The customer marketplace web app uses Next.js App Router, React, TypeScript and 
 
 ## Local development
 
-Local checks and frontend CI use Node.js 22; the committed Railway/Nixpacks build selects Node.js 20. Both use the npm lockfile. From this repository:
+Use Node.js 24.22.1 or later in the 24.x line (see `.node-version` and `package.json`) and the npm lockfile. From this repository:
 
 ```sh
 npm ci
@@ -27,7 +27,51 @@ npm run build
 npm start
 ```
 
+### Tests from a pinned detached worktree
+
+Install dependencies in that checkout; do not link `node_modules` from another
+worktree. With Node 24 selected, run from the checkout root (a detached HEAD is fine):
+
+```sh
+rtk npm ci
+rtk npm test
+rtk npm run typecheck
+rtk npm run lint
+```
+
+For just Settings recovery and the original 16:14:32–33 double-refresh regression:
+
+```sh
+rtk npm test -- api/client.refresh-race.test.ts app/dashboard/settings/session-recovery.integration.test.tsx app/dashboard/settings/SellerAuthority.read-order.test.tsx app/dashboard/settings/SellerAuthority.test.tsx app/dashboard/settings/SellerPublicName.test.tsx app/dashboard/settings/page.test.tsx components/PendingProfileChanges.test.tsx
+```
+
+The integrated tests keep the real auth coordinator, interceptors, API wrappers
+and section controllers; only HTTP transport and unrelated UI dependencies are
+substituted. No backend or credentials are required. They cover all four Settings
+readers with persistent 401s and successful refreshes, a successful refresh/replay,
+one automatic re-read after external session rotation, manual retry, and the
+absence of further reads after focus or subsequent rotations.
+
 `npm start` serves the built application. `nixpacks.toml` runs `npm ci` and `npm run build`, then starts it with `npm start`. Railway deploys the main branch; deployment and browser acceptance guidance lives in the existing runbooks below.
+
+The root layout self-hosts Plus Jakarta Sans upright variable WOFF2 in `app/fonts/`,
+using weights 400–800 and `display: swap` while retaining the body font class.
+The font and adjacent `OFL.txt` are unmodified from
+[tokotype/PlusJakartaSans at 18d1cd2f7ea10481919d2f05c1f7064b7307fc26](https://github.com/tokotype/PlusJakartaSans/tree/18d1cd2f7ea10481919d2f05c1f7064b7307fc26):
+`fonts/webfonts/PlusJakartaSans[wght].woff2` (Git blob `eebac44580986b89ed54b1dfc23209ce82ebc073`, 60,612 bytes)
+and `OFL.txt` (Git blob `ea69b0ca12a02556c436680ea0a159efb7a748fa`, 4,402 bytes).
+The SIL Open Font License 1.1 accompanies the font; builds need no Google font request.
+
+The deploy receipt workflow reads GitHub deployment records with its job token
+(`contents: read`, `deployments: read`). It requires the latest Railway App
+production attempt/status, current HTTP 200, and the exact independently served
+`/api/build-revision` before submitting a deploy receipt. Provider failure emits
+the existing alert; provider or revision uncertainty finishes non-success.
+Observation retains the initial 120-second wait and bounded 180-second window
+(up to 12 samples). Truncated API lists remain unverified. Receipt acceptance,
+refusal, or transport uncertainty is reported separately from verification;
+an ambiguous POST is never retried automatically. Live provider and release
+verification remain owner work.
 
 ## Operating guides
 

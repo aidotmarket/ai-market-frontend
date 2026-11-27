@@ -19,6 +19,7 @@ export default function AllAINextStep({ nextStep }: { nextStep: AnonymousNextSte
       )}
       <Link
         href={href}
+        prefetch={href.startsWith('/listings/') ? false : undefined}
         className="inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
       >
         {nextStep.label}

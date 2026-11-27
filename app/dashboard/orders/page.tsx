@@ -1,5 +1,6 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { hasDeliveredOrderNavigation, orderStatusPresentation } from '@/lib/order-status';
@@ -95,7 +96,7 @@ export default function OrdersListPage() {
         setTxMap(map);
       })
       .catch(() => {
-        if (current()) setError('Failed to load orders.');
+        if (current()) setError(customerLoadError("orders"));
       })
       .finally(() => {
         if (current()) setLoading(false);
@@ -153,7 +154,8 @@ export default function OrdersListPage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchases</h1>
           <h2 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h2>
-          <p className="text-gray-500 mb-6">You haven&apos;t purchased any datasets yet.</p>
+          <p className="text-gray-500">You haven&apos;t purchased any datasets yet.</p>
+          <p className="mt-2 mb-6 text-gray-500">After a purchase, any available licence record appears with that order here.</p>
           <Link
             href="/find-data"
             className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"

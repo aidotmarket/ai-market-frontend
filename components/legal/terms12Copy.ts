@@ -14,3 +14,6 @@ export const CARD_SELL_SUMMARY = "Sellers list free and pay nothing until a buye
 export const CARD_BUYER_TOTAL = 'The price shown is what you pay. No added card fee.';
 export const CARD_HOME_FEES = 'We deduct 5% and the card processing fee from the seller; the buyer pays the price shown plus any applicable tax.';
 export const CARD_REGISTER_CHECKOUT = 'Checkout shows the final total, the listing price plus any applicable tax, before you choose whether to confirm.';
+
+// Published Terms 1.2 explanatory aside.
+export const CARD_PAYOUT_EXAMPLE = "Example: on a $1,000 sale, ai.market's 5% commission is $50 and the card fee is about 2.9% + 30¢ (about $29), so the seller receives about $921. This is an example; the actual card fee varies.";

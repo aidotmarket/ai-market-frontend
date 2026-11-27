@@ -2,13 +2,14 @@
 
 import {useEffect,useRef,useState} from 'react';
 import axios from 'axios';
+import {deliveryNotice,deliveryPermitted} from '@/lib/order-purchase-evidence';
 import {requestWorkspaceDownload,requestWorkspaceFile,validateWorkspaceDownload, type WorkspaceDownload as DownloadBundle} from '@/api/sellerWorkspaceDownload';
 import {saveWorkspaceFile,streamWorkspaceDownload,WorkspaceDownloadError,type DownloadDirectory} from './workspaceDownloadStream';
 
 type PickerWindow = Window & {showDirectoryPicker?: (options:{mode:'readwrite'}) => Promise<DownloadDirectory>};
 const FALLBACK_MAX_BYTES=1_000_000_000;
-export default function WorkspaceDownload({orderId,requestGrant=requestWorkspaceDownload}: {
-  orderId:string;requestGrant?: (orderId:string,signal:AbortSignal,requestId?:string) => Promise<DownloadBundle>;
+export default function WorkspaceDownload({orderId,deliveryAccessState,requestGrant=requestWorkspaceDownload}: {
+  orderId:string;deliveryAccessState?:string|null;requestGrant?: (orderId:string,signal:AbortSignal,requestId?:string) => Promise<DownloadBundle>;
 }) {
   const [supported,setSupported]=useState<boolean|null>(null);
   const [busy,setBusy]=useState(false);
@@ -19,6 +20,8 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
   const working=useRef(false);
   const pendingStart=useRef<string|null>(null);
   const pendingUrls=useRef(new Map<number,string>());
+  const allowed=deliveryPermitted(deliveryAccessState);
+  useEffect(() => {if (!allowed) controller.current?.abort();},[allowed]);
   const revokePendingUrls=() => {
     for (const [timer,url] of pendingUrls.current) {
       window.clearTimeout(timer);URL.revokeObjectURL(url);
@@ -30,7 +33,7 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
     return () => {mounted.current=false;controller.current?.abort();revokePendingUrls();};
   },[]);
   const download=async () => {
-    if (working.current) return;
+    if (working.current || !allowed) return;
     const picker=(window as PickerWindow).showDirectoryPicker;
     working.current=true;setBusy(true);setError('');
     setMessage(picker ? 'Choose a folder inside Downloads, or create one in the folder picker.' : 'Checking access to your purchase…');
@@ -97,11 +100,15 @@ export default function WorkspaceDownload({orderId,requestGrant=requestWorkspace
         if (operation.signal.aborted || (choosingFolder && failure instanceof DOMException && failure.name === 'AbortError')) setMessage(`Download cancelled. Any completed files remain in ${picker ? 'your selected folder' : 'your Downloads location'}.`);
         else if (failure instanceof WorkspaceDownloadError && failure.code === 'file_changed') setError('The seller’s file has changed since approval. Contact the seller before downloading it again.');
         else if (failure instanceof WorkspaceDownloadError && failure.code === 'memory') setError('This file is too large for your browser to hold in memory. Use Chrome, Edge, or another browser that can save to a folder to download large files.');
-        else if (axios.isAxiosError(failure) && [403,404].includes(failure.response?.status ?? 0)) setError('Download access is not available for this purchase. Check the order or contact support.');
+        else if (axios.isAxiosError(failure) && [403,404].includes(failure.response?.status ?? 0)) setError('This purchase does not currently include download access. Check your order details, or contact support for help.');
         else setError(`The download could not be completed. Any completed files remain in ${picker ? 'your selected folder' : 'your Downloads location'}. Check your purchase before trying again.`);
       }
     } finally { working.current=false;if (mounted.current) setBusy(false); }
   };
+  if (!allowed) return <section aria-label="Download purchased files" className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
+    <h2 className="text-lg font-semibold">Delivery unavailable</h2>
+    <p role="alert">{deliveryNotice(deliveryAccessState)}</p>
+  </section>;
   return <section aria-label="Download purchased files" className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
     <h2 className="text-lg font-semibold text-gray-900">Download your files</h2>
     <p className="text-sm text-gray-600">Your files download directly from the seller’s storage to your browser. One download allowance covers all files in this purchase.</p>

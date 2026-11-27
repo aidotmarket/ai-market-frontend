@@ -4,6 +4,12 @@ import wire from '@/tests/fixtures/s1922-backend-wire.json';
 import {verifyPresentation, verifyCurrentListing, correctionFields, CORRECTION_KIND} from './publicPresentation';
 const digest=(html:string)=>createHash('sha256').update(html,'utf8').digest('hex');
 describe('actual backend19ff184 original and corrected presentation readers',()=>{
+  it.each(wire.public)('rejects null HTML on public $original.presentation_version presentations',async fixture=>{
+    for(const presentation of [fixture.original,fixture.corrected]) {
+      await expect(verifyPresentation({...presentation,rendered_html:null})).rejects.toThrow();
+      await expect(verifyCurrentListing({id:fixture.corrected.listing_id,approved_presentation:{...presentation,rendered_html:null}})).rejects.toThrow();
+    }
+  });
   it.each(wire.public)('admits supported original and correction $original.presentation_version',async fixture=>{
     const before=JSON.stringify(fixture);
     expect(await verifyPresentation(fixture.original)).toEqual(fixture.original);
@@ -50,4 +56,20 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     await expect(verifyCurrentListing({...listing,approved_presentation:wire.public[2].original})).rejects.toThrow();
     expect(c.presentation_kind).toBe(CORRECTION_KIND);
   });
+});
+
+
+it.each(wire.public)('accepts optional approved display fields without changing immutable evidence $original.presentation_version', async fixture => {
+  for (const original of [fixture.original, fixture.corrected]) {
+    const display = {...original, approved_display_html: '<h2>Coverage</h2><ul><li>Region</li></ul>', presentation_display_version: 'approved-display-v1'};
+    expect(await verifyPresentation(display)).toEqual(display);
+    expect(await verifyPresentation({...original, approved_display_html: null, presentation_display_version: null})).toMatchObject(original);
+    await expect(verifyPresentation({...display, rendered_html: original.rendered_html + 'tampered'})).rejects.toThrow();
+    await expect(verifyPresentation({...display, approved_display_html: 42})).rejects.toThrow();
+    await expect(verifyPresentation({...display, presentation_display_version: 'unknown'})).rejects.toThrow();
+    const missingVersion: Record<string, unknown> = {...display};
+    delete missingVersion.presentation_display_version;
+    await expect(verifyPresentation(missingVersion)).rejects.toThrow();
+    await expect(verifyPresentation({...display, presentation_display_version: null})).rejects.toThrow();
+  }
 });

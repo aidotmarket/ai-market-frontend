@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import {authSessionIdentity,useAuthStore} from '@/store/auth';
 import SellerPreparation from './SellerPreparation';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
@@ -7,7 +8,6 @@ import type {PreparedListing} from '@/api/sellerListingPreparation';
 import {notifyCapabilitiesChanged} from '@/components/onboarding/SellerSetupProgressBar';
 import {useEffect,useRef,useState} from 'react';
 import {useListingFlow} from './GuidedListingFlow';
-import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import axios from 'axios';
 import {readPublication,publishListing,type PublicationState} from '@/api/sellerListingPublication';
@@ -72,16 +72,15 @@ export default function SellerPublication({approval,active,rendered,sampleCount=
     <h3 className="text-lg font-semibold text-gray-900">Publish your listing</h3>
     {approval.draft_id&&<SellerPreparation key={approval.id} approval={approval} active={active} onChange={setPreparation} onLoaded={setPreparationResolved} published={!!publication} publicationBlocked={!state||busy||publicationUnresolved}/>}
     {!state && !error && <p role="status" className="text-sm text-gray-600">Checking publication status…</p>}
-    {publication ? <><p role="status" className="text-sm text-green-900">{publication.status==='published' && publication.is_listed?'Your listing is published and available in the marketplace.':'This review has been published. The listing is currently not available in marketplace discovery.'}</p>
+    {publication ? <><p role="status" className="text-sm text-green-900">{publication.status==='published' && publication.is_listed?'Your listing is published and available in the marketplace.':'This review has been published, but the listing is hidden from search. Open Your listings to manage its availability.'}</p>
       {approval.sample_decision==='member_files'&&<p className="text-sm text-gray-700">{sampleCount===0?'No free sample files':`${sampleCount} free sample ${sampleCount===1?'file is':'files are'} part of the purchased set.`}</p>}
       <a href={`/listings/${encodeURIComponent(publication.slug)}`} className="inline-block text-sm font-medium text-indigo-700 underline">View separately attributed current public display: {publication.title}</a>
       {approval.license_selection?.kind==='custom'&&<a href={`/listings/${encodeURIComponent(publication.slug)}`} className="text-sm text-indigo-700 underline">Open verified custom licence on listing</a>}
-      {publication.listing_id && (publication.status === 'published' || publication.status === 'unlisted') && <SellerShareControls key={publication.status} listingId={publication.listing_id} />}
       {publication.listing_id && <SellerAtAGlance listingId={publication.listing_id} slug={publication.slug} active={active} />}</> : state && <>
       <p className="text-sm leading-6 text-gray-700">Your approved listing is private. Publishing makes the approved description, tags, price and licence public. The files stay in your storage.</p>
       {approval.license_selection&&<p className="text-sm text-gray-700">{approval.license_selection.kind==='standard'?'Standard (recommended)':'My own licence'} · AI/ML training {approval.license_selection.ai_training?'allowed':'not allowed'} · covenant and authority {approval.license_selection.seller_acceptance.authority_confirmed?'confirmed':'not confirmed'}</p>}
       {state.publication_available ? <button type="button" onClick={publish} disabled={busy || !active || !rendered || stale || !licenseReady || (!!approval.draft_id && !preparationResolved) || (!!preparation && preparation.status!=='signed')} className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy?'Publishing…':'Publish this listing'}</button>:
-        <p className="text-sm text-gray-600">Publication is not available in this Workspace yet. Your approval is saved.</p>}
+        <p className="text-sm text-gray-600">Publishing is not enabled in this workspace yet. Your approval is saved. Open Your listings to manage your listings. <Link href="/dashboard/listings" className="underline">Your listings</Link></p>}
       {state.publication_available&&!busy&&(!rendered||stale||!licenseReady)&&<p role="status" className="text-sm text-amber-900">{stale?'Refresh the saved review and approve it again before publishing.':!licenseReady?(approval.license_selection&&!isCompleteLicenseSelection(approval.license_selection)?'Complete and save the licence choice in Choose a licence before publishing.':'Your legal identity and licence choice are not yet saved together. Return to Choose a licence before publishing.'):'Wait for the saved review to finish loading before publishing.'}</p>}
     </>}
     {!!authError&&<NativeSellerAuth error={authError} />}

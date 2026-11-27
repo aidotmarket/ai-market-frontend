@@ -29,7 +29,7 @@ export const FALLBACK_MARKETPLACE_CATEGORIES: readonly MarketplaceCategoryDefini
     description: 'Commerce, merchandising, pricing, inventory, and consumer behavior data.',
   },
   {
-    name: 'Real Estate',
+    name: 'Real estate',
     value: 'real-estate',
     description: 'Property, location, mobility, construction, and market intelligence.',
   },
@@ -52,18 +52,18 @@ export const FALLBACK_MARKETPLACE_CATEGORIES: readonly MarketplaceCategoryDefini
 
 // Public listing payloads carry slugs; the category-name endpoint is seller-only.
 const listingCategoryNames: Readonly<Record<string, string>> = {
-  'financial-data': 'Financial Data',
-  'alternative-data': 'Alternative Data',
-  'consumer-retail': 'Consumer & Retail',
-  'healthcare-life-sciences': 'Healthcare & Life Sciences',
-  'geospatial-location': 'Geospatial & Location',
-  'environmental-climate': 'Environmental & Climate',
-  'technology-web': 'Technology & Web',
-  'government-public': 'Government & Public',
-  'energy-utilities': 'Energy & Utilities',
-  'transportation-logistics': 'Transportation & Logistics',
-  'real-estate-property': 'Real Estate & Property',
-  'ai-machine-learning': 'AI & Machine Learning',
+  'financial-data': 'Financial data',
+  'alternative-data': 'Alternative data',
+  'consumer-retail': 'Consumer & retail',
+  'healthcare-life-sciences': 'Healthcare & life sciences',
+  'geospatial-location': 'Geospatial & location',
+  'environmental-climate': 'Environmental & climate',
+  'technology-web': 'Technology & web',
+  'government-public': 'Government & public',
+  'energy-utilities': 'Energy & utilities',
+  'transportation-logistics': 'Transportation & logistics',
+  'real-estate-property': 'Real estate & property',
+  'ai-machine-learning': 'AI & machine learning',
 };
 
 function normalizeCategory(value: string) {
@@ -81,7 +81,8 @@ export function formatMarketplaceCategoryName(value: string) {
   return value
     .trim()
     .replace(/[-_]+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .toLowerCase()
+    .replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
 function categoryDescription(value: string, name: string) {

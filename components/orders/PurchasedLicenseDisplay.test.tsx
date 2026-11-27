@@ -6,6 +6,7 @@ import PurchasedLicenseDisplay from './PurchasedLicenseDisplay';
 import {AxiosError} from 'axios';
 const client=vi.hoisted(()=>({get:vi.fn()}));
 vi.mock('@/api/client',()=>({api:client}));
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 it('silently omits a missing deployment endpoint through the real API reader',async()=>{
  const f=wire.purchased[0];
@@ -18,14 +19,14 @@ it.each([401,403,500])('retains the unavailable notice for HTTP %s',async status
  const f=wire.purchased[0];
  client.get.mockRejectedValue(new AxiosError('error',undefined,undefined,undefined,{status} as never));
  render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
- await screen.findByText(/Purchased licence display is unavailable/);
+ await screen.findByText(/We could not load your purchased licence summary/);
  expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
 });
 it.each(['private, max-age=900','public, no-store'])('keeps malformed/cacheable evidence visible as an error: %s',async policy=>{
  const f=wire.purchased[0];
  client.get.mockResolvedValue({data:f,headers:{'cache-control':policy}});
  render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
- await screen.findByText(/Purchased licence display is unavailable/);
+ await screen.findByText(/We could not load your purchased licence summary/);
  expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
 });
 it.each(wire.purchased)('shows purchased $instrument_display.license_version separately from original seller evidence and current public display',async f=>{
@@ -37,16 +38,30 @@ it.each(wire.purchased)('shows purchased $instrument_display.license_version sep
  expect(screen.getByText('Purchased instrument display; original accepted evidence retained.')).toBeTruthy();
  expect(screen.getByText('Original seller evidence for the purchased version; not a checkout receipt.')).toBeTruthy();
  expect(screen.getByTitle('Original seller evidence for purchased version').getAttribute('srcdoc')).toContain('ai.market Standard Data Licence v1.0');
- expect(screen.getByRole('link',{name:'Current public display (may differ from this purchase)'}).getAttribute('href')).toBe(`/listings/${f.listing_id}`);
+ const listingLink = screen.getByRole('link',{name:'Current public display (may differ from this purchase)'});
+ expect(listingLink.getAttribute('href')).toBe(`/listings/${f.listing_id}`);
+ expect(listingLink.getAttribute('data-prefetch')).toBe('false');
  expect(screen.queryByRole('checkbox')).toBeNull();
  expect(screen.queryByRole('button')).toBeNull();
  expect(JSON.stringify(f)).toBe(before);
+});
+it.each(wire.purchased)('renders gated $retained_presentation.presentation.presentation_version metadata without a preview',async f=>{
+ const gated={...f,retained_presentation:{...f.retained_presentation!,presentation:{...f.retained_presentation!.presentation,rendered_html:null}}};
+ client.get.mockResolvedValue({data:gated,headers:{'cache-control':'private, no-store'}});
+ const view=render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
+ await screen.findByRole('region',{name:'Purchased licence display'});
+ expect(screen.getByText(f.instrument_display!.license_label!)).toBeTruthy();
+ expect(screen.getByText(f.instrument_display!.notice)).toBeTruthy();
+ expect(screen.getByText(f.retained_presentation!.notice)).toBeTruthy();
+ expect(screen.getByText(`Original snapshot digest: ${f.original_snapshot_hash}`)).toBeTruthy();
+ expect(view.container.querySelector('iframe')).toBeNull();
+ expect(screen.queryByText('We could not load your purchased licence summary just now. Open the original licence record on this order for your terms.')).toBeNull();
 });
 it('never renders unverified retained HTML and aborts the prior order read',async()=>{
  const f=wire.purchased[0];
  client.get.mockResolvedValue({data:{...f,retained_presentation:{...f.retained_presentation,presentation:wire.public[2].corrected}},headers:{'cache-control':'private, no-store'}});
  const view=render(<PurchasedLicenseDisplay orderId={f.order_id} listingId={f.listing_id}/>);
- await screen.findByText(/Purchased licence display is unavailable/);
+ await screen.findByText(/We could not load your purchased licence summary/);
  expect(screen.queryByTitle('Original seller evidence for purchased version')).toBeNull();
  const signal=client.get.mock.calls[0][1].signal;
  view.unmount();expect(signal.aborted).toBe(true);

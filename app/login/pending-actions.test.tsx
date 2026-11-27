@@ -66,7 +66,7 @@ it('keeps a handoff continuation local when requesting the email sign-in link', 
   useAuthStore.setState({ isAuthenticated: false });
   vi.mocked(requestMagicLink).mockResolvedValue({ message: 'Sent' });
   render(<LoginForm />);
-  fireEvent.click(screen.getByRole('button', { name: 'Sign in or sign up with email' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Use an email link' }));
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'buyer@example.test' } });
   fireEvent.click(screen.getByRole('button', { name: 'Send email link' }));
   await waitFor(() => expect(requestMagicLink).toHaveBeenCalledExactlyOnceWith('buyer@example.test', 'register'));

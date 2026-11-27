@@ -1,6 +1,7 @@
 const base = 'inline-flex min-h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 enabled:active:translate-y-px disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none motion-reduce:transition-none sm:w-auto';
 
 export const primaryButtonClass = `${base} border-[#3F51B5] bg-[#3F51B5] text-white enabled:hover:bg-[#34449C] enabled:active:bg-[#293880]`;
+export const dangerButtonClass = `${base} border-red-700 bg-red-700 text-white enabled:hover:bg-red-800 enabled:active:bg-red-900 focus-visible:ring-red-600`;
 export const secondaryButtonClass = `${base} border-gray-300 bg-white text-gray-700 enabled:hover:bg-gray-50 enabled:active:bg-gray-100`;
 export const dangerSecondaryButtonClass = `${base} border-red-300 bg-white text-red-700 enabled:hover:bg-red-50 enabled:active:bg-red-100 focus-visible:ring-red-600`;
 export const buttonRowClass = 'flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4';

@@ -2,11 +2,13 @@
 
 import {useEffect,useRef,useState} from 'react';
 import {
-  LICENSE_HASHES, licenseHashesFor, isCurrentLicenseSelection, CURRENT_COVENANT_VERSION, createStandardSelection, submitCustomLicenseText, licenseDocumentPath,
+  LICENSE_HASHES, licenseHashesFor, isCurrentLicenseSelection, CURRENT_COVENANT_VERSION, COVENANT_CONFIRMATION, createStandardSelection, submitCustomLicenseText, licenseDocumentPath,
   type LicenseSelection,
 } from '@/api/listingLicenses';
 import {MAX_CUSTOM_LICENSE_CODEPOINTS,canonicalizeCustomText} from '@/lib/customLicenseVerification';
-import {getSellerLegalIdentity,refreshSellerLegalIdentity,saveSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
+import {getSellerLegalIdentity,refreshSellerLegalIdentity,saveSellerLegalIdentity,readLatestSellerSigner,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH,type SellerLegalIdentity} from '@/api/sellerLegalIdentity';
+import {authSessionIdentity,useAuthStore} from '@/store/auth';
+import {authSessionOwner,isAuthSessionOwner} from '@/lib/auth-session-owner';
 import LicenseReadingDialog from '@/components/LicenseReadingDialog';
 import CustomLicenseMarkdown from '@/components/CustomLicenseMarkdown';
 import CustomLicenseEditor from './CustomLicenseEditor';
@@ -36,6 +38,24 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   const [legalError,setLegalError]=useState('');
   const current=useRef({value,onChange,onIdentityStateChange});
   current.current={value,onChange,onIdentityStateChange};
+  const account=useAuthStore(authSessionIdentity);
+  const signerEdited=useRef(false);
+  const needsSigner=(!legalIdentityEnabled||legalState.kind==='known')&&
+    !value.seller_acceptance.signer_name&&!value.seller_acceptance.signer_title&&!value.seller_acceptance.authority_confirmed;
+  useEffect(()=>{
+    if(!account||!needsSigner||signerEdited.current)return;
+    const owner=authSessionOwner();
+    const controller=new AbortController();
+    void readLatestSellerSigner(controller.signal).then(signer=>{
+      if(!signer||controller.signal.aborted||signerEdited.current||!isAuthSessionOwner(owner)||
+          authSessionIdentity(useAuthStore.getState())!==account)return;
+      const {value:selection,onChange:change}=current.current;
+      const acceptance=selection.seller_acceptance;
+      if(acceptance.signer_name||acceptance.signer_title||acceptance.authority_confirmed)return;
+      change({...selection,seller_acceptance:{...signer,authority_confirmed:false}});
+    }).catch(()=>{ /* Signer details can be entered manually. */ });
+    return()=>controller.abort();
+  },[account,needsSigner]);
   const mounted=useRef(true);
   const setIdentityState=(state:IdentityState)=>{if(mounted.current){setLegalState(state);current.current.onIdentityStateChange?.(state);}};
   const applyIdentity=(result:SellerLegalIdentity)=>{
@@ -76,9 +96,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       else if(kind==='unavailable')setIdentityState({kind:'unavailable'});
       else if(kind==='invalid')setLegalError('Check the legal name and country');
       else {
-        const detail=(error as {response?:{data?:{detail?:{message?:unknown}}}})?.response?.data?.detail;
-        const reason=typeof detail?.message==='string'&&detail.message.length<=200?detail.message:null;
-        setLegalError(reason??(kind==='required'?'Your legal name and country are not saved. Check them and try again.':'Your legal details could not be changed. They may already be used in a licence acceptance. Contact support if they need correction.'));
+        setLegalError((kind==='required'?'Your legal name and country are not saved. Check them and try again.':'Your legal details could not be changed. They may already be used in a licence acceptance. Contact support if they need correction.'));
       }
     } finally {setSavingLegal(false);}
   }
@@ -91,8 +109,10 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
   const submissionVersion = useRef(0);
   const identity = value.seller_acceptance;
   const stale = !isCurrentLicenseSelection(value);
-  const updateIdentity = (field: 'signer_name' | 'signer_title' | 'authority_confirmed', next: string | boolean) =>
+  const updateIdentity = (field: 'signer_name' | 'signer_title' | 'authority_confirmed', next: string | boolean) => {
+    if(field!=='authority_confirmed')signerEdited.current=true;
     onChange({...value, seller_acceptance: {...identity, [field]: next}});
+  };
   const invalidateCustom = (changes: Partial<LicenseSelection> = {}) => {
     submissionVersion.current += 1;
     setCustomPreview(null);
@@ -214,7 +234,7 @@ export default function SellerLicenseSelection({value, onChange, disabled = fals
       <label className="text-sm font-medium text-gray-900">Signer full name<input aria-label="Signer full name" value={identity.signer_name} onChange={event => updateIdentity('signer_name', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
       <label className="text-sm font-medium text-gray-900">Signer title<input aria-label="Signer title" value={identity.signer_title} onChange={event => updateIdentity('signer_title', event.target.value)} className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
     </div>
-    <label className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed && !stale} disabled={stale || value.kind === 'custom' && !value.license_document_id} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>I have read the selected licence and Marketplace Listing Covenant. I confirm the covenant facts and that I am authorised to accept them for the seller.</span></label>
+    <label className="flex items-start gap-3 text-sm leading-6 text-gray-700"><input aria-label="Confirm covenant and authority" type="checkbox" checked={identity.authority_confirmed && !stale} disabled={stale || value.kind === 'custom' && !value.license_document_id} onChange={event => updateIdentity('authority_confirmed', event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-700" /><span>{COVENANT_CONFIRMATION}</span></label>
     {value.kind==='custom'&&!value.license_document_id&&<p className="text-xs text-gray-600">Save your custom licence text before confirming.</p>}
   </fieldset></div>;
 }

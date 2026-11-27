@@ -1,6 +1,8 @@
+import { plainTextExcerpt } from '@/lib/plainTextExcerpt';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSampleCard from '@/components/listings/GeneratedSampleCard';
 import { generatedSampleState } from '@/lib/generatedSample';
+import { formatPrice } from '@/lib/format';
 import Link from 'next/link';
 import SellDataCta from '@/components/SellDataCta';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
@@ -18,15 +20,20 @@ import { HomepageActivityTickerBeacons } from '@/components/HomepageActivityTick
 import { HeroSearch } from '@/components/HeroSearch';
 import type { DataRequestListItem } from '@/types';
 
+const marketplaceSummary =
+  'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
+const homepageTitle = 'ai.market — SEO for data';
+const heroSubhead = 'Where AI search finds data.';
+const heroFee = 'Free to list; 5% only when it sells.';
+const homepageDescription = `${heroSubhead} ${heroFee}`;
+
 export const metadata: Metadata = {
   alternates: { canonical: '/' },
-  title: { absolute: 'ai.market — Sell data without giving it away' },
-  description:
-    'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
+  title: { absolute: homepageTitle },
+  description: homepageDescription,
   openGraph: {
-    title: 'ai.market — Sell data without giving it away',
-    description:
-      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
+    title: homepageTitle,
+    description: homepageDescription,
     url: 'https://ai.market',
     siteName: 'ai.market',
     images: ['/og/home.png'],
@@ -34,9 +41,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ai.market — Sell data without giving it away',
-    description:
-      'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.',
+    title: homepageTitle,
+    description: homepageDescription,
     images: ['/og/home.png'],
   },
 };
@@ -47,7 +53,7 @@ const LANDING_JSONLD = [
     '@type': 'Organization',
     name: 'ai.market',
     url: 'https://ai.market',
-    description: 'Non-custodial B2B data marketplace.',
+    description: marketplaceSummary,
     sameAs: ['https://github.com/maxrobbins'],
   },
   {
@@ -55,8 +61,7 @@ const LANDING_JSONLD = [
     '@type': 'WebSite',
     name: 'ai.market',
     url: 'https://ai.market',
-    description:
-      'The non-custodial B2B data marketplace.',
+    description: marketplaceSummary,
     potentialAction: {
       '@type': 'SearchAction',
       target: 'https://ai.market/find-data?q={search_term_string}',
@@ -308,16 +313,17 @@ export default async function LandingPage() {
               {/* Left */}
               <div>
                 <span className="inline-flex items-center rounded-full bg-[#E1F5EE] px-3 py-1 text-xs font-semibold text-[#0F6E56]">
-                  Non-Custodial Protocol
+                  Data marketplace for businesses
                 </span>
                 <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-5xl lg:text-6xl">
-                  Sell data without{' '}
-                  <span className="text-[#3F51B5]">giving it away.</span>
+                  SEO{' '}
+                  <span className="text-[#3F51B5]">for data.</span>
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-[#4A4A4A] max-w-xl">
-                  ai.market is a non-custodial B2B marketplace. Your data stays on your
-                  infrastructure. Buyers and AI agents find it through search or post a request,
-                  and buyers download purchased files directly from the seller.
+                  {heroSubhead}
+                </p>
+                <p className="mt-3 max-w-xl text-sm font-semibold text-[#0F6E56]">
+                  {heroFee}
                 </p>
                 <HeroSearch />
                 <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">
@@ -344,8 +350,7 @@ export default async function LandingPage() {
               {/* Right - trust visual card */}
               <div className="card-texture rounded-2xl border border-[#E8E8E8] bg-[#FAFAFA] p-8">
                 <p className="text-base leading-7 text-[#1A1A1A]">
-                  Your datasets become discoverable by AI agents and visible in AI-powered
-                  search, so buyers find you, not the other way around.
+                  Your listings are published in formats AI agents and AI search can read, so buyers can find you.
                 </p>
                 <div className="my-6 h-px bg-[#E8E8E8]" />
                 <ul className="space-y-5">
@@ -366,8 +371,11 @@ export default async function LandingPage() {
                   <li className="flex items-start gap-3">
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
                     <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Found everywhere.</p>
-                      <p className="text-sm text-[#666666]">Listings surface in AI search worldwide, and buyers&apos; agents can transact directly.</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Found in AI search.</p>
+                      <p className="text-sm text-[#666666]">
+                        Listings are open to AI search and agents. A buyer&apos;s agent can find data and start a purchase;
+                        the buyer confirms and pays in the browser.
+                      </p>
                     </div>
                   </li>
                 </ul>
@@ -484,7 +492,7 @@ export default async function LandingPage() {
                       Buyer demand, live now
                     </h2>
                     <p className="mt-3 text-lg text-[#666666]">
-                      See what verified buyers need and respond with a relevant listing.
+                      See what email-verified buyers need and respond with a relevant listing.
                     </p>
                   </div>
                   <Link href="/requests" className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]">
@@ -506,7 +514,7 @@ export default async function LandingPage() {
                         ))}
                       </div>
                       <h3 className="mt-4 text-lg font-bold leading-snug text-[#1A1A1A]">
-                        {request.title || 'Buyer data request'}
+                        {plainTextExcerpt(request.title) || 'Buyer data request'}
                       </h3>
                       {request.is_sample === true && (
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
@@ -514,7 +522,7 @@ export default async function LandingPage() {
                         </span>
                       )}
                       <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#666666]">
-                        {request.description}
+                        {plainTextExcerpt(request.description)}
                       </p>
                       <p className="mt-5 text-sm font-semibold text-[#3F51B5]">Review request →</p>
                     </Link>
@@ -570,17 +578,24 @@ export default async function LandingPage() {
                   <Link
                     key={l.id}
                     href={`/listings/${l.slug}`}
+                    prefetch={false}
                     className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
                   >
                     <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}>
                       {formatMarketplaceCategoryName(l.category)}
                     </span>
                     <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">{l.title ?? 'Untitled'}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">{l.short_description ?? ''}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">
+                      {'summary' in l ? l.summary ?? '' : l.short_description ?? ''}
+                    </p>
                     <div className="flex-1" />
                     <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
                       <span className="text-[#888888]">{formatMarketplaceCategoryName(l.category)}</span>
-                      <span className="font-semibold text-[#1A1A1A]">{l.price === 0 ? 'Free' : `$${l.price}`}</span>
+                      {l.price != null && (
+                        <span className="font-semibold text-[#1A1A1A]">
+                          {l.price === 0 ? 'Free' : formatPrice(l.price, { omitTrailingZeros: true })}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 ))

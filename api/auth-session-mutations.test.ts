@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ post: vi.fn(), token: '' as string | null }));
-vi.mock('./client', () => ({ api: {}, refreshAccessToken: vi.fn() }));
+vi.mock('./client', () => ({ api: {}, refreshAccessToken: vi.fn(), currentSessionRefresh: () => null }));
 vi.mock('axios', async original => ({ ...await original<typeof import('axios')>(), default: { create: () => ({ post: mocks.post }) } }));
 vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ token: mocks.token }) } }));
 import { setup2FA, verify2FASetup, disable2FA, regenerateBackupCodes } from './auth';

@@ -10,7 +10,7 @@ import {WorkspaceOverview} from './WorkspaceOverview';
 import {categoryRows,guidedCapabilities,guidedConnection,emptyGuidedDraft} from '@/tests/guidedListingFixture';
 import {createStandardSelection} from '@/api/listingLicenses';
 const mocks=vi.hoisted(()=>({source:vi.fn(),categories:vi.fn(),review:vi.fn(),publication:vi.fn(),publish:vi.fn(),account:vi.fn(),load:vi.fn(),start:vi.fn(),draft:null as unknown}));
-vi.mock('@/api/sellerListingSource',()=>({readListingSource:mocks.source,readSellerCategories:mocks.categories}));
+vi.mock('@/api/sellerListingSource',()=>({readListingSource:async(id?:string)=>({source:await mocks.source(id),current_draft_id:id??null}),readSellerCategories:mocks.categories}));
 vi.mock('@/api/sellerListingReview',()=>({readListingReview:mocks.review}));
 vi.mock('@/api/sellerListingPublication',()=>({readPublication:mocks.publication,publishListing:mocks.publish}));
 vi.mock('@/api/capabilities',()=>({getCapabilities:mocks.account}));
@@ -18,7 +18,7 @@ vi.mock('./SellerListingDraftStore',()=>({useSellerListingDraft:()=>({draft:mock
 const source={version:1,connection_current:true,content:{connection_id:guidedConnection.id,connection_version:1,objects:[],version_mode:'current' as const}};
 const navigate=vi.fn();
 function Harness(){return <GuidedListingFlow capabilities={guidedCapabilities} connections={[guidedConnection]} view="manage" navigate={navigate}><WorkspaceOverview connections={[guidedConnection]} view="manage" onViewChange={navigate}/><Probe/></GuidedListingFlow>;}
-function Probe(){const flow=useListingFlow();return <button onClick={()=>flow?.sourceSaved({...source,version:2})}>Save new files</button>;}
+function Probe(){const flow=useListingFlow();return <button onClick={()=>flow?.sourceSaved({source:{...source,version:2},current_draft_id:null})}>Save new files</button>;}
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 beforeEach(()=>{
  mocks.start.mockResolvedValue({draft_id:"new",version:1,content:emptyGuidedDraft});
@@ -37,6 +37,15 @@ describe('checklist reads owned at the workspace page',()=>{
   const sections=screen.getByRole('navigation',{name:'Workspace sections'});expect(within(sections).getAllByRole('button').map(b=>b.textContent)).toEqual(['Connect your storage','Choose your files','Choose a licence','Describe and price','Review','Publish','Your listings']);
   fireEvent.click(within(checklist).getByRole('button',{name:'Next: Review →'}));expect(navigate).toHaveBeenCalledWith('review');expect(mocks.review).toHaveBeenCalledOnce();
   const collapse=within(checklist).getByRole('button',{name:/Listing checklist/});expect(collapse.getAttribute('aria-expanded')).toBe('false');fireEvent.click(collapse);expect(collapse.getAttribute('aria-expanded')).toBe('true');
+ });
+ it('labels the first unfinished step To do · Next and done steps Complete',async()=>{
+  mocks.source.mockResolvedValue(null);mocks.draft=null;render(<Harness/>);
+  const checklist=screen.getByRole('complementary',{name:'Listing checklist'});
+  await waitFor(()=>expect(within(checklist).getByRole('button',{name:'Next: Choose your files →'})).toBeTruthy());
+  const storage=within(checklist).getByRole('button',{name:/1\. Connect your storage/});
+  expect(storage.textContent).toContain('Complete');expect(storage.textContent).not.toContain('Next');
+  expect(within(checklist).getByRole('button',{name:/2\. Choose your files/}).textContent).toContain('To do · Next');
+  expect(within(checklist).queryByText(/Up to date/)).toBeNull();
  });
  it('shows server refusal and marks Describe and price as Next',async()=>{
   mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:['tags'],approval:null});render(<Harness/>);
@@ -108,12 +117,12 @@ it('retains the published link while starting and retries the same request ident
  await waitFor(()=>expect(navigate).toHaveBeenCalledWith('data'));
  expect(mocks.start.mock.calls[1][0]).toBe(mocks.start.mock.calls[0][0]);
 });
-it('shows the DRAFT_IN_PROGRESS backend sentence',async()=>{
+it('shows customer guidance for a draft already in progress',async()=>{
  const message='You already have a listing in progress. Finish or discard it first.';
  mocks.review.mockResolvedValue({draft_version:2,source_version:1,missing_fields:[],approval:{id:'a'}});
  mocks.publication.mockResolvedValue({publication_available:true,publication:{approval_id:'a',slug:'first'}});
  mocks.start.mockRejectedValueOnce({response:{data:{detail:{code:'DRAFT_IN_PROGRESS',message}}}});
  render(<Harness/>);await screen.findByRole('link',{name:'Published: view your listing'});
  fireEvent.click(screen.getByRole('button',{name:'Start another listing'}));
- expect((await screen.findByRole('alert')).textContent).toBe(message+' Retry');expect(navigate).not.toHaveBeenCalled();
+ expect((await screen.findByRole('alert')).textContent).toBe('You already have a listing draft in progress. Open Seller Workspace to finish it before starting another. Retry');expect(navigate).not.toHaveBeenCalled();
 });

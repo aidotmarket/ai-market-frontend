@@ -1,17 +1,21 @@
 'use client';
 
+import VectoraizImport from '@/components/seller-workspace/VectoraizImport';
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
-import { getCapabilities } from '@/api/capabilities';
-import { createPairingCode, listSellerGateways } from '@/api/sellerGateways';
+import { loadGatewayAccess } from '@/lib/gateway-access';
+import SellerSetupPanel from '@/components/gateways/SellerSetupPanel';
+import { createPairingCode } from '@/api/sellerGateways';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { dateLabel, gatewaySummary } from '@/components/gateways/presentation';
 import type { PairingCode, SellerGateway } from '@/types/sellerGateway';
 
 export default function GatewaysPage() {
   const { isAuthenticated, hydrated } = useAuthStore();
-  const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'setup' | 'unavailable' | 'error'>('loading');
+  const [missingSteps, setMissingSteps] = useState<string[]>([]);
   const [gateways, setGateways] = useState<SellerGateway[]>([]);
   const [pairing, setPairing] = useState<PairingCode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,14 +25,11 @@ export default function GatewaysPage() {
     if (!hydrated || !isAuthenticated) return;
     let cancelled = false;
     async function load() {
-      try {
-        const capabilities = await getCapabilities();
-        if (capabilities.seller.effective_status !== 'active') throw new Error('seller inactive');
-        const result = await listSellerGateways();
-        if (!cancelled) { setGateways(result); setState('ready'); }
-      } catch {
-        if (!cancelled) setState('unavailable');
-      }
+      const access = await loadGatewayAccess();
+      if (cancelled) return;
+      if (access.state === 'ready') setGateways(access.gateways);
+      if (access.state === 'setup') setMissingSteps(access.missingSteps);
+      setState(access.state);
     }
     void load();
     return () => { cancelled = true; };
@@ -45,8 +46,11 @@ export default function GatewaysPage() {
   }
 
   if (state === 'loading') return <p>Loading…</p>;
+  if (state === 'setup') return <SellerSetupPanel missingSteps={missingSteps} />;
+  if (state === 'error') return <p role="alert">We could not load gateways. Please refresh and try again.</p>;
   if (state === 'unavailable') return <p>Gateways are not available.</p>;
   return <section className="space-y-6">
+    <VectoraizImport mode="gateway" />
     <div className="flex items-center justify-between gap-4">
       <h1 className="text-2xl font-semibold">Gateways</h1>
       <button type="button" onClick={addGateway} className="rounded bg-indigo-700 px-4 py-2 text-white">Add a gateway</button>

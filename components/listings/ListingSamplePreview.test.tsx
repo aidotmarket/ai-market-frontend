@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import {readFileSync} from 'node:fs';
-import {disclosureBytes, platformBytes} from '@/lib/listing-preview/verifier';
+import * as verifier from '@/lib/listing-preview/verifier';
 import {testSign} from '@/tests/previewFixture';
 import {webcrypto} from 'node:crypto';
-import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {makeCurrentPreview, makeFreshnessTransitionPreview, makePreview} from '@/tests/previewFixture';
 import {fetchPreviewKeys, fetchPreviewManifest, fetchSignedSummaryPayload} from '@/lib/api';
@@ -29,6 +29,32 @@ it('has byte-empty markup without a manifest and no seller fetch', async () => {
   vi.mocked(fetchPreviewManifest).mockResolvedValue(null); const v = render(<ListingSamplePreview slug="none" listingId={f.manifest.listing_id} />);
   await waitFor(() => expect(fetchPreviewManifest).toHaveBeenCalledOnce()); expect(v.container.innerHTML).toBe(''); expect(fetchPackage).not.toHaveBeenCalled();
 });
+it('shows the listing guidance whenever the preview has no sample to show', async () => {
+  const emptyNotice = 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
+  vi.mocked(fetchPreviewManifest).mockResolvedValueOnce(null).mockResolvedValueOnce(f.manifest).mockRejectedValueOnce(new TypeError('offline'));
+  await act(async () => {render(<ListingSamplePreview slug="sample" listingId={f.manifest.listing_id} emptyNotice={emptyNotice} />);});
+  expect(screen.getByText(emptyNotice)).toBeTruthy();
+  await visibility('visible');
+  expect(await screen.findByRole('button', {name: 'View sample'})).toBeTruthy();
+  expect(screen.queryByText(emptyNotice)).toBeNull();
+  await visibility('visible');
+  expect(screen.getByText(emptyNotice)).toBeTruthy();
+  expect(screen.queryByRole('button', {name: 'View sample'})).toBeNull();
+  expect(fetchPackage).not.toHaveBeenCalled();
+});
+it('shows the load failure and listing guidance together when verification fails after View sample', async () => {
+  const emptyNotice = 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
+  const failureMessage = 'We could not load this sample just now. Ask the seller for a sample using the question form on this listing.';
+  vi.spyOn(verifier, 'verifyManifest').mockRejectedValueOnce(new Error('verification failed'));
+  render(<ListingSamplePreview slug="sample" listingId={f.manifest.listing_id} emptyNotice={emptyNotice} />);
+
+  fireEvent.click(await screen.findByRole('button', {name: 'View sample'}));
+
+  await screen.findByText(failureMessage);
+  const status = within(screen.getByRole('status'));
+  expect(status.getByText(failureMessage)).toBeTruthy();
+  expect(status.getByText(emptyNotice)).toBeTruthy();
+});
 it('does not fetch the seller before an explicit request or when keys are 503/absent', async () => {
   await mount(); expect(fetchPackage).not.toHaveBeenCalled();
   cleanup(); vi.mocked(fetchPreviewKeys).mockResolvedValue(null); const v = render(<ListingSamplePreview slug="no-keys" listingId={f.manifest.listing_id} />);
@@ -52,7 +78,7 @@ it('waits for verification and the final manifest before rendering any row', asy
 it('hides on tab departure and stays hidden after withdrawal on return', async () => {
   await view(); await visibility('hidden'); expect(screen.queryByRole('table')).toBeNull();
   vi.mocked(fetchPreviewManifest).mockResolvedValue(null); await visibility('visible');
-  await screen.findByText('Sample unavailable'); expect(screen.queryByRole('table')).toBeNull();
+  await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.'); expect(screen.queryByRole('table')).toBeNull();
 });
 it('revalidates a same-size independently retained checkpoint on tab return', async () => {
   await view(); await visibility('hidden'); expect(screen.queryByRole('table')).toBeNull();
@@ -61,15 +87,15 @@ it('revalidates a same-size independently retained checkpoint on tab return', as
 });
 it('stays hidden after an offline return and rejects an expired manifest on fresh request', async () => {
   await view(); await visibility('hidden'); vi.mocked(fetchPreviewManifest).mockRejectedValue(new TypeError('offline'));
-  await visibility('visible'); await screen.findByText('Sample unavailable'); expect(screen.queryByRole('table')).toBeNull();
+  await visibility('visible'); await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.'); expect(screen.queryByRole('table')).toBeNull();
   cleanup(); vi.mocked(fetchPreviewManifest).mockResolvedValue({...f.manifest, valid_until: '2026-09-17T00:00:00.000000Z'});
-  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.');
   expect(screen.queryByRole('table')).toBeNull(); expect(fetchPackage).toHaveBeenCalledTimes(1);
 });
 it('keeps rows hidden with neutral UI when the device clock is behind the signed generation time', async () => {
   vi.spyOn(Date, 'now').mockReturnValue(Date.parse(f.manifest.generated_at) - 1_000);
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'}));
-  await screen.findByText('Sample unavailable');
+  await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.');
   expect(screen.queryByRole('table')).toBeNull();
   expect(screen.queryByText('clock_uncertain')).toBeNull();
   expect(fetchPackage).not.toHaveBeenCalled();
@@ -78,7 +104,7 @@ it('rejects offline and late replies after a return timeout', async () => {
   await view(); await visibility('hidden'); vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
   let finish!: (v: typeof f.manifest) => void; vi.mocked(fetchPreviewManifest).mockReturnValue(new Promise(r => {finish = r;}));
   await visibility('visible'); await act(async () => {await vi.advanceTimersByTimeAsync(5000);});
-  expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText('Sample unavailable')).toBeTruthy();
+  expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.')).toBeTruthy();
   await act(async () => {finish(f.manifest);}); expect(screen.queryByRole('table')).toBeNull();
 });
 it('has no untouched-tab polling and clears on bfcache return before revalidation', async () => {
@@ -91,7 +117,7 @@ it('has no untouched-tab polling and clears on bfcache return before revalidatio
 });
 it('never contacts the seller after a platform-signature failure', async () => {
   f.manifest.approval.platform_envelope.signature = 'A'.repeat(86);
-  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.');
   expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
 });
 
@@ -107,21 +133,21 @@ it('binds descriptions and units from the current signed payload before insertio
   for (const field of ['summary_hash', 'render_hash', 'source_revision'] as const) {
     f.manifest[field] = signed[field]; e.binding[field] = signed[field];
   }
-  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
+  e.seller_signature = testSign(verifier.disclosureBytes(e.binding)); e.signature = testSign(verifier.platformBytes(e));
   vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(signed);
   await view(); expect(screen.getByText('Crop label')).toBeTruthy();
   expect(fetchSignedSummaryPayload).toHaveBeenCalledWith('current-canonical', expect.any(AbortSignal));
 });
 it('silently uses identity-only columns when the signed payload is absent or has another hash', async () => {
   vi.mocked(fetchSignedSummaryPayload).mockResolvedValue(JSON.parse(readFileSync('tests/fixtures/preview/signed-summary-payload.json', 'utf8')));
-  await view(); expect(screen.queryByText('Crop label')).toBeNull(); expect(screen.queryByText('Sample unavailable')).toBeNull();
+  await view(); expect(screen.queryByText('Crop label')).toBeNull(); expect(screen.queryByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.')).toBeNull();
 });
 
 it('hides all rows before seller contact for an F2-signed attestation digest mismatch', async () => {
   const e = f.manifest.approval.platform_envelope;
   e.binding.scan_attestation_digest = '0'.repeat(64);
-  e.seller_signature = testSign(disclosureBytes(e.binding)); e.signature = testSign(platformBytes(e));
-  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('Sample unavailable');
+  e.seller_signature = testSign(verifier.disclosureBytes(e.binding)); e.signature = testSign(verifier.platformBytes(e));
+  await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'})); await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.');
   expect(fetchPackage).not.toHaveBeenCalled(); expect(screen.queryByRole('table')).toBeNull();
   expect(screen.queryByText('scan_mismatch')).toBeNull();
 });
@@ -157,6 +183,6 @@ it('renders effective re-attestation while retaining the original authenticated 
 it('hides malformed source overlays before requesting the seller package', async () => {
   f.manifest.source_stale = true; f.manifest.source_stale_since = null;
   await mount(); fireEvent.click(screen.getByRole('button', {name: 'View sample'}));
-  await screen.findByText('Sample unavailable'); expect(fetchPackage).not.toHaveBeenCalled();
+  await screen.findByText('We could not load this sample just now. Ask the seller for a sample using the question form on this listing.'); expect(fetchPackage).not.toHaveBeenCalled();
   expect(screen.queryByRole('table')).toBeNull();
 });

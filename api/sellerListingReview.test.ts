@@ -1,6 +1,6 @@
 import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { readListingReview, readReviewSourcePage, approveListingReview, type ListingReview } from './sellerListingReview';
+import { readListingReview, readReviewSourcePage, approveListingReview, LISTING_CONFIRMATION_V4, type ListingReview } from './sellerListingReview';
 import {nativeClient,nativeSession} from './connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {id, instrument} from '@/tests/fixtures/seller-authority';
@@ -10,7 +10,7 @@ import {preparationRequest, prepareListing} from './sellerListingPreparation';
 import {readSigningInstruments, signInstruments} from './seller-batch-signing';
 import {createStandardSelection} from './listingLicenses';
 const client = vi.hoisted(() => ({get:vi.fn(),post:vi.fn()}));
-vi.mock('./client', () => ({api:client}));
+vi.mock('./client', async original => ({ ...await original<typeof import('./client')>(), api: client }));
 const html = '<!doctype html><html><body>Regional retail — $25.00</body></html>';
 const review = {presentation_version:'seller-listing-review-v2', rendered_html:html, render_hash:createHash('sha256').update(html).digest('hex')};
 beforeEach(() => {vi.resetAllMocks();vi.stubGlobal('crypto',webcrypto);});
@@ -97,6 +97,22 @@ const complete={...review,review_hash:page.review_hash,source_hash:page.source_h
 it('accepts a bounded first page for the full 22,000-file review',async()=>{
  client.get.mockResolvedValue({data:complete});
  expect(await readListingReview(new AbortController().signal)).toBe(complete);
+});
+it('verifies v4 with a saved licence confirmation and the existing sample statement',async()=>{
+ const confirmedAt='2026-11-23T10:00:00.000Z';
+ const selection={...createStandardSelection(),seller_acceptance:{signer_name:'Sam Seller',signer_title:'Director',authority_confirmed:true}};
+ const value:ListingReview={...complete,confirmation_version:LISTING_CONFIRMATION_V4,license_selection:selection,
+  covenant_confirmed_at:confirmedAt,sample_decision:'member_files',sample_object_indices:[0],
+  sample_status:{state:'selected',files:[{index:0,sha256:'c'.repeat(64),key_basename:'sample.csv',size:1}]},
+  confirmation_statements:{ownership_confirmed:'Ownership',privacy_confirmed:'Privacy',price_confirmed:'Price',
+   license_confirmed:'Licence',public_disclosure_confirmed:'Disclosure',sample_files_confirmed:'Sample files'}};
+ const signal=new AbortController().signal;
+ client.get.mockResolvedValueOnce({data:value});
+ expect(await readListingReview(signal)).toBe(value);
+ client.get.mockResolvedValueOnce({data:{...value,license_selection:createStandardSelection()}});
+ await expect(readListingReview(signal)).rejects.toThrow('Saved review could not be verified');
+ client.get.mockResolvedValueOnce({data:{...value,confirmation_statements:{...value.confirmation_statements,sample_files_confirmed:undefined}}});
+ await expect(readListingReview(signal)).rejects.toThrow('Saved review could not be verified');
 });
 it.each([
  {source_hash:'c'.repeat(64)}, {source_version:2}, {review_hash:'c'.repeat(64)},

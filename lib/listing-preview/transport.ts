@@ -18,8 +18,8 @@ export function admitPackageUrl(value: string, platformOrigins: string[] = []): 
   check(!/^[\d.]+$/.test(host) && /^[a-z0-9.-]+$/.test(host) && host.split('.').every(p => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(p)), 'private_origin');
   return url;
 }
-export async function boundedBody(response: Response, ceiling: number, signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
-  check(response.ok && !response.redirected && response.type !== 'opaque', 'origin_unavailable');
+export async function boundedBody(response: Response, ceiling: number, signal: AbortSignal, acceptedStatus?: number): Promise<Uint8Array<ArrayBuffer>> {
+  check((response.ok || response.status === acceptedStatus) && !response.redirected && response.type !== 'opaque', 'origin_unavailable');
   check(response.body, 'origin_unavailable'); const reader = response.body.getReader(), chunks: Uint8Array[] = []; let total = 0;
   const abort = () => {void reader.cancel().catch(() => undefined);}; signal.addEventListener('abort', abort, {once: true});
   try {

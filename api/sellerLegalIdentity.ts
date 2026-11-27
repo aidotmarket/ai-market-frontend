@@ -1,6 +1,16 @@
 import {api} from './client';
+import type {SellerAcceptance} from './listingLicenses';
 
 export const LEGAL_IDENTITY_SUPPORT_PATH = '/seller-workspace/support/legal-identity';
+
+export async function readLatestSellerSigner(signal:AbortSignal):Promise<Pick<SellerAcceptance,'signer_name'|'signer_title'> | null> {
+  const {data}=await api.get('/seller-workspace/license-signer',{signal});
+  if(typeof data?.signer_name!=='string'||typeof data?.signer_title!=='string')return null;
+  const signer_name=data.signer_name.trim();
+  const signer_title=data.signer_title.trim();
+  return signer_name&&signer_title&&Array.from(signer_name).length<=255&&Array.from(signer_title).length<=255
+    ? {signer_name,signer_title} : null;
+}
 
 export type SellerLegalIdentity =
   | {status:'known';source:'stripe_connect'|'seller_typed';legal_name:string;jurisdiction:string;version:number;seller_editable?:boolean}

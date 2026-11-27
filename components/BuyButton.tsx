@@ -1,4 +1,5 @@
 'use client';
+import { customerRefusal, customerActionError } from '@/lib/customerMessages';
 import { ACTION_AUTH_REFRESH, isLegacyActionAuthError } from '@/lib/action-auth-error';
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
@@ -6,7 +7,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createCheckout, type DomainCheckoutOptions } from '@/api/checkout';
-import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath } from '@/lib/checkout-domain';
+import { checkoutBlock, checkoutDestination, checkoutDomainEnabled, checkoutErrorCode, checkoutOutcome, checkoutWebPath, paymentUrl } from '@/lib/checkout-domain';
 import { getMyOrders } from '@/api/orders';
 import { formatPrice } from '@/lib/format';
 import { validateRedirect } from '@/lib/redirect';
@@ -35,6 +36,7 @@ interface BuyButtonProps {
   licenseDetails?: ListingLicenseDetails;
   dataFormat?: string | null;
   fulfillmentType?: string | null;
+  downloadDescription?: string;
   disabledReason?: string;
   checkoutContext?: DomainCheckoutOptions;
   onCheckoutStarted?: () => void;
@@ -54,6 +56,7 @@ export default function BuyButton({
   licenseDetails,
   dataFormat,
   fulfillmentType,
+  downloadDescription,
   disabledReason,
   checkoutContext,
   onCheckoutStarted,
@@ -164,6 +167,7 @@ export default function BuyButton({
         license={license}
         dataFormat={dataFormat}
         fulfillmentType={fulfillmentType}
+        downloadDescription={downloadDescription}
       />
       </>
     );
@@ -232,7 +236,7 @@ export default function BuyButton({
       if (!isCurrent()) return;
 
       // Validate Stripe URL before redirect (AG-G2-M4)
-      if (!checkout_url || !checkout_url.startsWith('https://checkout.stripe.com/')) {
+      if (!paymentUrl(checkout_url)) {
         toast('Invalid checkout URL received. Please try again.', 'error');
         return;
       }
@@ -284,7 +288,7 @@ export default function BuyButton({
 
   if (domainEnabled && processingIdentity === requestIdentity) return <div className="space-y-4">
     {!checkoutRefusal?.blocked && <p role="status">Checkout is processing. Retry to check the same purchase.</p>}
-    {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath}>{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : 'Review listing'}</Link>}</div>}
+    {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined}>{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}</div>}
     <button type="button" disabled={loading || !!checkoutRefusal?.blocked} onClick={startCheckout} className="rounded-lg bg-[#3F51B5] px-5 py-2.5 text-white disabled:opacity-50">
       {loading ? 'Checking checkout…' : 'Retry checkout'}
     </button>
@@ -343,7 +347,7 @@ export default function BuyButton({
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{checkoutRefusal.message}</p>
             {checkoutRefusal.reconciliationUrl && <Link href={checkoutRefusal.reconciliationUrl} className="mt-2 inline-block font-medium underline">Reconcile legal identity</Link>}
-            {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} className="mt-2 inline-block font-medium underline">{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : 'Review listing'}</Link>}
+            {checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined} className="mt-2 inline-block font-medium underline">{checkoutRefusal.code === 'TERMS_ACCEPTANCE_REQUIRED' ? 'Accept platform terms' : checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}
           </div>
         )}
         <button
@@ -362,6 +366,7 @@ export default function BuyButton({
     <div>
       <TermsGatePrompt />
       {termsVersion === '1.2' && <p className="text-sm text-gray-600">{CARD_BUYER_TOTAL}</p>}
+      {checkoutRefusal && <div role="alert"><p>{checkoutRefusal.message}</p>{checkoutRefusal.webPath && <Link href={checkoutRefusal.webPath} prefetch={checkoutRefusal.webPath.startsWith('/listings/') ? false : undefined}>{checkoutRefusal.linkLabel ?? 'Review listing'}</Link>}</div>}
       <button
         onClick={handleBuy}
         disabled={loading || checkingPurchase || checkingTerms || !!disabledReason || domainEnabled}
@@ -395,11 +400,35 @@ export interface CheckoutRefusal {
   reconciliationUrl?: string;
   webPath?: string;
   blocked?: boolean;
+  linkLabel?: string;
 }
 
 /** No authoritative rejection: preserve the original claim and frozen acceptance. */
 export function checkoutOutcomeUnknown(error: unknown): boolean {
   return checkoutOutcome(error) === 'retry';
+}
+
+const PURCHASE_REFUSALS = {
+  activeOrder: (detail: string) => {
+    const match = /^You already have an active order for this listing \(#([A-Za-z0-9-]+)\)$/.exec(detail);
+    return match ? `You already have an order for this listing (#${match[1]}). View it in My Purchases.` : undefined;
+  },
+  ACTIVE_ORDER: 'You already have an order for this listing. View it in My Purchases.',
+  'Cannot purchase your own listing': 'You cannot purchase your own listing.',
+  OWN_LISTING: 'You cannot purchase your own listing.',
+  listing_not_available: 'This listing is no longer for sale.',
+  LISTING_UNAVAILABLE: 'This listing is no longer for sale.',
+  'Listing not found': 'This listing is no longer for sale.',
+};
+
+function legalIdentityConflictMessage(sources: unknown): string {
+  const values = Array.isArray(sources) ? sources : [];
+  const typed = values.find(value => value?.source === 'typed');
+  const billing = values.find(value => value?.source === 'billing_entity');
+  const valid = (value: typeof typed) => value && typeof value.legal_name === 'string' && typeof value.jurisdiction === 'string';
+  return valid(typed) && valid(billing)
+    ? `The legal name you entered (${typed.legal_name}, ${typed.jurisdiction}) differs from your billing details (${billing.legal_name}, ${billing.jurisdiction}). Use the same name, or update your legal details.`
+    : 'Your legal name or country differs between your account records. Use the same name, or update your legal details.';
 }
 
 export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkoutDomainEnabled(), currentPath?: string): CheckoutRefusal {
@@ -430,12 +459,20 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
       CHECKOUT_REFUNDED: 'This checkout was refunded. This cancelled order will not be fulfilled.',
       CHECKOUT_TERMINAL: 'This checkout has ended. Review its order status.',
     };
-    if (Object.hasOwn(messages, code) || checkoutWebPath(value.web_path)) return { code, blocked: true,
-      message: Object.hasOwn(messages, code) ? messages[code] : (typeof value.message === 'string' ? value.message : 'Checkout is blocked. Review the listing.'),
+    if (Object.hasOwn(messages, code)) return { code, blocked: true,
+      message: messages[code],
       ...(checkoutWebPath(value.web_path) ? { webPath: checkoutWebPath(value.web_path) } : {}),
     };
   }
-  if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: detail };
+  const purchaseMessage = customerRefusal(error, PURCHASE_REFUSALS, '');
+  if (purchaseMessage) {
+    const unavailable = /no longer for sale/.test(purchaseMessage);
+    const active = /already have an order/.test(purchaseMessage);
+    return { code: checkoutErrorCode(error) || 'CHECKOUT_FAILED', message: purchaseMessage,
+      ...(domainEnabled ? { blocked: true } : {}),
+      ...(unavailable ? { webPath: '/find-data', linkLabel: 'Browse similar data' } : active ? { webPath: '/dashboard/orders', linkLabel: 'My Purchases' } : {}) };
+  }
+  if (typeof detail === 'string') return { code: 'CHECKOUT_FAILED', message: customerActionError('start your purchase') };
   const value = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {};
   const code = typeof value.code === 'string' ? value.code : 'CHECKOUT_FAILED';
   const messages: Record<string, string> = {
@@ -445,21 +482,12 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
     LICENSE_ACCEPTANCE_INVALID: 'The licence acceptance details are invalid. Review every field and try again.',
     LICENSE_AUTHORITY_REQUIRED: 'Confirm that you are authorised to accept for the named legal business.',
     BUYER_LEGAL_IDENTITY_REQUIRED: 'A verified business legal name and jurisdiction are required before purchase.',
-    SELLER_TERMS_ACCEPTANCE_PENDING: 'This listing cannot be purchased until the seller accepts the current terms.',
+    SELLER_TERMS_ACCEPTANCE_PENDING: 'This listing cannot be purchased until the seller accepts the current terms. Choose another listing, or ask the seller when it will be ready.',
   };
   if (code === 'LEGAL_IDENTITY_CONFLICT') {
-    const sources = Array.isArray(value.sources) ? value.sources : [];
-    const candidates = sources
-      .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate && typeof candidate === 'object'));
-    const described = candidates.map((candidate) => {
-      const source = typeof candidate.source === 'string' ? candidate.source : 'identity';
-      const name = typeof candidate.legal_name === 'string' ? candidate.legal_name : 'missing name';
-      const country = typeof candidate.jurisdiction === 'string' ? candidate.jurisdiction : 'missing jurisdiction';
-      return `${source}: ${name} (${country})`;
-    });
     return {
       code,
-      message: `Your legal identity records conflict${described.length ? ` — ${described.join(' versus ')}` : ''}. Reconcile them before purchasing.`,
+      message: legalIdentityConflictMessage(value.sources),
       reconciliationUrl: typeof value.reconciliation_url === 'string'
         ? value.reconciliation_url
         : '/settings/organization/legal-identity',
@@ -467,7 +495,10 @@ export function parseCheckoutRefusal(error: AxiosError, domainEnabled = checkout
   }
   return {
     code,
-    message: messages[code] ?? (typeof value.message === 'string' ? value.message : 'Failed to start checkout. Please try again.'),
+    message: messages[code] ?? (domainEnabled && checkoutWebPath(value.web_path)
+      ? "Checkout is blocked for this listing. Review the listing for details."
+      : customerActionError("start your purchase")),
+    ...(domainEnabled && checkoutWebPath(value.web_path) ? { blocked: true, webPath: checkoutWebPath(value.web_path) } : {}),
   };
 }
 
@@ -480,6 +511,7 @@ export function SignedOutPurchase({
   license,
   dataFormat,
   fulfillmentType,
+  downloadDescription,
 }: Pick<
   BuyButtonProps,
   | 'slug'
@@ -490,6 +522,7 @@ export function SignedOutPurchase({
   | 'license'
   | 'dataFormat'
   | 'fulfillmentType'
+  | 'downloadDescription'
 >) {
   const returnPath = `/listings/${encodeURIComponent(slug)}`;
   const encodedReturnPath = encodeURIComponent(returnPath);
@@ -499,8 +532,9 @@ export function SignedOutPurchase({
       ? 'One-time or subscription'
       : 'One-time purchase';
   const licenseLabel = license?.trim() || null;
-  const dataFormatLabel = formatPurchaseFact(dataFormat);
+  const dataFormatLabel = dataFormat?.trim().replace(/_/g, ' ').toUpperCase();
   const fulfillmentTypeLabel = formatPurchaseFact(fulfillmentType);
+  const isFileDownload = fulfillmentTypeLabel === 'File download' || (!fulfillmentTypeLabel && !!downloadDescription);
 
   return (
     <div>
@@ -555,14 +589,18 @@ export function SignedOutPurchase({
           )}
           {dataFormatLabel && (
             <div className="flex justify-between gap-3">
-              <dt>Data format</dt>
+              <dt>Data format (as described by the seller)</dt>
               <dd className="font-medium text-gray-900">{dataFormatLabel}</dd>
             </div>
           )}
-          {fulfillmentTypeLabel && (
+          {(isFileDownload || fulfillmentTypeLabel) && (
             <div className="flex justify-between gap-3">
-              <dt>Fulfillment type</dt>
-              <dd className="font-medium text-gray-900">{fulfillmentTypeLabel}</dd>
+              <dt className={isFileDownload && !downloadDescription ? 'sr-only' : undefined}>
+                {isFileDownload ? 'Download' : 'Fulfillment type'}
+              </dt>
+              <dd className="font-medium text-gray-900">
+                {isFileDownload ? downloadDescription ?? 'Download link after purchase' : fulfillmentTypeLabel}
+              </dd>
             </div>
           )}
         </dl>

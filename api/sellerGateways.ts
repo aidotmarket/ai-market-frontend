@@ -2,6 +2,10 @@ import { api } from './client';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { DoorCheck, FilesPage, GatewayFile, GatewayMessageType, PairingCode, ReceivedPage, SellerGateway, WithRetry } from '@/types/sellerGateway';
 
+/** Backend #1166: absent until deployed; never infer a revision from PATCH. */
+export type AuthorityGateway = SellerGateway & {gateway_metadata_revision?:number};
+export type AuthorityFilesPage = FilesPage & {gateway_metadata_revision?:number};
+
 const gatewayPath = (id: string) => `/gateways/${encodeURIComponent(id)}`;
 const filePath = (id: string, fileId: string) => `${gatewayPath(id)}/files/${encodeURIComponent(fileId)}`;
 
@@ -14,11 +18,11 @@ function withRetry<T>(response: AxiosResponse<T>): WithRetry<T> {
 export async function createPairingCode(): Promise<PairingCode> {
   return (await api.post<PairingCode>('/gateways/pairing-codes', {})).data;
 }
-export async function listSellerGateways(): Promise<SellerGateway[]> {
-  return (await api.get<{ gateways: SellerGateway[] }>('/gateways')).data.gateways;
+export async function listSellerGateways(): Promise<AuthorityGateway[]> {
+  return (await api.get<{ gateways: AuthorityGateway[] }>('/gateways')).data.gateways;
 }
-export async function getSellerGateway(id: string): Promise<SellerGateway> {
-  return (await api.get<SellerGateway>(gatewayPath(id))).data;
+export async function getSellerGateway(id: string): Promise<AuthorityGateway> {
+  return (await api.get<AuthorityGateway>(gatewayPath(id))).data;
 }
 export async function patchSellerGateway(id: string, body: { name?: string; door_url?: string | null }): Promise<SellerGateway> {
   return (await api.patch<SellerGateway>(gatewayPath(id), body)).data;
@@ -32,8 +36,8 @@ export async function startDoorCheck(id: string): Promise<WithRetry<{ door_check
 export async function acknowledgeGatewayIdentity(id: string): Promise<SellerGateway> {
   return (await api.post<SellerGateway>(`${gatewayPath(id)}/identity-acknowledgement`, { acknowledged: true })).data;
 }
-export async function listGatewayFiles(id: string, cursor?: string, limit = 100): Promise<FilesPage> {
-  return (await api.get<FilesPage>(`${gatewayPath(id)}/files`, { params: { cursor, limit } })).data;
+export async function listGatewayFiles(id: string, cursor?: string, limit = 100): Promise<AuthorityFilesPage> {
+  return (await api.get<AuthorityFilesPage>(`${gatewayPath(id)}/files`, { params: { cursor, limit } })).data;
 }
 export interface GatewayListingSource { type: 'gateway'; gateway_id: string; file_ids: string[] }
 export async function getGatewayListingSource(listingId: string, options?: Pick<AxiosRequestConfig, 'timeout' | 'signal'>): Promise<GatewayListingSource | null> {
@@ -55,4 +59,23 @@ export async function listReceivedMessages(id: string, cursor?: string, limit = 
 export function gatewayErrorDetails(error: unknown): { open_order_count?: number } | null {
   const details = (error as { response?: { data?: { error?: { details?: unknown } } } })?.response?.data?.error?.details;
   return details && typeof details === 'object' ? details as { open_order_count?: number } : null;
+}
+
+/** Selection and revision come from the same pages. A moving inventory must
+ * start again; a subsequent gateway detail read cannot repair this selection. */
+export async function readAuthorityGatewayFiles(id:string):Promise<{files:GatewayFile[];revision:number}|null>{
+  let cursor:string|undefined;let revision:number|undefined;
+  const files:GatewayFile[]=[];const cursors=new Set<string>();const ids=new Set<string>();
+  for(let page=0;page<1000;page++){
+    const result=await listGatewayFiles(id,cursor);
+    const value=result.gateway_metadata_revision;
+    if(value===undefined)return null;
+    if(!Number.isSafeInteger(value)||value<0||revision!==undefined&&revision!==value)throw new Error('AUTHORITY_PURCHASER_STALE');
+    revision=value;
+    for(const file of result.files){if(ids.has(file.file_id))throw new Error('AUTHORITY_PURCHASER_STALE');ids.add(file.file_id);files.push(file);}
+    if(!result.next_cursor)return {files,revision};
+    if(cursors.has(result.next_cursor))throw new Error('AUTHORITY_PURCHASER_STALE');
+    cursors.add(result.next_cursor);cursor=result.next_cursor;
+  }
+  throw new Error('AUTHORITY_PURCHASER_STALE');
 }

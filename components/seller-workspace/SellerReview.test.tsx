@@ -26,6 +26,7 @@ it.each(['seller-listing-review-v2','seller-listing-review-v3','seller-listing-r
 });
 it('does not request a review before the capability is available', () => {
   render(<SellerReview active enabled={false} />);
+  expect(screen.getByText("Saved reviews are not enabled here yet. Open Describe and price to keep preparing your listing with allAI.")).toBeTruthy();
   expect(api.readListingReview).not.toHaveBeenCalled();
 });
 function PendingReviewHarness(){

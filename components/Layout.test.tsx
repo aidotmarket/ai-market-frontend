@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnchorHTMLAttributes, ReactNode } from 'react';
 import { Layout } from './Layout';
@@ -33,7 +33,7 @@ vi.mock('@/components/NotificationCenter', () => ({
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { children: ReactNode; href: string }) => (
-    <a href={href} {...props}>
+    <a href={href} data-next-link="true" {...props}>
       {children}
     </a>
   ),
@@ -54,6 +54,7 @@ describe('Layout registration links', () => {
 
   it('renders one on-site newsletter form in the signed-out footer with existing legal links', () => {
     render(<Layout><div>Page content</div></Layout>);
+    expect(screen.getByRole('link', { name: 'How we verify data' }).getAttribute('href')).toBe('/verified');
     const form = screen.getByRole('form', { name: 'Newsletter subscription' });
     expect(form.closest('footer')).not.toBeNull();
     expect(screen.getAllByRole('textbox', { name: 'Newsletter email' })).toHaveLength(1);
@@ -62,6 +63,13 @@ describe('Layout registration links', () => {
     for (const link of screen.getAllByRole('link', { name: 'Privacy Notice' })) {
       expect(link.getAttribute('href')).toBe('/legal/privacy');
     }
+  });
+
+  it('links both current licence documents from the legal footer menu', () => {
+    render(<Layout><div>Page content</div></Layout>);
+    const legal = within(screen.getByRole('heading', { name: 'Legal' }).parentElement!);
+    expect(legal.getByRole('link', { name: 'Standard Data Licence' }).getAttribute('href')).toBe('/licenses/standard/1.1/ai-training');
+    expect(legal.getByRole('link', { name: 'Marketplace Listing Covenant' }).getAttribute('href')).toBe('/licenses/marketplace-listing/1.1');
   });
 
   it('restores a validated listing redirect from both desktop and mobile terms Sign up actions', () => {
@@ -112,4 +120,24 @@ describe('Layout registration links', () => {
       expect(link.getAttribute('href')).toBe('/register');
     }
   });
+});
+
+it.each(['/', '/search', '/legal/terms', '/requests/retail-data'])('links the desktop header directly to /requests from %s', (pathname) => {
+  navigation.pathname = pathname;
+  navigation.search = pathname.startsWith('/requests/') ? 'page=3&category=retail' : '';
+  render(<Layout><div>Page content</div></Layout>);
+
+  const header = within(screen.getByRole('banner'));
+  const navigationMenu = within(header.getByRole('navigation'));
+  const link = navigationMenu.getByRole('link', { name: 'Buyer Requests' });
+  expect(link.getAttribute('href')).toBe('/requests');
+  expect(link.hasAttribute('data-next-link')).toBe(false);
+
+  let defaultPrevented: boolean | undefined;
+  window.addEventListener('click', (event) => {
+    defaultPrevented = event.defaultPrevented;
+    event.preventDefault(); // Stop jsdom from attempting the document navigation.
+  }, { once: true });
+  fireEvent.click(link);
+  expect(defaultPrevented).toBe(false);
 });

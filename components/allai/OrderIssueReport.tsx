@@ -109,7 +109,7 @@ export default function OrderIssueReport({ session, onLeave, onSeparate }: { ses
     </> : <>
       {proposal && <details><summary>Order context supplied by the server</summary><dl>
         {Object.entries(proposal.context).map(([key, value]) => <div key={key}>
-          <dt>{categoryLabel(key)}</dt><dd className="break-words">{value === null ? 'Not available' : String(value)}</dd>
+          <dt>{categoryLabel(key)}</dt><dd className="break-words">{value === null ? 'No details recorded' : String(value)}</dd>
         </div>)}
       </dl></details>}
       {proposal && proposal.enrollment !== 'enabled' && <p role="status">New order reporting is unavailable or not confirmed available. Your draft can be retained. Existing support: support@ai.market.</p>}

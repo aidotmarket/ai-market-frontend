@@ -7,17 +7,19 @@ import { WorkspaceOverview, type WorkspaceView } from '@/components/seller-works
 import { WorkspaceData } from '@/components/seller-workspace/WorkspaceData';
 import SavedWorkspaceData from '@/components/seller-workspace/SavedWorkspaceData';
 import SellerReview from '@/components/seller-workspace/SellerReview';
+import SellerListingRemoval from '@/components/seller-workspace/SellerListingRemoval';
 import SellerPublications from '@/components/seller-workspace/SellerPublications';
 import ConnectionScopeChoice from '@/components/seller-workspace/ConnectionScopeChoice';
 import R2ConnectionForm from '@/components/seller-workspace/R2ConnectionForm';
 import { StorageProviders } from '@/components/seller-workspace/StorageProviders';
 import SellerListingEditor from '@/components/seller-workspace/SellerListingEditor';
 import SavedListingEditor from '@/components/seller-workspace/SavedListingEditor';
+import VectoraizImport from '@/components/seller-workspace/VectoraizImport';
 import {SellerListingDraftProvider} from '@/components/seller-workspace/SellerListingDraftStore';
 import { GuidedListingFlow, StepNext } from '@/components/seller-workspace/GuidedListingFlow';
 import SavedLicenseStep from '@/components/seller-workspace/SavedLicenseStep';
 import GuidedPublishStep from '@/components/seller-workspace/GuidedPublishStep';
-import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
+import { WorkspaceConfirmation, WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
 import {
   type AWSAuthorization,
@@ -116,9 +118,9 @@ function safeActionMessage(error: unknown): string {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return 'Not available';
+  if (!value) return 'No date recorded';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not available';
+  if (Number.isNaN(date.getTime())) return 'No date recorded';
   return new Intl.DateTimeFormat('en', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -202,6 +204,8 @@ export default function SellerWorkspacePage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [disconnectConfirmation, setDisconnectConfirmation] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [ownerListingsRefresh, setOwnerListingsRefresh] = useState(0);
+  const [publicationsRefresh, setPublicationsRefresh] = useState(0);
 
   const clearSensitive = useCallback(() => {
     authorizationRef.current = null;
@@ -540,8 +544,19 @@ export default function SellerWorkspacePage() {
     setView(nextView);
   };
 
+  const workspaceReady = pageState === 'ready';
+  const showOwnerListings = !workspaceReady || view === 'manage';
+  const recoveryPrerequisite = {
+    loading: 'Wait for Workspace to finish loading to prepare a listing or check storage.',
+    gated: 'Complete seller setup in Settings to prepare a listing or check storage.',
+    unavailable: 'Preparing listings and checking storage here requires Workspace setup to be available.',
+    error: 'Retry loading Workspace before preparing a listing or checking storage.',
+    ready: undefined,
+  }[pageState];
+
+  let workspaceFallback: React.ReactNode;
   if (pageState === 'loading') {
-    return (
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <div className="flex items-center gap-3 py-12 text-sm text-gray-600" role="status">
@@ -550,26 +565,22 @@ export default function SellerWorkspacePage() {
         </div>
       </div>
     );
-  }
-
-  if (pageState === 'unavailable') {
-    return (
+  } else if (pageState === 'unavailable') {
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <StorageProviders capabilities={null} busy={null} onConnectAWS={handleCreate} />
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">AWS connections are unavailable</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Cloud storage setup is paused</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Cloud storage setup is not currently available. You can still manage your existing listings.
+            Cloud storage setup is not enabled here yet. Manage your existing listings while setup is paused.
           </p>
           <Link href="/dashboard/listings" className="mt-5 inline-flex rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white">Manage listings</Link>
         </div>
       </div>
     );
-  }
-
-  if (pageState === 'gated') {
-    return (
+  } else if (pageState === 'gated') {
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -581,10 +592,8 @@ export default function SellerWorkspacePage() {
         </div>
       </div>
     );
-  }
-
-  if (pageState === 'error') {
-    return (
+  } else if (pageState === 'error') {
+    workspaceFallback = (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900">Seller Workspace</h1>
         <div className="rounded-xl border border-red-200 bg-red-50 p-8">
@@ -603,17 +612,22 @@ export default function SellerWorkspacePage() {
   }
 
   return (
+    <div className="space-y-6">
+    {workspaceFallback ?? (
     <SellerListingDraftProvider
       enabled={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'}
       sampleCapability={capabilities?.master.enabled===true&&capabilities?.drafts?.enabled===true&&capabilities.drafts.status==='available'&&capabilities?.samples?.enabled===true&&capabilities.samples.status==='available'}>
+    <VectoraizImport />
     <GuidedListingFlow connections={currentConnections} capabilities={capabilities} view={view} navigate={navigate}>
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={navigate} />
-      <WorkspacePanel active={view === 'data'}>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'license'}><SavedLicenseStep /></WorkspacePanel>
+      <WorkspacePanel active={view === 'data'} showReloadOnError>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'license'} showReloadOnError><SavedLicenseStep /></WorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'listing'}>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'} showReloadOnError>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} refresh={publicationsRefresh}
+        onRefreshOwnerListings={() => setOwnerListingsRefresh(value => value + 1)}
+        enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'review'}><SellerReview active={view === 'review'} enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>
       <WorkspacePanel active={view === 'storage'}>
       {busyAction!==null&&<p role="status" className="text-sm text-gray-600">A storage connection action is in progress. Other connection actions will be available when it finishes.</p>}
@@ -869,7 +883,7 @@ export default function SellerWorkspacePage() {
                 )}
 
                 {disconnectConfirmation === connection.id && (
-                  <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4" role="alertdialog" aria-label="Confirm disconnect">
+                  <WorkspaceConfirmation label="Confirm disconnect" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4">
                     <p className="text-sm font-medium text-red-900">
                       Disconnect this storage connection? ai.market will no longer use this connection.
                     </p>
@@ -891,7 +905,7 @@ export default function SellerWorkspacePage() {
                         Cancel
                       </button>
                     </div>
-                  </div>
+                  </WorkspaceConfirmation>
                 )}
               </article>
             );
@@ -935,5 +949,11 @@ export default function SellerWorkspacePage() {
     </div>
     </GuidedListingFlow>
     </SellerListingDraftProvider>
+    )}
+      <SellerListingRemoval active={showOwnerListings} compact={!workspaceReady}
+        refresh={ownerListingsRefresh} onChange={() => setPublicationsRefresh(value => value + 1)}
+        onOpenConfirmation={() => setView('manage')}
+        onRecovery={workspaceReady ? navigate : undefined} recoveryPrerequisite={recoveryPrerequisite} />
+    </div>
   );
 }

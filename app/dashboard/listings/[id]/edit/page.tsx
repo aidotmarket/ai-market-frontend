@@ -1,12 +1,14 @@
 'use client';
 
+import PurchaserReview from '@/components/gateways/PurchaserReview';
+import { customerLoadError } from '@/lib/customerMessages';
 import ListingDocumentsEditor from '@/components/listing/ListingDocumentsEditor';
 
 import MarkdownTextField,{descriptionTooLong} from '@/components/listing/MarkdownTextField';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
+import { getListingAccessWindow, getListing, updateListing, unpublishListing, publishListing } from '@/api/listings';
 import { notifyCapabilitiesChanged } from '@/components/onboarding/SellerSetupProgressBar';
 import { useToast } from '@/components/Toast';
 import { formatListingActionError } from '@/lib/listing-action-error';
@@ -14,13 +16,15 @@ import SellerAtAGlance from '@/components/listings/SellerAtAGlance';
 import SellerShareControls from '@/components/listings/SellerShareControls';
 import SellerLicenseSelection from '@/components/seller-workspace/SellerLicenseSelection';
 import {createStandardSelection,isCompleteLicenseSelection,type LicenseSelection} from '@/api/listingLicenses';
-import {getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
+import {authorityAvailable,getAuthorityCapabilities,getSellerWorkspaceCapabilities} from '@/api/sellerWorkspace';
 import {getSellerLegalIdentity,refreshSellerLegalIdentity,legalIdentityFailure,LEGAL_IDENTITY_SUPPORT_PATH} from '@/api/sellerLegalIdentity';
 import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { blockerMessage } from '@/components/gateways/presentation';
 import ListingGatewaySource from '@/components/gateways/ListingGatewaySource';
 import type { GatewayBlocker, GatewayFile, SellerGateway } from '@/types/sellerGateway';
 import Link from 'next/link';
+import {sessionLifecycle} from '@/api/connector-seller-settings';
+import {useAuthStore} from '@/store/auth';
 
 const CATEGORIES = ['Finance', 'Healthcare', 'Technology', 'Real Estate', 'Government', 'Marketing'];
 const FORMATS = ['csv', 'tsv', 'jsonl', 'parquet', 'json', 'xlsx', 'other'];
@@ -46,6 +50,21 @@ export default function EditListingPage() {
   const id = params.id as string;
   const { toast } = useToast();
 
+  const account=useAuthStore(state=>state.user?.id);
+  const [authorityReference,setAuthorityReference]=useState<{id:string;account:string|undefined;version:string|null}|null>(null);
+  const authorityVersion=authorityReference?.id===id&&authorityReference.account===account?authorityReference.version:null;
+  useEffect(()=>{
+    let active=true;const same=sessionLifecycle();setAuthorityReference(null);
+    void (async()=>{
+      try{
+        if(!account||!authorityAvailable(await getAuthorityCapabilities()))return;
+        if(!active||!same())return;
+        const owner=await getListingAccessWindow(id);
+        if(active&&same())setAuthorityReference({id,account,version:owner.authority_version_id??null});
+      }catch{/* Owner recovery stays dark when unavailable. */}
+    })();
+    return()=>{active=false;};
+  },[id,account]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [summaryRevision, setSummaryRevision] = useState(0);
@@ -66,11 +85,18 @@ export default function EditListingPage() {
   });
   const [tagInput, setTagInput] = useState('');
   const [listingLicensesEnabled, setListingLicensesEnabled] = useState(false);
-  const [licenseSelection, setLicenseSelection] = useState<LicenseSelection>(createStandardSelection());
+  const [licenceEdit, setLicenceEdit] = useState<{account:string|undefined;id:string;selection:LicenseSelection}>();
+  const licenseSelection = licenceEdit?.account===account&&licenceEdit?.id===id ? licenceEdit.selection : createStandardSelection();
   const [savedGatewaySourceListingId, setSavedGatewaySourceListingId] = useState<string | null>(null);
   const [savedGateway, setSavedGateway] = useState<SellerGateway | null>(null);
   const [sourceFiles, setSourceFiles] = useState<GatewayFile[]>([]);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<ReturnType<typeof formatListingActionError> | null>(null);
+  const showActionError = (error: unknown) => {
+    const failure = formatListingActionError(error);
+    setActionError(failure);
+    toast(failure.message, 'error');
+  };
   const [publishBlockers, setPublishBlockers] = useState<GatewayBlocker[]>([]);
   const onSourceDirty = useCallback(() => setSavedGatewaySourceListingId(null), []);
   const onSourceSaved = useCallback((gateway: SellerGateway, files: GatewayFile[]) => {
@@ -80,12 +106,14 @@ export default function EditListingPage() {
   const canPublish = data.status === 'unlisted' || (data.status === 'draft' && savedGatewaySourceListingId === id);
 
   const fetchListing = useCallback(async () => {
+    const sameSession = sessionLifecycle();
     try {
       const [res, capabilities] = await Promise.all([getListing(id), getSellerWorkspaceCapabilities().catch(() => null)]);
+      if (!sameSession()) return;
       const l = res as any;
       const licensesEnabled = capabilities?.listing_licenses === true;
       setListingLicensesEnabled(licensesEnabled);
-      if (licensesEnabled && l.license_selection) setLicenseSelection(l.license_selection);
+      if (licensesEnabled && l.license_selection) setLicenceEdit({account,id,selection:l.license_selection});
       setListingSlug(typeof l.slug === 'string' ? l.slug : undefined);
       setHasStoredFormat(Boolean(l.data_format));
       setData({
@@ -102,12 +130,12 @@ export default function EditListingPage() {
         status: l.status || 'draft',
       });
     } catch {
-      toast('Failed to load listing', 'error');
+      toast(customerLoadError("listing"), 'error');
       router.push('/dashboard/listings');
     } finally {
       setLoading(false);
     }
-  }, [id, router, toast]);
+  }, [id, account, router, toast]);
 
   useEffect(() => {
     fetchListing();
@@ -137,6 +165,7 @@ export default function EditListingPage() {
 
   const handleSave = async () => {
     if (descriptionTooLong(data.description)) return;
+    setActionError(null);
     setSaving(true);
     const submittedFormat = data.data_format;
     try {
@@ -157,20 +186,21 @@ export default function EditListingPage() {
       setSummaryRevision(value => value + 1);
       toast('Listing saved', 'success');
     } catch (err: unknown) {
-      toast(formatListingActionError(err).message, 'error');
+      showActionError(err);
     } finally {
       setSaving(false);
     }
   };
 
   const handleUnpublish = async () => {
+    setActionError(null);
     setSaving(true);
     try {
       await unpublishListing(id);
       toast('Listing unpublished', 'success');
       setData((prev) => ({ ...prev, status: 'unlisted' }));
-    } catch (err: any) {
-      toast(err.response?.data?.detail || 'Failed to unpublish', 'error');
+    } catch (err: unknown) {
+      showActionError(err);
     } finally {
       setSaving(false);
     }
@@ -191,6 +221,7 @@ export default function EditListingPage() {
   };
 
   const handlePublish = async () => {
+    setActionError(null);
     setSaving(true);
     setPublishError(null); setPublishBlockers([]);
     try {
@@ -210,7 +241,7 @@ export default function EditListingPage() {
         setPublishBlockers(Array.isArray(blockers) ? blockers : []);
       } else if (code === 'gateway_offline') setPublishError('The gateway is offline. Reconnect it before publishing.');
       else if (code === 'listing_not_draft') setPublishError('Only a draft listing can be published. Refresh this listing.');
-      else toast(err.response?.data?.detail || 'Failed to publish', 'error');
+      else showActionError(err);
     } finally {
       setSaving(false);
     }
@@ -226,6 +257,13 @@ export default function EditListingPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {(actionError?.setupHref || actionError?.workspaceHref) && (
+        <p role="status" className="text-sm text-gray-700">
+          <Link href={actionError.setupHref ?? actionError.workspaceHref!} className="font-semibold text-indigo-700 underline">
+            {actionError.setupHref ? 'Finish seller setup' : 'Manage this listing in Seller Workspace.'}
+          </Link>
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Edit Listing</h1>
@@ -239,8 +277,8 @@ export default function EditListingPage() {
         </button>
       </div>
 
-      {(data.status === 'published' || data.status === 'unlisted') && (
-        <SellerShareControls key={data.status} listingId={id} />
+      {data.status === 'published' && (
+        <SellerShareControls listingId={id} />
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
@@ -428,13 +466,14 @@ export default function EditListingPage() {
 
       <ListingDocumentsEditor listingId={id}/>
 
-      {listingLicensesEnabled && <SellerLicenseSelection value={licenseSelection} onChange={setLicenseSelection} disabled={saving} />}
+      {listingLicensesEnabled && <SellerLicenseSelection key={JSON.stringify([account,id])} value={licenseSelection} onChange={selection=>setLicenceEdit({account,id,selection})} disabled={saving} />}
 
       {data.status === 'draft' && <ListingGatewaySource listingId={id} onSourceDirty={onSourceDirty} onSourceSaved={onSourceSaved} />}
 
       <SellerAtAGlance listingId={id} slug={listingSlug} active={!saving} revision={summaryRevision} />
 
       {/* Actions */}
+      <PurchaserReview versionId={authorityVersion} />
       {publishError && <div role="alert" className="rounded border border-red-300 p-3 text-red-700"><p>{publishError}</p>{publishBlockers.length > 0 && <ul className="list-disc pl-6">{publishBlockers.map((blocker, index) => <li key={`${blocker.code}-${blocker.file_id ?? index}`}>{blockerMessage(blocker, sourceFiles)}</li>)}</ul>}</div>}
       {canPublish && savedGateway && !savedGateway.identity_ack_at && <p className="rounded border border-amber-300 p-3 text-sm">Before this listing goes live: after purchase, buyers learn your door hostname and certificate. Use a neutral hostname. <Link href={`/dashboard/gateways/${encodeURIComponent(savedGateway.gateway_id)}`} className="text-indigo-700 underline">Review and acknowledge the gateway identity notice</Link>.</p>}
       <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-4">

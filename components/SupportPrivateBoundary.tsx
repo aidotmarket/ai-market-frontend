@@ -1,4 +1,5 @@
 "use client";
+import {useHandoffBoundary} from '@/lib/vectoraizHandoff';
 import { usePathname } from 'next/navigation';
 import { PendingProfileChanges } from '@/components/PendingProfileChanges';
 import { Providers } from '@/components/Providers';
@@ -10,7 +11,18 @@ import AllAIPanel from '@/components/allai/AllAIPanel';
 // Mailbox consumption has no allAI/history/analytics widgets. The normal tree
 // is preserved for every other route; auth uses its existing store directly.
 export function SupportPrivateBoundary({ children }: { children: React.ReactNode }) {
+  useHandoffBoundary();
   const path = usePathname();
-  if (path === null || path.replace(/\/$/, '') === '/support/mailbox-account') return <>{children}</>;
-  return <Providers><AllAIProvider><Layout><PendingProfileChanges />{children}</Layout><AllAIFab /><AllAIPanel /></AllAIProvider></Providers>;
+  const route = path?.replace(/\/$/, '');
+  if (path === null || route === '/support/mailbox-account') return <>{children}</>;
+  const dockOnDesktop = route === '/support' || route === '/pricing' || route === '/sell-data';
+  return (
+    <Providers>
+      <AllAIProvider>
+        <Layout><PendingProfileChanges />{children}</Layout>
+        <AllAIFab />
+        <AllAIPanel dockOnDesktop={dockOnDesktop} />
+      </AllAIProvider>
+    </Providers>
+  );
 }

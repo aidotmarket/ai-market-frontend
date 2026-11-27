@@ -86,6 +86,35 @@ describe('next.config request discovery rewrites', () => {
     });
   });
 
+  it.each(['NEXT_PUBLIC_API_URL', 'API_URL'])('proxies mcp.json in production using %s', async (apiEnv) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_API_URL', undefined);
+    vi.stubEnv('API_URL', undefined);
+    vi.stubEnv(apiEnv, 'https://api.example.test');
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    expect(rewrites).toContainEqual({
+      source: '/.well-known/mcp.json',
+      destination: 'https://api.example.test/.well-known/mcp.json',
+    });
+  });
+
+  it('uses localhost fallback for mcp.json outside production', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('NEXT_PUBLIC_API_URL', undefined);
+    vi.stubEnv('API_URL', undefined);
+    const { default: config } = await import('./next.config');
+
+    const rewrites = await config.rewrites!();
+
+    expect(rewrites).toContainEqual({
+      source: '/.well-known/mcp.json',
+      destination: 'http://localhost:8000/.well-known/mcp.json',
+    });
+  });
+
   it('keeps local licence URLs on the readable Next page', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     const { default: config } = await import('./next.config');

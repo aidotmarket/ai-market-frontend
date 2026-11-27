@@ -1,6 +1,7 @@
 'use client';
 
 import axios from 'axios';
+import {customerRefusal} from '@/lib/customerMessages';
 import {useEffect, useId, useRef, useState, useSyncExternalStore} from 'react';
 import BackendListingHtml from '@/components/BackendListingHtml';
 import {discardDocumentDraft, publishDocument, readListingDocuments, saveDocumentDraft, withdrawDocument} from '@/api/listingDocuments';
@@ -16,16 +17,18 @@ const genericError = 'Documents could not be updated. Reload their current state
 const unavailable = 'Data sheets become available when public business names are switched on. Your listing must show a valid public business name.';
 
 function errorMessage(error: unknown): string {
-  const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined;
-  const code = typeof detail === 'string' ? detail : typeof detail?.code === 'string' ? detail.code : error instanceof Error ? error.message : '';
-  if (code === 'FIRST_PARTY_SESSION_REQUIRED') return 'Sign in on the ai.market website to change documents. API keys and connector sessions cannot change them.';
-  if (code === 'DATA_SHEET_REQUIRES_PUBLIC_NAME') return unavailable;
-  if (code === 'DATA_SHEET_INVALID_URL') return 'Use a stable, public, non-expiring https address for the PDF, without contact details or a fragment.';
-  if (code === 'DATA_SHEET_INVALID_FILENAME') return 'Choose a PDF with a simple filename without contact details.';
-  if (typeof detail === 'string') return /^[A-Z][A-Z0-9_]*$/.test(detail) ? genericError : detail;
-  if (typeof detail?.message === 'string') return detail.message;
-  if (Array.isArray(detail)) return detail.map(item => item.msg).join(' ');
-  return genericError;
+  return customerRefusal(error, {
+    'Document is too complex to render safely. Simplify Markdown, especially large tables, deeply nested blocks, repeated unmatched markup, very long paragraphs or a very large number of lines, or split it into smaller sections.': 'This document is too complex to preview. Simplify its formatting and try again.',
+    'Remove contact details and off-platform payment instructions.': 'Remove contact details and payment instructions from your document, then save it again.',
+    'Text validation is temporarily unavailable. Please retry.': 'We could not check your document just now. Try saving it again.',
+    DOCUMENT_RENDER_BUDGET: 'This document is too complex to preview. Simplify its formatting and try again.',
+    'Remove contact details from the data sheet address path or query; rename the file.': 'Remove contact details from the PDF address or rename the file, then save it again.',
+    FIRST_PARTY_SESSION_REQUIRED: 'Sign in on the ai.market website to change documents. API keys and connector sessions cannot change them.',
+    DATA_SHEET_REQUIRES_PUBLIC_NAME: unavailable,
+    DATA_SHEET_INVALID_URL: 'Use a stable, public, non-expiring https address for the PDF, without contact details or a fragment.',
+    DATA_SHEET_INVALID_FILENAME: 'Choose a PDF with a simple filename without contact details.',
+    DOCUMENT_KIND_CONTENT_MISMATCH: 'Use text for technical documentation or a PDF for a data sheet, then save again.',
+  }, genericError);
 }
 
 export default function ListingDocumentsEditor({listingId}: {listingId?: string | null}) {
@@ -162,7 +165,7 @@ function DocumentEditor({kind, state, listingId, available, busy, run, previewed
               const metadata = await hashDataSheet(file);
               if (selection === fileGeneration.current) setPdf(metadata);
             } catch (error) {
-              if (selection === fileGeneration.current) setFileError(error instanceof Error ? error.message : 'The PDF could not be read. Choose it again.');
+              if (selection === fileGeneration.current) setFileError('The PDF could not be read. Choose it again.');
             } finally {
               if (selection === fileGeneration.current) setHashing(false);
             }

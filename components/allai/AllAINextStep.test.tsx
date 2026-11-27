@@ -3,6 +3,8 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
+
 vi.mock('./AllAIContext', async () => {
   const actual = await vi.importActual<typeof import('./AllAIContext')>('./AllAIContext');
   return { ...actual, useAllAI: () => ({ locale: 'en' }) };
@@ -46,4 +48,21 @@ it('keeps public next steps ungated', () => {
   expect(screen.getByRole('link', { name: 'Browse listings' }).getAttribute('href')).toBe(
     '/listings'
   );
+});
+
+it('disables prefetch for a public listing detail next step', () => {
+  render(
+    <AllAINextStep
+      nextStep={{
+        action: 'browse_listings',
+        label: 'View listing',
+        url: '/listings/example',
+        requires_account: false,
+      }}
+    />
+  );
+
+  const link = screen.getByRole('link', { name: 'View listing' });
+  expect(link.getAttribute('href')).toBe('/listings/example');
+  expect(link.getAttribute('data-prefetch')).toBe('false');
 });

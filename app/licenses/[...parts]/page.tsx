@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import PrePurchaseLicensor from '@/components/PrePurchaseLicensor';
 
 type Props = { params: Promise<{ parts: string[] }> };
 type StockDocument = {
@@ -13,6 +15,7 @@ type StockDocument = {
 type CustomNotice = { code: 'custom'; sha256: string; notice: string };
 
 const hashPattern = /^[a-f0-9]{64}$/;
+const termsReference = 'ai.market marketplace terms';
 const stockPaths = new Set([
   'standard/1.1/ai-training',
   'standard/1.1/no-ai-training',
@@ -59,6 +62,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function TermsLink({ children }: { children: string }) {
+  return <Link href="/legal/terms" className="text-indigo-700 underline">{children}</Link>;
+}
+
+function renderStandardLicenceText(text: string) {
+  const section = /^11\. Notices and marketplace role\.[\s\S]*?(?=^\d+\. )/m.exec(text);
+  if (!section) return text;
+
+  const sectionEnd = section.index + section[0].length;
+  if (!text.startsWith('12. General.', sectionEnd)) return text;
+
+  return <>
+    {text.slice(0, section.index)}
+    {section[0].split(/(\bmarketplace[ \t]+terms\b)/i).map((part, index) =>
+      index % 2 === 0 ? part : <TermsLink key={index}>{part}</TermsLink>)}
+    {text.slice(sectionEnd)}
+  </>;
+}
+
+function renderLicenceText({ code, version, full_text: text }: StockDocument) {
+  if (version !== '1.1') return text;
+  if (code === 'standard') return renderStandardLicenceText(text);
+  if (code !== 'marketplace-listing') return text;
+
+  const termsIndex = text.indexOf(termsReference);
+  if (termsIndex < 0) return text;
+
+  return <>
+    {text.slice(0, termsIndex)}
+    <TermsLink>{termsReference}</TermsLink>
+    {text.slice(termsIndex + termsReference.length)}
+  </>;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { parts } = await params;
   const document = await getDocument(parts);
@@ -82,13 +119,14 @@ export default async function LicencePage({ params }: Props) {
   return <main className="mx-auto max-w-3xl px-6 py-16">
     <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
     <p className="mt-2 text-sm text-gray-600">Version {document.version}{document.variant ? ` · ${document.variant.replaceAll('-', ' ')}` : ''}</p>
+    {document.code === 'standard' && <div className="mt-4"><PrePurchaseLicensor /></div>}
     <section className="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-6" aria-label="Licence summary">
       <h2 className="text-xl font-semibold text-gray-900">Major points</h2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-gray-700">{document.summary.map((line) => <li key={line}>{line}</li>)}</ul>
     </section>
     <section className="mt-10" aria-label="Full licence text">
       <h2 className="text-xl font-semibold text-gray-900">Full text</h2>
-      <pre dir="auto" className="mt-4 whitespace-pre-wrap break-words [tab-size:4] font-sans leading-7 text-gray-700">{document.full_text}</pre>
+      <pre dir="auto" className="mt-4 whitespace-pre-wrap break-words [tab-size:4] font-sans leading-7 text-gray-700">{renderLicenceText(document)}</pre>
     </section>
     <p className="mt-8 break-all text-sm text-gray-600">SHA-256: <code>{document.sha256}</code></p>
     <a className="mt-4 inline-block text-indigo-700 underline" href={`${apiBase}/api/v1/licenses/${parts.join('/')}?download=1`}>Download exact document</a>

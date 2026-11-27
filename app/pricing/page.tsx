@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getPublicTermsVersion } from '@/lib/publicTermsVersion';
 import VersionedTermsCopy, { TermsVersionProvider } from '@/components/legal/VersionedTermsCopy';
-import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE } from '@/components/legal/terms12Copy';
+import { CARD_PRICING_HEADLINE, CARD_SELLER_FEES, CARD_BUYER_HEADLINE, CARD_BUYER_DETAIL, CARD_PRICING_SUMMARY, CARD_CHECKOUT_NOTE, CARD_PAYOUT_EXAMPLE } from '@/components/legal/terms12Copy';
 
 export const metadata: Metadata = {
   title: 'Pricing and fees — ai.market',
@@ -26,6 +26,7 @@ const feeCards = [
     audience: 'Buyers',
     headline: <VersionedTermsCopy legacy="Pay the listing price plus transaction costs." terms12={CARD_BUYER_HEADLINE} />,
     details: [
+      'Listing prices are one-time payments.',
       'Buyers do not pay the 5% marketplace commission on top of the listing price.',
       <VersionedTermsCopy legacy="Buyers pay the applicable payment-provider costs, including Stripe, stablecoin, or escrow fees." terms12={CARD_BUYER_DETAIL} />,
       'Applicable sales tax, VAT, or similar tax is added where required.',
@@ -49,8 +50,8 @@ export default async function PricingPage() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-5xl px-6 py-14 sm:py-18">
-        <div className="grid gap-6 md:grid-cols-2">
+      <div className="@container mx-auto max-w-5xl px-6 py-14 sm:py-18">
+        <div className="grid gap-6 @2xl:grid-cols-2">
           {feeCards.map((card) => (
             <section key={card.audience} className="rounded-2xl border border-gray-200 p-7 shadow-sm">
               <p className="text-sm font-semibold text-[#3F51B5]">{card.audience}</p>
@@ -63,6 +64,17 @@ export default async function PricingPage() {
                   </li>
                 ))}
               </ul>
+              {card.audience === 'Sellers' && (
+                <VersionedTermsCopy legacy={null} terms12={(
+                  <p className="mt-5 border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700">{CARD_PAYOUT_EXAMPLE}</p>
+                )} />
+              )}
+              {card.audience === 'Buyers' && (
+                <p className="mt-5 border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700">
+                  <Link href="/requests" className="font-semibold text-[#3F51B5] underline">Post a Data Request</Link>
+                  {' '}for free. Free account needed.
+                </p>
+              )}
             </section>
           ))}
         </div>
@@ -84,7 +96,7 @@ export default async function PricingPage() {
             Read Section 5 of the Terms →
           </Link>
         </section>
-      </main>
+      </div>
     </div></TermsVersionProvider>
   );
 }

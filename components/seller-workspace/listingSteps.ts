@@ -36,14 +36,14 @@ export function listingSteps({connections, source, draft, categories, licensesEn
     : !categories.some(c => c.slug === content.category) ? 'Choose a category from the list in Describe and price, then save.'
     : !content.tags.split(',').some(t => t.trim()) ? 'Add at least one tag in Describe and price, then save.'
     : !admissiblePrice(content.price) ? PRICE_REASON
-    : !source || content.description_source_version !== source.version ? 'Your files changed after this description was written. Update it with Allai or confirm it matches your files, then save.' : '';
+    : !source || content.description_source_version !== source.version ? 'Your files changed after this description was written. Update it with allAI or confirm it matches your files, then save.' : '';
   // Never let a local field check overrule the current server review.
   if (currentReview && reviewRefusal(review!)) describeReason = reviewRefusal(review!);
   if (review && !currentReview) describeReason = 'The saved review changed elsewhere. Refresh Review to reload your saved files and draft before continuing.';
   if (reviewReason) describeReason = reviewReason;
   const described = !describeReason;
   // Keep a matching pre-rollout approval visible; new approval still requires confirmation.
-  const existingApprovalValid = legacyApproved && describeReason === 'Your files changed after this description was written. Update it with Allai or confirm it matches your files, then save.';
+  const existingApprovalValid = legacyApproved && describeReason === 'Your files changed after this description was written. Update it with allAI or confirm it matches your files, then save.';
   const approved = connected && files && licence && (described || existingApprovalValid) && currentReview && !!review?.approval;
   const published = approved && publication?.approval_id === review?.approval?.id;
   const done = [connected, files, licence, described, approved, !!published];

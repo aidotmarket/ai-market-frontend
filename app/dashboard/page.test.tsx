@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError } from 'axios';
 import { StrictMode } from 'react';
@@ -120,6 +120,13 @@ describe('DashboardOverview seller setup 2FA state', () => {
       pendingTwoFactor: null,
       refreshAuth,
     });
+  });
+
+  it.each([null, '', 'Seller'])('greets the buyer with first name %j', async (first_name) => {
+    useAuthStore.setState({ user: { ...baseUser, first_name } });
+    render(<DashboardOverview />);
+    expect(await screen.findByRole('heading', { name: first_name ? `Welcome back, ${first_name}` : 'Welcome back' })).toBeTruthy();
+    expect(screen.queryByText('Welcome back, there')).toBeNull();
   });
 
   it.each(['google','github'] as const)('unlocks Stripe from server current-policy missing steps for %s, without native MFA',async provider=>{
@@ -270,7 +277,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enable 2FA' }));
     fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    expect(await screen.findByText('Invalid verification code')).toBeTruthy();
+    expect(await screen.findByText("That code didn't match. Enter the newest code from your authenticator app.")).toBeTruthy();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
 
@@ -294,7 +301,64 @@ describe('DashboardOverview seller setup 2FA state', () => {
     expect(await screen.findByRole('heading', { name: 'Backup codes' })).toBeTruthy();
   });
 
-  it('renders active seller stats from the real contract shape', async () => {
+  it('keeps stats and listing navigation visible when payout status fails, and retries', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active', missing_steps: [] }, next_action: null,
+    });
+    connectApi.getConnectStatus.mockRejectedValueOnce(new Error('private_stripe_error'))
+      .mockResolvedValue({ data: { details_submitted: true, payouts_enabled: false } });
+    sellerApi.getSellerStats.mockResolvedValue({ data: sellerStats });
+    listingsApi.getMyListings.mockResolvedValue({ data: [{ status: 'published' }] });
+    render(<DashboardOverview />);
+    await screen.findByText("We couldn't check your payout account just now.");
+    expect(screen.getByText('$45.50')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View listings' }).getAttribute('href')).toBe('/dashboard/listings');
+    expect(screen.queryByText(/private_stripe_error/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    // The successful listings read still supplies the held-listing notice after recovery.
+    await screen.findByText('Published listings are not yet purchasable. Finish payout setup to enable sales.');
+    expect(screen.getByText('$45.50')).toBeTruthy();
+    expect(connectApi.getConnectStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the entire listings recovery message with separate focusable actions', async () => {
+    capabilitiesApi.getCapabilities.mockResolvedValue({
+      seller: { effective_status: 'active', missing_steps: [] }, next_action: null,
+    });
+    connectApi.getConnectStatus.mockResolvedValue({ data: { details_submitted: true, payouts_enabled: true } });
+    sellerApi.getSellerStats.mockResolvedValue({ data: sellerStats });
+    listingsApi.getMyListings.mockRejectedValueOnce(new Error('fixture listings failure')).mockResolvedValue({ data: [] });
+    render(<DashboardOverview />);
+
+    const region = await screen.findByRole('region', { name: 'Sales summary and listings' });
+    const recovery = within(region);
+    expect(recovery.getByRole('alert').textContent)
+      .toBe("We couldn't load your listings just now. Try again, or contact support if it keeps happening.");
+    const support = recovery.getByRole('link', { name: 'Contact support' });
+    const retry = recovery.getByRole('button', { name: 'Retry' });
+    expect(support.getAttribute('href')).toBe('/support');
+    expect(region.classList.contains('whitespace-normal')).toBe(true);
+    expect(retry.parentElement?.classList.contains('flex-wrap')).toBe(true);
+    for (const action of [support, retry]) {
+      expect(action.tabIndex).toBe(0);
+      action.focus();
+      expect(document.activeElement).toBe(action);
+    }
+    fireEvent.click(retry);
+    await screen.findByRole('link', { name: 'View listings' });
+    expect(listingsApi.getMyListings).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    sellerStats,
+    {
+      ...sellerStats,
+      total_sales: 0,
+      period_revenue_cents: 2375,
+      period_revenue_display: '$23.75',
+      pending_fulfillments: 1,
+    },
+  ])('shows active seller stats with context when Total Sales is $total_sales', async (stats) => {
     capabilitiesApi.getCapabilities.mockResolvedValue({
       buyer: { persisted_status: 'active', effective_status: 'active', missing_steps: [], reason: null },
       seller: {
@@ -309,7 +373,7 @@ describe('DashboardOverview seller setup 2FA state', () => {
       data: { details_submitted: true, payouts_enabled: true },
     });
     sellerApi.getSellerStats.mockResolvedValue({
-      data: sellerStats,
+      data: stats,
     });
     listingsApi.getMyListings.mockResolvedValue({ data: [] });
 
@@ -320,13 +384,17 @@ describe('DashboardOverview seller setup 2FA state', () => {
     });
 
     expect(screen.getByText('12')).not.toBeNull();
-    expect(screen.getByText('3')).not.toBeNull();
-    expect(screen.getByText('$45.50')).not.toBeNull();
-    expect(screen.getByText('Revenue (30 days)')).not.toBeNull();
+    const totalSales = within(screen.getByText('Total Sales').closest('dl')!);
+    expect(totalSales.getByText(String(stats.total_sales))).not.toBeNull();
+    expect(totalSales.getByText('Purchases on currently published listings, across all time')).not.toBeNull();
+    expect(totalSales.getByRole('link', { name: 'View sales by status' }).getAttribute('href')).toBe('/dashboard/sales?status=all');
+    const revenue = within(screen.getByText('Revenue (30 days)').closest('dl')!);
+    expect(revenue.getByText(stats.period_revenue_display)).not.toBeNull();
+    expect(revenue.getByText('Your share of orders completed in the last 30 days')).not.toBeNull();
     expect(screen.queryByText('Total Revenue')).toBeNull();
     const salesPointer = screen.getByRole('link', { name: 'Sales awaiting delivery' });
     expect(salesPointer.getAttribute('href')).toBe('/dashboard/sales?status=pending_delivery');
-    expect(salesPointer.textContent).toContain('2');
+    expect(within(salesPointer).getByText(String(stats.pending_fulfillments))).not.toBeNull();
     expect(screen.queryByText('Finish seller setup')).toBeNull();
     expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
     expect(connectApi.getConnectStatus).toHaveBeenCalledOnce();
@@ -405,11 +473,24 @@ describe('DashboardOverview seller setup 2FA state', () => {
     });
 
     expect(screen.getByText("You haven't bought anything yet")).not.toBeNull();
+    expect(screen.getByText('Review your purchases here and manage your buyer requests under My Requests.')).toBeTruthy();
+    expect(screen.queryByText("Here's what's happening with your store today.")).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Payout account' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Sales summary and listings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View listings' })).toBeNull();
+    expect(screen.queryByText('Total Sales')).toBeNull();
+    expect(screen.queryByText('Revenue (30 days)')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View sales by status' })).toBeNull();
+    expect(screen.queryByText('Purchases on currently published listings, across all time')).toBeNull();
+    expect(screen.queryByText('Your share of orders completed in the last 30 days')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sales awaiting delivery' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Browse data' }).getAttribute('href')).toBe('/find-data');
     expect(screen.getByRole('heading', { name: 'Interested in selling on AI Market?' })).not.toBeNull();
     expect(screen.queryByText('Finish seller setup')).toBeNull();
     expect(ordersApi.getMyOrders).toHaveBeenCalledOnce();
     expect(sellerApi.getSellerStats).not.toHaveBeenCalled();
+    expect(connectApi.getConnectStatus).not.toHaveBeenCalled();
+    expect(listingsApi.getMyListings).not.toHaveBeenCalled();
   });
 
   it('summarizes recent buyer orders with status and an orders entry point', async () => {

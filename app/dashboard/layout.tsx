@@ -1,15 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
   getSellerWorkspaceCapabilities,
   isAWSConnectionAvailable,
 } from '@/api/sellerWorkspace';
 import SellerSetupProgressBar from '@/components/onboarding/SellerSetupProgressBar';
+import { gatewayErrorCode } from '@/api/gatewayDelivery';
 import { listSellerGateways } from '@/api/sellerGateways';
 
 const isBuyerActivityRoute = (pathname: string) =>
@@ -21,6 +23,7 @@ type CapabilitySnapshot = {
   token: string | null;
   phase: 'loading' | 'ready' | 'error';
   sellerStatus: CapabilityStatus | null;
+  sellerPersistedStatus: CapabilityStatus | null;
   workspace: boolean;
   gateways: boolean;
 };
@@ -52,7 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
     if (!isCurrent()) return;
     const pending: CapabilitySnapshot = {
-      owner, token, phase: 'loading', sellerStatus: null, workspace: false, gateways: false,
+      owner, token, phase: 'loading', sellerStatus: null, sellerPersistedStatus: null, workspace: false, gateways: false,
     };
     // Credentials own requests; a ready view belongs to the stable action owner.
     // Revalidation must not remount the seller page and discard unsaved state.
@@ -63,18 +66,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const capabilities = await getCapabilities();
       if (!isCurrent()) return;
       const status = capabilities.seller.effective_status;
-      const ready: CapabilitySnapshot = { ...pending, phase: 'ready', sellerStatus: status };
+      const ready: CapabilitySnapshot = { ...pending, phase: 'ready', sellerStatus: status, sellerPersistedStatus: capabilities.seller.persisted_status };
       setSnapshot(ready);
-      if (status !== 'active') return;
+      if (!['active', 'provisioning'].includes(capabilities.seller.persisted_status)) return;
 
       const [workspace, gateways] = await Promise.allSettled([
-        getSellerWorkspaceCapabilities(), listSellerGateways(),
+        status === 'active' ? getSellerWorkspaceCapabilities() : Promise.resolve(null), listSellerGateways(),
       ]);
       if (!isCurrent()) return;
       setSnapshot({
         ...ready,
-        workspace: workspace.status === 'fulfilled' && isAWSConnectionAvailable(workspace.value),
-        gateways: gateways.status === 'fulfilled',
+        workspace: workspace.status === 'fulfilled' && workspace.value !== null && isAWSConnectionAvailable(workspace.value),
+        gateways: gateways.status === 'fulfilled' || gatewayErrorCode(gateways.reason) !== 'gateway_disabled',
       });
     } catch (err) {
       if (!isCurrent()) return;
@@ -99,25 +102,62 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     snapshot?.owner === owner ? snapshot : null;
   const capabilitiesResolved = current?.phase === 'ready';
   const isSeller = capabilitiesResolved &&
-    (current.sellerStatus === 'active' || current.sellerStatus === 'provisioning');
+    (current.sellerPersistedStatus === 'active' || current.sellerPersistedStatus === 'provisioning');
   const isSellerActive = capabilitiesResolved && current.sellerStatus === 'active';
   const sellerWorkspaceAvailable = current?.workspace === true;
   const gatewaysAvailable = current?.gateways === true;
-  const buyerRoute = buyerAllowedRoutes.some((p) =>
-    pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
+  // The licence-record endpoint authorizes the recorded buyer and seller.
+  const allowsSignedInUsers = /^\/dashboard\/sales\/[^/]+\/license-record\/?$/.test(pathname) ||
+    buyerAllowedRoutes.some((p) => pathname === p || (p !== '/dashboard' && pathname.startsWith(`${p}/`)));
   const authenticated = !isLoading && hydrated && isAuthenticated && !!owner && !!token;
-  const routeReady = authenticated && (buyerRoute || isSeller);
+  const checkOwnerListings = authenticated && pathname === '/dashboard/seller-workspace' &&
+    !isSeller && (capabilitiesResolved || current?.phase === 'error');
+  const ownerGeneration = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
+  const [ownerAdmission, setOwnerAdmission] = useState<{owner: string; generation: number; result: 'allowed' | 'denied' | 'error'} | null>(null);
+  const [ownerRetry, setOwnerRetry] = useState(0);
+  useEffect(() => {
+    if (!checkOwnerListings || !owner) return;
+    const request = new AbortController();
+    const apply = (result: 'allowed' | 'denied' | 'error') => {
+      if (!request.signal.aborted && authSessionOwner() === ownerGeneration && useAuthStore.getState().user?.id === owner) {
+        setOwnerAdmission({owner, generation: ownerGeneration, result});
+      }
+    };
+    void import('@/api/sellerListingPublication').then(({hasOwnerListings}) => {
+      if (!request.signal.aborted && authSessionOwner() === ownerGeneration && useAuthStore.getState().user?.id === owner) {
+        return hasOwnerListings(request.signal).then(allowed => apply(allowed ? 'allowed' : 'denied'));
+      }
+    }).catch(() => apply('error'));
+    return () => request.abort();
+  }, [checkOwnerListings, owner, ownerGeneration, current, ownerRetry]);
+  const ownerAccess = checkOwnerListings && ownerAdmission?.owner === owner &&
+    ownerAdmission?.generation === ownerGeneration ? ownerAdmission.result : undefined;
+  const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
+  const routeReady = authenticated && (allowsSignedInUsers || isSeller || ownerAccess === 'allowed');
 
   useEffect(() => {
     if (isLoading || !hydrated) return;
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
-    } else if (owner && !buyerRoute && capabilitiesResolved && !isSeller) {
+    } else if (owner && !allowsSignedInUsers && capabilitiesResolved && !isSeller && (!checkOwnerListings || ownerAccess === 'denied')) {
       router.push(current?.sellerStatus === 'not_requested' ? '/dashboard' : '/dashboard/inquiries');
     }
-  }, [buyerRoute, capabilitiesResolved, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
+  }, [allowsSignedInUsers, capabilitiesResolved, checkOwnerListings, ownerAccess, current?.sellerStatus, hydrated, isAuthenticated, isLoading, isSeller, owner, pathname, router]);
 
-  if (authenticated && !buyerRoute && current?.phase === 'error') {
+  if (ownerAccess === 'error') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p role="alert">Unable to check your Workspace listings. Please try again.</p>
+        <button type="button" onClick={() => { setOwnerAdmission(null); setOwnerRetry(value => value + 1); }}
+          className="rounded-md bg-[#3F51B5] px-4 py-2 text-white">
+          Retry
+        </button>
+        <Link href="/dashboard">Back to Overview</Link>
+      </div>
+    );
+  }
+
+  if (authenticated && !allowsSignedInUsers && current?.phase === 'error' && !checkingOwnerAccess && ownerAccess !== 'allowed') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p role="alert">Unable to check seller access. Please try again.</p>
@@ -149,7 +189,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ...(isSellerActive && sellerWorkspaceAvailable
           ? [{ name: 'Seller Workspace', href: '/dashboard/seller-workspace' }]
           : []),
-        ...(isSellerActive && gatewaysAvailable
+        ...(isSeller && gatewaysAvailable
           ? [{ name: 'Gateways', href: '/dashboard/gateways' }]
           : []),
         ...(isSellerActive ? [{ name: 'Sales', href: '/dashboard/sales' }] : []),

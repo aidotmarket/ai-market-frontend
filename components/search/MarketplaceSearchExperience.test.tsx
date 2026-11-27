@@ -3,6 +3,9 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ListingListItem, SearchResultItem } from '@/types';
+import FindDataPage from '@/app/find-data/page';
+import SearchPage from '@/app/search/page';
+import BrowseListingsPage from '@/app/listings/page';
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -87,6 +90,33 @@ describe('MarketplaceSearchExperience', () => {
     function renderedListingIds() {
       return screen.queryAllByTestId('listing-card').map((card) => card.getAttribute('data-listing-id'));
     }
+
+    it.each([
+      ['/find-data', FindDataPage, 2],
+      ['/search', SearchPage, 1],
+    ] as const)('shows one page h1 and one Search Marketplace label on %s', (path, Page, level) => {
+      mocks.pathname = path;
+      mocks.searchParams = new URLSearchParams();
+      mockLoadedItems([]);
+      render(<Page />);
+
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(screen.getAllByText('Search Marketplace')).toEqual([
+        screen.getByRole('heading', { name: 'Search Marketplace', level }),
+      ]);
+    });
+
+    it.each([
+      ['', 'Browse every listing. Pick a category or sort to narrow it down.'],
+      ['type=data', 'Use filters and sorting to find data listings.'],
+      ['type=models', 'Use filters and sorting to find model listings.'],
+    ])('introduces Browse Marketplace in plain buyer language for "%s"', (params, description) => {
+      mocks.searchParams = new URLSearchParams(params);
+      mockLoadedItems([]);
+      render(<BrowseListingsPage />);
+
+      expect(screen.getByText(description)).toBeTruthy();
+    });
 
     it('offers counted formats from loaded browse metadata without inventing legacy formats', () => {
       mocks.searchParams = new URLSearchParams('type=data');
@@ -251,7 +281,7 @@ describe('MarketplaceSearchExperience', () => {
       expect(screen.getByText(/Load more results to look for matches/)).toBeTruthy();
       expect((screen.getByRole('combobox', { name: 'Data type' }) as HTMLSelectElement).value).toBe('json');
       expect(screen.getByRole('option', { name: 'JSON (0 loaded)' })).toBeTruthy();
-      expect(screen.getByText('0 results filtered to JSON')).toBeTruthy();
+      expect(screen.getByText('Showing 0 results filtered to JSON')).toBeTruthy();
       expect(screen.getByText('Counts reflect loaded results only')).toBeTruthy();
       expect(state.fetchNextPage).not.toHaveBeenCalled();
       expect(mocks.replace).not.toHaveBeenCalled();
@@ -271,9 +301,18 @@ describe('MarketplaceSearchExperience', () => {
       expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
     });
 
+    it('labels a loaded format match while more pages are available', () => {
+      setup({ items: [csv, json] });
+      render(<MarketplaceSearchExperience mode={mode} />);
+
+      expect(screen.getByText(`Showing 1 ${semanticMode ? 'suggestion' : 'result'} filtered to JSON`)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+    });
+
     it('preserves definitive empty recovery when no pages remain', () => {
       const state = setup({ hasNextPage: false });
       render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText('0 results filtered to JSON')).toBeTruthy();
       expect(screen.getByText('No data found')).toBeTruthy();
       expect(screen.getByText(/Try adjusting the search text or filters/)).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
@@ -298,22 +337,26 @@ describe('MarketplaceSearchExperience', () => {
       expect(state.fetchNextPage).not.toHaveBeenCalled();
       if (status === 'loading') expect(screen.getByText('Loading results...')).toBeTruthy();
       else {
-        expect(screen.getByText('Synthetic failure')).toBeTruthy();
+        expect(screen.getByText("We couldn't load your search results just now. Try again, or contact support if it keeps happening.")).toBeTruthy();
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
         expect(state.refetch).toHaveBeenCalledTimes(1);
       }
     });
 
-    it('preserves ordinary unfiltered counts, ordering and explicit pagination', () => {
+    it('labels paginated Browse counts and preserves semantic totals, ordering and explicit pagination', () => {
       const state = setup({ items: [csv, json] });
       mocks.searchParams.delete('data_type');
-      render(<MarketplaceSearchExperience mode={mode} />);
-      expect(screen.getByText(semanticMode ? '24 suggestions' : '2 results')).toBeTruthy();
+      const view = render(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText(semanticMode ? '24 suggestions' : 'Showing 2 results')).toBeTruthy();
       expect(screen.getAllByTestId('listing-card').map((card) => card.getAttribute('data-listing-id'))).toEqual(['first-csv', 'later-json']);
       expect((screen.getByRole('combobox', { name: 'Sort' }) as HTMLSelectElement).value).toBe(semanticMode ? 'relevance' : 'newest');
       expect(state.fetchNextPage).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
       expect(state.fetchNextPage).toHaveBeenCalledTimes(1);
+
+      mocks.useSearchListings.mockReturnValue({ ...state, hasNextPage: false });
+      view.rerender(<MarketplaceSearchExperience mode={mode} />);
+      expect(screen.getByText(semanticMode ? '24 suggestions' : '2 results')).toBeTruthy();
     });
 
     it('keeps an exact case-sensitive URL format without assigning missing metadata', () => {
@@ -476,16 +519,21 @@ describe('MarketplaceSearchExperience', () => {
 
     render(<MarketplaceSearchExperience mode="search" />);
 
+    expect(screen.getByText('Describe what you need in your own words, then narrow the results with filters.')).toBeTruthy();
     expect(screen.getByText('No listings found')).toBeTruthy();
     const recoveryLink = screen.getByRole('link', {
       name: 'Browse all marketplace listings',
     });
     expect(recoveryLink.getAttribute('href')).toBe('/listings');
+    expect(screen.queryByRole('link', { name: 'Post a data request' })).toBeNull();
   });
 
-  it('labels nonempty semantic results as related suggestions', () => {
-    const query = 'real-time telepathy recordings from wild unicorns on Mars';
-    mocks.pathname = '/search';
+  it.each([
+    ['/find-data', FindDataPage],
+    ['/search', SearchPage],
+  ] as const)('labels suggestions and links to the request form below the results on %s', (path, Page) => {
+    const query = 'historical weather';
+    mocks.pathname = path;
     mocks.searchParams = new URLSearchParams({ q: query });
     mocks.useSearchListings.mockReturnValue({
       items: [
@@ -530,12 +578,18 @@ describe('MarketplaceSearchExperience', () => {
       refetch: vi.fn(),
     });
 
-    render(<MarketplaceSearchExperience mode="search" />);
+    render(<Page />);
 
     expect(screen.getByText(`Marketplace suggestions for "${query}"`)).toBeTruthy();
     expect(screen.getByText('2 suggestions')).toBeTruthy();
     expect(screen.getByText(/ranked by meaning and may be related rather than exact/i)).toBeTruthy();
     expect(screen.getByText(/refine your search text or filters if they do not fit/i)).toBeTruthy();
-    expect(screen.getAllByTestId('listing-card')).toHaveLength(2);
+    const cards = screen.getAllByTestId('listing-card');
+    expect(cards).toHaveLength(2);
+    const requestPrompt = screen.getByText(/Not what you need\?/);
+    const requestLink = within(requestPrompt).getByRole('link', { name: 'Post a data request' });
+    expect(requestPrompt.textContent).toBe('Not what you need? Post a data request.');
+    expect(requestLink.getAttribute('href')).toBe('/requests/new');
+    expect(cards[1].compareDocumentPosition(requestPrompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

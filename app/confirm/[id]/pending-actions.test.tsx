@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   auth: { hydrated: true, isLoading: false, user: { id: 'owner', totp_enabled: true }, token: 'session' } as { hydrated: boolean; isLoading: boolean; user: Pick<User, 'id'> & Partial<User> | null; token: string | null },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useParams: () => ({ id: mocks.id }), useSearchParams: () => mocks.query }));
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 vi.mock('@/lib/company-sign-in', async original => ({ ...await original<typeof import('@/lib/company-sign-in')>(), startCompanySignIn: mocks.signIn, checkCompanySignIn: mocks.checkSignIn }));
 vi.mock('@/components/OAuthButtons', () => ({ startProviderOAuth: mocks.provider }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => mocks.auth }));
@@ -218,7 +219,8 @@ it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENC
   vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'true');
   mocks.decide.mockResolvedValue({ ...checkoutAction, status: 'failed', error_code: code, result: { web_path: '/listings/listing' } });
   await review(); fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-  await screen.findByRole('link', { name: 'Review listing' });
+  const listingLink = await screen.findByRole('link', { name: 'Review listing' });
+  expect(listingLink.getAttribute('data-prefetch')).toBe('false');
   expect(screen.getByRole('alert').textContent).toContain('Checkout is blocked');
   expect(mocks.push).not.toHaveBeenCalled(); expect(screen.queryByRole('link', { name: 'Continue to checkout' })).toBeNull(); noDecisions();
 });

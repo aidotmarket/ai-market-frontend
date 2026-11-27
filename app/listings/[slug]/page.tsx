@@ -1,3 +1,4 @@
+import {LISTING_DATA_HEADER, LISTING_UUID, ListingUnavailable} from '@/lib/listing-http-status';
 import CurrentDisplayFreshness from '@/components/listings/CurrentDisplayFreshness';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import GeneratedSamplePage from './GeneratedSamplePage';
@@ -5,8 +6,9 @@ import { generatedSampleState, samplePresentation } from '@/lib/generatedSample'
 import PublicSourceReferencePage, { isPublicSourceReference } from './PublicSourceReferencePage';
 import SchemaTable from '@/components/listings/SchemaTable';
 import PublisherCard from '@/components/listings/PublisherCard';
-import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_NOTICE, CORRECTION_TITLE} from '@/lib/publicPresentation';
-import { notFound, redirect } from 'next/navigation';
+import {verifyCurrentListing, readLicenseDisplay, CORRECTION_KIND, CORRECTION_TITLE, CORRECTION_NOTICE} from '@/lib/publicPresentation';
+import { notFound, permanentRedirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { fetchListingAccessWindowDays, fetchListingVersions, fetchPublicListingDocuments, fetchPublicListing, resolveListingUUID } from '@/lib/api';
@@ -24,59 +26,71 @@ import InquiryWidget from '@/components/InquiryWidget';
 import ScanFindingsBadge from '@/components/listings/ScanFindingsBadge';
 import BackendListingHtml from '@/components/BackendListingHtml';
 import ListingDocumentation from '@/components/listing/ListingDocumentation';
+import { selectListingDocumentation } from '@/lib/listingDocumentation';
 import FileBreakdown from './FileBreakdown';
 import SampleFiles, { type ListingWithSamples } from './SampleFiles';
 import ListingLicenseDisclosure from '@/components/ListingLicenseDisclosure';
+import PrePurchaseLicensor from '@/components/PrePurchaseLicensor';
 import ApprovedListingPreview from '@/components/ApprovedListingPreview';
 import { isListingLicenseDetails } from '@/lib/listingLicense';
 
 export const dynamic = 'force-dynamic';
 
-// UUID v4 pattern
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATASET_JSONLD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DATASET_JSONLD !== 'false';
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ version?: string }>;
+  searchParams?: Promise<{ version?: string | string[] }>;
+}
+
+function forwardedListing(requestHeaders: Headers) {
+  const snapshot = requestHeaders.get(LISTING_DATA_HEADER);
+  return snapshot === null ? undefined : JSON.parse(decodeURIComponent(snapshot));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
 
-  if (UUID_RE.test(slug)) {
+  const requestHeaders = await headers();
+  if (LISTING_UUID.test(slug)) {
     return { title: 'Redirecting...' };
   }
 
 
-  const listing: ListingDetail | null = await fetchPublicListing(slug);
+  const userAgent = requestHeaders.get('user-agent');
+  const snapshot = forwardedListing(requestHeaders);
+  if (snapshot) await verifyCurrentListing(snapshot);
+  const listing: ListingDetail | null = snapshot ?? await fetchPublicListing(slug, userAgent).catch(error => {
+    if (error instanceof ListingUnavailable) return null;
+    throw error;
+  });
   if (!listing) {
     return { title: 'Not Found' };
   }
 
   const sample = generatedSampleState(listing) !== 'ordinary' ? samplePresentation(listing) : null;
   const title = sample?.title ?? listing.title;
-  const description = sample ? sample.description : isPublicSourceReference(listing)
-    ? listing.description?.slice(0, 200) || ''
+  const description = sample ? sample.description
+    : 'summary' in listing ? listing.summary ?? undefined
+    : isPublicSourceReference(listing) ? listing.description?.slice(0, 200) || ''
     : listing.short_description || listing.description?.slice(0, 200) || '';
+  const descriptionMetadata = description === undefined ? {} : { description };
 
   return {
     title,
-    description,
+    ...descriptionMetadata,
     alternates: { canonical: `https://ai.market/listings/${listing.slug}` },
     openGraph: {
       title,
-      description,
+      ...descriptionMetadata,
       url: `https://ai.market/listings/${listing.slug}`,
       type: 'website',
       siteName: 'ai.market',
-      ...(listing.share_card_url ? { images: [listing.share_card_url] } : {}),
     },
     twitter: {
       card: 'summary_large_image',
-      ...(listing.share_card_url ? { images: [listing.share_card_url] } : {}),
       title,
-      description,
+      ...descriptionMetadata,
     },
     robots:
       listing.noindex
@@ -85,20 +99,32 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+function failClosed(error: unknown): never {
+  if (error instanceof ListingUnavailable) notFound();
+  throw error;
+}
+
 export default async function ListingDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const requestedVersionId = (await searchParams)?.version ?? null;
+  const version = (await searchParams)?.version;
+  const requestedVersionId = (Array.isArray(version) ? version[0] : version) ?? null;
 
-  // UUID redirect: resolve UUID → slug, 301 redirect
-  if (UUID_RE.test(slug)) {
-    const resolved = await resolveListingUUID(slug);
+  const requestHeaders = await headers();
+  const snapshot = forwardedListing(requestHeaders);
+
+  // UUID redirect: resolve UUID → slug, 308 redirect
+  if (LISTING_UUID.test(slug)) {
+    const resolved = snapshot ?? await resolveListingUUID(slug).catch(failClosed);
     if (resolved?.slug) {
-      redirect(`/listings/${resolved.slug}`);
+      const query = requestedVersionId === null ? '' : `?${new URLSearchParams({version: requestedVersionId})}`;
+      permanentRedirect(`/listings/${resolved.slug}${query}`);
     }
     notFound();
   }
 
-  const listing: ListingWithSamples | null = await fetchPublicListing(slug);
+  const userAgent = requestHeaders.get('user-agent');
+  if (snapshot) await verifyCurrentListing(snapshot);
+  const listing: ListingWithSamples | null = snapshot ?? await fetchPublicListing(slug, userAgent).catch(failClosed);
   if (!listing) {
     notFound();
   }
@@ -136,15 +162,26 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
     ? {...listing.at_a_glance, sample_availability: undefined}
     : listing.at_a_glance;
   const [documents, versions] = await Promise.all([documentsPromise, fetchListingVersions(listing.id)]);
+  const sampleFiles = listing.sample_files ?? approved?.sample_files;
+  const {technical, pdf} = selectListingDocumentation(documents);
+  const keyFields = atAGlanceSummary?.key_fields;
+  const hasSummarySchema = keyFields?.provenance !== 'absent' && Array.isArray(keyFields?.value) && keyFields.value.length > 0;
+  const schemaHref = schemaColumns.length ? '#listing-schema' : hasSummarySchema ? '#listing-key-fields' : undefined;
+  const documentationHref = technical ? '#technical-documentation' : pdf ? '#listing-documentation' : undefined;
+  const hasPublicSampleFiles = !pendingSellerTerms && sampleFiles?.some((file) => file.state === 'available');
+  const emptyNotice = technical || pdf || hasPublicSampleFiles ? undefined
+    : 'Want to check field names or whether a data dictionary is included? Use Ask a Question before you buy.';
   const hasVersionRows = versions.length > 0;
-  // S1097: legacy listings intentionally keep byte-identical rendering and omit
-  // the pre-purchase download-window line pending Max's R5.1h-vs-parity adjudication.
+  const showVersionInventory = hasVersionRows && !pendingSellerTerms && !(approved && !listing.purchasable);
+  // S1097: legacy listings omit the pre-purchase download-window line pending
+  // Max's R5.1h-vs-parity adjudication.
   const accessWindowDays = hasVersionRows
-    ? await fetchListingAccessWindowDays(listing.id)
+    ? await fetchListingAccessWindowDays(listing.id, userAgent)
     : null;
 
   return (
     <CurrentDisplayFreshness observedAt={Date.now()}>
+      {currentDisplay && <meta name="ai-market:licence-display-provenance" content={CORRECTION_NOTICE} data-correction-digest={currentDisplay.correction_digest} />}
       {shouldEmitJsonLd && (
         <script
           type="application/ld+json"
@@ -161,11 +198,11 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
         <span className="text-gray-900">{listing.title}</span>
       </nav>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="group/listing grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
           <div>
-            {!approved && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
+            {(!approved || approved.approved_display_html != null) && <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>}
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <span>Published {listing.published_at ? formatPublishedDate(listing.published_at) : 'N/A'}</span>
               <span>&middot;</span>
@@ -173,12 +210,32 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
               <span>&middot;</span>
               <span>{listing.inquiry_count} inquiries</span>
             </div>
+            {(schemaHref || documentationHref) && (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-indigo-700">
+                {schemaHref && <a href={schemaHref} className="underline">View field names and types</a>}
+                {documentationHref && <a href={documentationHref} className="underline">
+                  {technical ? 'Read public technical documentation' : 'Find the public data sheet'}
+                </a>}
+              </div>
+            )}
           </div>
 
-          {currentDisplay && <p className="text-sm text-gray-700">Original seller evidence below; current public licence display: {currentDisplay.license_label}. {CORRECTION_NOTICE}</p>}
-          <BuyerAtAGlance slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
+          <BuyerAtAGlance licenseDisplay={currentDisplay} slug={listing.slug} listingId={listing.id} initialSummary={atAGlanceSummary} includeSample={false} hideSampleAvailability={pendingSellerTerms} />
 
-          {approved ? <><p className="text-sm text-gray-700">{corrected ? CORRECTION_NOTICE : 'Original seller-approved listing evidence'}</p><ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} /></> : <>
+          {approved ? <>
+            {approved.approved_display_html != null ? <>
+              <div className="prose prose-sm max-w-none">
+                <BackendListingHtml description={listing.description} descriptionHtml={approved.approved_display_html} />
+              </div>
+              <details>
+                <summary className="cursor-pointer text-sm text-gray-700">Original seller-approved version</summary>
+                <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
+              </details>
+            </> : <>
+              {!corrected && <p className="text-sm text-gray-700">Original seller-approved listing evidence</p>}
+              <ApprovedListingPreview title={corrected ? CORRECTION_TITLE : 'Seller-approved listing'} html={approved.rendered_html} />
+            </>}
+          </> : <>
           {/* Description uses the validated backend render. */}
           <div className="prose prose-sm max-w-none">
             <BackendListingHtml description={listing.description} descriptionHtml={listing.description_html}/>
@@ -191,8 +248,10 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
           <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
           {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
           {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
-          <FileBreakdown groups={listing.file_breakdown} />
+          {!showVersionInventory && <FileBreakdown groups={listing.file_breakdown} />}
 
+          </>}
+          {(!approved || approved.approved_display_html != null) && <>
           {/* Tags */}
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
@@ -221,23 +280,24 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             <ScanFindingsBadge scanFindings={listing.scan_findings ?? null} />
             {!hasActiveScanFindings && <p className="text-sm text-gray-600">The seller can request a verified scan of this data.</p>}
             {listing.verification_scope != null && <p className="text-sm text-gray-600">{listing.verification_scope}</p>}
-            <FileBreakdown groups={listing.file_breakdown} />
+            {!showVersionInventory && <FileBreakdown groups={listing.file_breakdown} />}
           </>}
 
           {publicLicenseUrl && <Link href={publicLicenseUrl} className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${licenseDetails?.code === 'standard' ? 'bg-green-50 text-green-900' : 'bg-amber-50 text-amber-950'}`}>
             {licenseDetails?.code === 'standard' ? 'ai.market standard terms' : "Seller's own licence"}
           </Link>}
+          {licenseDetails && !pendingSellerTerms && <PrePurchaseLicensor />}
           {licenseDetails && (pendingSellerTerms || approved && !listing.purchasable) && <ListingLicenseDisclosure license={licenseDetails} />}
           {pendingSellerTerms && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
             <p className="font-medium">Not yet available to buy. The seller needs to accept the current terms.</p>
           </div>}
           {listing.license_provenance && <p className="text-sm text-gray-600">seller previously indicated: {listing.license_provenance}</p>}
 
-          {!pendingSellerTerms && <SampleFiles files={listing.sample_files ?? approved?.sample_files} />}
+          {!pendingSellerTerms && <SampleFiles files={sampleFiles} />}
 
           {/* Schema Info */}
           {(rowCount != null || schemaColumns.length > 0) && (
-            <div>
+            <div id={schemaColumns.length ? 'listing-schema' : undefined} className="scroll-mt-24">
               <h2 className="text-lg font-semibold mb-3">Schema Information</h2>
               {rowCount != null && (
                 <p className="text-sm text-gray-500 mb-3">{rowCount.toLocaleString()} rows</p>
@@ -248,7 +308,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             </div>
           )}
 
-          {!pendingSellerTerms && <BuyerSamplePreview slug={listing.slug} listingId={listing.id} />}
+          {pendingSellerTerms
+            ? emptyNotice && <p className="text-sm text-gray-600">{emptyNotice}</p>
+            : <BuyerSamplePreview slug={listing.slug} listingId={listing.id} emptyNotice={emptyNotice} />}
         </div>
 
         {/* Sidebar */}
@@ -277,6 +339,7 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
                 fulfillmentType={listing.fulfillment_type}
                 disabledReason={purchaseDisabledReason}
                 initialVersionId={requestedVersionId}
+                fileBreakdown={listing.file_breakdown}
               />
             ) : (
               <BuyButton
@@ -320,6 +383,9 @@ export default async function ListingDetailPage({ params, searchParams }: Props)
             listingId={listing.id}
             listingSlug={listing.slug}
             listingTitle={listing.title}
+            schemaHref={schemaHref}
+            documentationHref={documentationHref}
+            sampleHref={hasPublicSampleFiles ? '#listing-sample-files' : pendingSellerTerms ? undefined : '#listing-sample-preview'}
           />
 
           {/* Non-custodial trust strip */}

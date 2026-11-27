@@ -13,6 +13,22 @@ import { useAllAI } from '@/components/allai/AllAIContext';
 
 const SUPPORT_TYPES = new Set(['support_ticket_status_changed', 'support_ticket_message']);
 
+function formatNotificationType(type: NotificationItem['type']): string {
+  switch (type) {
+    case 'data_request_matched':
+      return 'Data request match';
+    case 'inquiry_replied':
+      return 'Inquiry reply';
+    case 'license_terminated':
+      return 'Licence terminated';
+    default: {
+      if (!/^[a-z][a-z0-9_]*$/.test(type)) return 'Notification';
+      const label = type.replace(/_+/g, ' ').trim();
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+  }
+}
+
 function formatNotificationTime(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -83,7 +99,7 @@ export function NotificationList({
                   {notification.body && (
                     <span className="mt-1 block text-sm leading-snug text-gray-600">{notification.body}</span>
                   )}
-                  <span className="mt-1 block text-xs text-gray-400">{notification.type === 'license_terminated' ? 'Licence terminated' : notification.type}</span>
+                  <span className="mt-1 block text-xs text-gray-400">{formatNotificationType(notification.type)}</span>
                 </span>
               </div>
             </button>

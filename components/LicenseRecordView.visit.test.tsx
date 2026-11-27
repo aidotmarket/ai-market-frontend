@@ -145,7 +145,8 @@ it('survives StrictMode read setup/cleanup and confirms only the displayed visit
 
 it('catches read refusals with a fixed persistent error and deliberate read retry only', async () => {
   mocks.getLicenseRecord.mockRejectedValueOnce({ private: 'never expose' }).mockResolvedValueOnce(record('retried'));
-  render(<LicenseRecordView party="buyer" />); expect((await screen.findByRole('alert')).textContent).toBe('The licence record is unavailable.');
+  render(<LicenseRecordView party="buyer" />); expect((await screen.findByRole('alert')).textContent).toBe('We could not load your licence record just now. Try again, or contact support if it keeps happening.');
+  expect(screen.getByRole('link', { name: 'contact support' }).getAttribute('href')).toBe('/support');
   expect(mocks.getLicenseRecord).toHaveBeenCalledTimes(1); expect(mocks.confirmLicenseRecordDeletion).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry licence record' })); await screen.findByText('retried'); expect(screen.queryByRole('alert')).toBeNull();
 });

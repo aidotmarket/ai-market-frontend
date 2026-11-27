@@ -35,6 +35,14 @@ describe('AllAIPanel accessibility and locale boundary', () => {
 
   afterEach(cleanup);
 
+  it('names allAI in the seller workspace introduction', () => {
+    mocks.context.anonymousSurfaceActive = false;
+    mocks.context.page = '/dashboard/seller-workspace';
+    render(<AllAIPanel />);
+    expect(screen.getByText('I’m allAI, here to help throughout your seller journey. Ask me about setting up storage, choosing what to sell, or preparing your listing.')).toBeTruthy();
+    mocks.context.page = '/';
+  });
+
   it('opens as a labelled dialog and moves focus to the input', async () => {
     render(<AllAIPanel />);
 

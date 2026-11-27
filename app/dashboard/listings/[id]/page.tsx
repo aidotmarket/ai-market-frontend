@@ -3,20 +3,87 @@
 import { use, useEffect, useState } from 'react';
 import type { AxiosRequestConfig } from 'axios';
 import Link from 'next/link';
-import { getSellerListing, getListingOwnership } from '@/api/listings';
+import { getSellerListing, getListingOwnership, getPendingSellerTermsListings } from '@/api/listings';
+import { getConnectStatus } from '@/api/connect';
 import { getGatewayListingSource } from '@/api/sellerGateways';
 import { getAwsVerifierStatus, getCloudflareVerifierStatus } from '@/api/dataVerificationGateway';
 import { useAuthStore } from '@/store/auth';
 import GatewayVerificationFlow from '@/components/listings/GatewayVerificationFlow';
+import { summaryLicenseDisplay } from '@/components/listings/AtAGlance';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
+import { formatDate, formatPrice } from '@/lib/format';
+import { formatBytes } from '@/lib/formatBytes';
+import { heldStatus, isPublicReference, ListingReadinessNote, listingReadiness, listingStatus, readPayoutsStatus, type PayoutsStatus } from '../listing-status';
 
 type OwnedListing = Awaited<ReturnType<typeof getSellerListing>>;
 type VerifierStatus = { state: 'loading' | 'unavailable'; connectionId?: never } | { state: 'ready'; connectionId: string | null };
 const OPTIONAL_STATUS_TIMEOUT_MS = 10_000;
+// A failed readiness read is display-only, including a 401 that would otherwise
+// trigger a session refresh. The core reads retain their usual auth behavior.
+const readinessResponse = { validateStatus: () => true };
+
+const nextSteps: Record<string, string> = {
+  draft: 'Finish your draft in the editor.',
+  unlisted: 'Open the editor to publish this listing.',
+};
+
+function ListingOverview({ listing, id, readiness }: {
+  listing: OwnedListing;
+  id: string;
+  readiness: ReturnType<typeof listingReadiness>;
+}) {
+  const status = readiness?.href ? heldStatus : listingStatus(listing.status);
+  const nextStep = Object.hasOwn(nextSteps, listing.status) ? nextSteps[listing.status] : 'Open the editor to review your listing.';
+  const summary = listing.at_a_glance;
+  const count = listing.raw_metadata?.object_count;
+  const summarySize = summary?.size_bytes;
+  const size = listing.raw_metadata?.file_size_bytes ?? (summarySize?.provenance !== 'absent' ? summarySize?.value : null);
+  const summaryLicence = summary?.license;
+  const licence = summaryLicenseDisplay(listing.license_display)?.license_label ??
+    (summaryLicence?.provenance !== 'absent' ? summaryLicence?.value : null);
+  const updated = listing.updated_at;
+
+  return (
+    <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="owner-listing-title">
+      <div>
+        <h1 id="owner-listing-title" className="text-2xl font-semibold text-gray-900 [overflow-wrap:anywhere]">{listing.title || 'Listing title unavailable'}</h1>
+        <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-xs font-semibold [overflow-wrap:anywhere] ${status.style}`}>{status.label}</span>
+        {readiness ? <ListingReadinessNote readiness={readiness} className="mt-2 text-sm text-gray-700" /> :
+          <p className="mt-2 text-sm text-gray-700">{nextStep}</p>}
+      </div>
+      <dl className="grid gap-4 border-t border-gray-100 pt-4 text-sm [overflow-wrap:anywhere] sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <dt className="font-semibold text-gray-900">Files</dt>
+          <dd className="mt-1 text-gray-700">{typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count.toLocaleString('en-US') : 'Count unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Total size</dt>
+          <dd className="mt-1 text-gray-700">{typeof size === 'number' && Number.isFinite(size) && size >= 0 ? formatBytes(size) : 'Size unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Price</dt>
+          <dd className="mt-1 text-gray-700">{typeof listing.price === 'number' && Number.isFinite(listing.price) ? formatPrice(listing.price) : 'Price unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Licence</dt>
+          <dd className="mt-1 text-gray-700">{typeof licence === 'string' && licence.trim() ? licence : 'Licence unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Last updated</dt>
+          <dd className="mt-1 text-gray-700">{typeof updated === 'string' && Number.isFinite(Date.parse(updated)) ? formatDate(updated) : 'Update date unavailable'}</dd>
+        </div>
+      </dl>
+      <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className={primaryButtonClass}>Edit listing</Link>
+    </section>
+  );
+}
 
 export default function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user, isAuthenticated, hydrated } = useAuthStore();
   const [listing, setListing] = useState<OwnedListing | null>(null);
+  const [pendingTerms, setPendingTerms] = useState<boolean>();
+  const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus>('unknown');
   const [sourceState, setSourceState] = useState<'loading' | 'gateway' | 'other' | 'unavailable'>('loading');
   const [cloudflareStatus, setCloudflareStatus] = useState<VerifierStatus>({ state: 'loading' });
   const [awsStatus, setAwsStatus] = useState<VerifierStatus>({ state: 'loading' });
@@ -32,6 +99,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     const cleanups: (() => void)[] = [];
     setLoadOwner({ id, userId });
     setState('loading'); setListing(null); setSourceState('loading');
+    setPendingTerms(undefined); setPayoutsStatus('unknown');
     setAwsStatus({ state: 'loading' }); setCloudflareStatus({ state: 'loading' });
 
     function optional<T>(request: (options: Pick<AxiosRequestConfig, 'timeout' | 'signal'>) => Promise<T>, apply: (data: T) => void, unavailable: () => void) {
@@ -66,6 +134,17 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         const owned = await getSellerListing(id);
         if (!current) return;
         setListing(owned); setState('ready');
+        if (owned.status === 'published' && !isPublicReference(owned.structured_metadata)) {
+          // Wait for the higher-priority Terms read before showing a payout reason.
+          optional(async options => {
+            const { data, status } = await getPendingSellerTermsListings({ ...options, ...readinessResponse });
+            return status === 200 && Array.isArray(data?.listings) && data.listings.some(entry => entry?.id === id);
+          }, setPendingTerms, () => setPendingTerms(false));
+          optional(async options => {
+            const { data, status } = await getConnectStatus({ ...options, ...readinessResponse });
+            return readPayoutsStatus(status === 200 ? data?.payouts_enabled : undefined);
+          }, setPayoutsStatus, () => setPayoutsStatus('unknown'));
+        }
         optional(options => getGatewayListingSource(id, options), source => {
           setSourceState(source?.type === 'gateway' ? 'gateway' : 'other');
           if (source?.type === 'gateway') return;
@@ -88,21 +167,20 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   if (!hydrated) return <p>Loading your listing…</p>;
   if (!isAuthenticated || !user) return <p><Link href="/login" className="underline">Sign in</Link> to manage your listing.</p>;
   if (state === 'loading' || loadOwner?.id !== id || loadOwner.userId !== userId) return <p>Loading your listing…</p>;
-  if (state === 'unavailable') return <p>This listing is not available.</p>;
-  if (state === 'error') return <><p>We could not load your listing.</p><button onClick={() => setRetry(value => value + 1)}>Try again</button></>;
+  if (state === 'unavailable') return <p>We could not find a listing you can manage here. Open Your listings to choose another listing. <Link href="/dashboard/listings" className="underline">Your listings</Link></p>;
+  if (state === 'error' || !listing) return <><p>We could not load your listing just now. Try again, or contact support if it keeps happening.</p><button className={secondaryButtonClass} onClick={() => setRetry(value => value + 1)}>Try again</button></>;
   return <div className="space-y-6">
-    <Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link>
-    <h1 className="text-2xl font-semibold">{listing?.title}</h1>
-    <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className="text-indigo-700 underline">Edit listing</Link>
-    {listing?.status === 'published' && <>
+    <p><Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link></p>
+    <ListingOverview listing={listing} id={id} readiness={listingReadiness(listing, pendingTerms, payoutsStatus)} />
+    {listing.status === 'published' && <>
       {sourceState === 'loading' && <p role="status">Loading verification availability…</p>}
-      {sourceState === 'unavailable' && <p role="status">Verification availability is unavailable.</p>}
+      {sourceState === 'unavailable' && <div><p role="status">We could not check whether this listing can be verified. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
       {sourceState === 'gateway' && <GatewayVerificationFlow key={`${user.id}:${id}`} listingId={id} sellerId={user.id} />}
       {sourceState === 'other' && <>
         {awsStatus.state === 'loading' && <p role="status">Loading AWS verification status…</p>}
-        {awsStatus.state === 'unavailable' && <p role="status">AWS verification status is unavailable.</p>}
+        {awsStatus.state === 'unavailable' && <div><p role="status">We could not check your AWS data verification status. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
         {cloudflareStatus.state === 'loading' && <p role="status">Loading Cloudflare verification status…</p>}
-        {cloudflareStatus.state === 'unavailable' && <p role="status">Cloudflare verification status is unavailable.</p>}
+        {cloudflareStatus.state === 'unavailable' && <div><p role="status">We could not check your Cloudflare data verification status. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
         {/* Cloudflare takes precedence; unknown Cloudflare status must not select AWS. */}
         {cloudflareStatus.state === 'ready' && !cloudflareStatus.connectionId && awsStatus.connectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${awsStatus.connectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'aws', connectionId: awsStatus.connectionId }} />}
         {cloudflareStatus.connectionId && <GatewayVerificationFlow key={`${user.id}:${id}:${cloudflareStatus.connectionId}`} listingId={id} sellerId={user.id} verifier={{ kind: 'cloudflare', connectionId: cloudflareStatus.connectionId }} />}

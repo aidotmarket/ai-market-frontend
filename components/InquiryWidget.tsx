@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { customerRefusal, INQUIRY_REFUSALS, INQUIRY_UNAVAILABLE, customerActionError } from '@/lib/customerMessages';
+import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -15,14 +16,26 @@ import ConversationThread from '@/components/ConversationThread';
 import type { ConversationDetail, ConversationMessage } from '@/types';
 import { AxiosError } from 'axios';
 import { mergeConversationMessages } from '@/lib/conversationMessages';
+import { useAllAILocale } from '@/components/allai/AllAIContext';
+import AllAIMarkdown from '@/components/allai/AllAIMarkdown';
+import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
+import {
+  anonymousAllAIResources,
+  isAnonymousSafeOutcome,
+  type AnonymousSafeOutcome,
+} from '@/lib/i18n/anonymous-allai';
 
 interface Props {
   listingId: string;
   listingSlug: string;
   listingTitle: string;
+  schemaHref?: '#listing-schema' | '#listing-key-fields';
+  documentationHref?: '#technical-documentation' | '#listing-documentation';
+  sampleHref?: '#listing-sample-files' | '#listing-sample-preview';
 }
 
 const DRAFT_KEY_PREFIX = 'inquiry_draft_';
+const QUESTION_SEND_FAILED = "We couldn't send your question. Try sending it again.";
 const ANONYMOUS_WAIT_NOTICE_DELAY_MS = 8_000;
 const ANONYMOUS_ATTEMPT_DEADLINE_MS = 45_000;
 
@@ -31,16 +44,26 @@ interface AnonymousAttemptResource<T> {
   value: T;
 }
 
+interface AnonymousInquiryMessage extends ConversationMessage {
+  safeOutcome?: AnonymousSafeOutcome;
+  fallbackDestinations?: FallbackDestinations;
+}
+
 // A listing is a separate public attempt/session as well as a private visit.
 export default function InquiryWidget(props: Props) {
   return <ListingInquiryWidget key={props.listingId} {...props} />;
 }
 
-function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
+function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref, documentationHref, sampleHref }: Props) {
   const { isAuthenticated } = useAuthStore();
   const { toast } = useToast();
+  const locale = useAllAILocale();
+  const resources = anonymousAllAIResources(locale);
+  const recovery = resources.listingRecovery;
+  const signInHref = `/login?redirect=/listings/${encodeURIComponent(listingSlug)}`;
 
   const [question, setQuestion] = useState('');
+  const [hasSellerDraft, setHasSellerDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
@@ -57,10 +80,16 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   const statusVersion = useRef(0);
   const owner = authSessionIdentity(useAuthStore.getState());
   const visitRef = useRef({ owner });
+  // Set whenever a signed-in owner leaves, even if a batched sign-out/sign-in
+  // returns to the same owner before React commits.
+  const signedInOwnerLeftRef = useRef(false);
   const [renderedVisit, setRenderedVisit] = useState(visitRef.current);
   const [, notifyOwnerChange] = useState(0);
   const creating = useRef(false);
-  if (visitRef.current.owner !== owner) visitRef.current = { owner };
+  if (visitRef.current.owner !== owner) {
+    if (visitRef.current.owner !== null) signedInOwnerLeftRef.current = true;
+    visitRef.current = { owner };
+  }
   const visit = visitRef.current;
 
   // Store notifications retire visits synchronously, including A -> B -> A
@@ -68,10 +97,14 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   useEffect(() => useAuthStore.subscribe((state) => {
     const nextOwner = authSessionIdentity(state);
     if (visitRef.current.owner !== nextOwner) {
+      if (visitRef.current.owner !== null) signedInOwnerLeftRef.current = true;
       visitRef.current = { owner: nextOwner };
       notifyOwnerChange((version) => version + 1);
     }
   }), []);
+
+  // allAI had no qualifying answer: keep the question so it can go to the seller.
+  const [anonymousFallback, setAnonymousFallback] = useState(false);
 
   if (renderedVisit !== visit) {
     setRenderedVisit(visit);
@@ -85,15 +118,18 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     setReplying(false);
     setShowTyping(false);
     setSubmissionError(null);
-    if (renderedVisit.owner !== null) setQuestion('');
+    if (renderedVisit.owner !== null) {
+      setQuestion('');
+      setHasSellerDraft(false);
+      setAnonymousFallback(false);
+    }
     if (creating.current) setSubmitting(false);
     creating.current = false;
     sending.current = false;
     readVersion.current += 1;
   }
-  const [anonymousMessages, setAnonymousMessages] = useState<ConversationMessage[]>([]);
-  const [anonymousError, setAnonymousError] = useState<string | null>(null);
-  const [anonymousTimedOut, setAnonymousTimedOut] = useState(false);
+  const [anonymousMessages, setAnonymousMessages] = useState<AnonymousInquiryMessage[]>([]);
+  const [anonymousError, setAnonymousError] = useState<'error' | 'timeout' | null>(null);
   const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
   const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
   const [anonymousWaitElapsed, setAnonymousWaitElapsed] = useState(false);
@@ -129,6 +165,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     const draft = sessionStorage.getItem(DRAFT_KEY_PREFIX + listingId);
     if (draft) {
       setQuestion(draft);
+      setHasSellerDraft(true);
       sessionStorage.removeItem(DRAFT_KEY_PREFIX + listingId);
     }
   }, [listingId]);
@@ -143,6 +180,22 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       anonymousAbortRef.current = null;
     };
   }, [clearAnonymousAttemptTimers]);
+
+  // When a signed-in account leaves (sign-out or A -> B), retire any pending
+  // anonymous attempt so its deadline or stream end cannot restore the earlier
+  // question for the next account. Anonymous -> first sign-in keeps the handoff.
+  useLayoutEffect(() => {
+    if (!signedInOwnerLeftRef.current) return;
+    signedInOwnerLeftRef.current = false;
+    anonymousAttemptRef.current += 1;
+    clearAnonymousAttemptTimers();
+    anonymousAbortRef.current?.value.abort();
+    anonymousAbortRef.current = null;
+    setAnonymousSubmissionInProgress(false);
+    setAnonymousWaitElapsed(false);
+    setAnonymousFallback(false);
+    setSubmitting(false);
+  }, [renderedVisit, clearAnonymousAttemptTimers]);
 
   const preserveAnonymousDraft = useCallback(() => {
     const draft = question.trim() ? question : anonymousSubmittedQuestionRef.current;
@@ -174,12 +227,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     current
   );
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (requestSeller = false) => {
     if (!current() || creating.current || anonymousAbortRef.current || !question.trim()) return;
 
     setSubmissionError(null);
     setAnonymousError(null);
-    setAnonymousTimedOut(false);
+    setAnonymousFallback(false);
 
     if (!isAuthenticated) {
       const trimmedQuestion = question.trim();
@@ -188,6 +241,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       const answerMessageId = `anonymous-answer-${attemptId}`;
       const controller = new AbortController();
       let receivedAnswer = '';
+      let receivedFallback = false;
 
       anonymousAttemptRef.current = attemptId;
       clearAnonymousAttemptTimers();
@@ -220,11 +274,16 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
           anonymousAbortRef.current.value.abort();
           anonymousAbortRef.current = null;
         }
-        setAnonymousMessages((prev) => prev.filter(
-          (message) => message.id !== questionMessageId && message.id !== answerMessageId
-        ));
-        setAnonymousError('This is taking longer than expected. Please try again, or');
-        setAnonymousTimedOut(true);
+        if (receivedFallback) {
+          setQuestion(trimmedQuestion);
+          setAnonymousFallback(true);
+          setAnonymousAnswerReturned(true);
+        } else {
+          setAnonymousMessages((prev) => prev.filter(
+            (message) => message.id !== questionMessageId && message.id !== answerMessageId
+          ));
+          setAnonymousError('timeout');
+        }
         setAnonymousWaitElapsed(false);
         setAnonymousAnswerStarted(false);
         setAnonymousSubmissionInProgress(false);
@@ -260,7 +319,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
             page: `/listings/${listingSlug}`,
             listing_id: listingId,
           },
-          locale: 'en',
+          locale,
           stream: true,
         }, { signal: controller.signal });
 
@@ -273,17 +332,23 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         }
 
         await readAnonymousMessageStream(response.body, (event) => {
-          if (!mountedRef.current || anonymousAttemptRef.current !== attemptId) return;
+          if (!mountedRef.current || anonymousAttemptRef.current !== attemptId || receivedFallback) return;
+
+          const safeOutcome = event.type === 'safe_failure' && isAnonymousSafeOutcome(event.outcome)
+            ? event.outcome : undefined;
+          const fallbackDestinations = anonymousFallbackDestinations(event, 'listing');
 
           const streamError = event.error ?? (event.type === 'error' ? event.message : undefined);
           if (typeof streamError === 'string' && streamError) {
             throw new Error(streamError);
           }
 
-          const delta = event.text ?? (event.type === 'delta' ? event.chunk : undefined);
+          const delta = safeOutcome ? resources.safeOutcomes[safeOutcome]
+            : event.text ?? (event.type === 'delta' ? event.chunk : undefined);
           if (typeof delta !== 'string' || !delta) return;
 
-          receivedAnswer += delta;
+          receivedFallback = Boolean(safeOutcome);
+          receivedAnswer = receivedFallback ? delta : receivedAnswer + delta;
           setAnonymousAnswerStarted(true);
           setAnonymousMessages((prev) => {
             const answer = prev.find((message) => message.id === answerMessageId);
@@ -295,6 +360,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
                   conversation_id: '',
                   role: 'allai',
                   content: delta,
+                  safeOutcome,
+                  fallbackDestinations,
                   created_at: new Date().toISOString(),
                 },
               ];
@@ -302,7 +369,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
 
             return prev.map((message) => (
               message.id === answerMessageId
-                ? { ...message, content: message.content + delta }
+                ? { ...message, content: safeOutcome ? delta : message.content + delta, safeOutcome, fallbackDestinations }
                 : message
             ));
           });
@@ -314,7 +381,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         }
 
         if (mountedRef.current) {
-          setQuestion('');
+          if (receivedFallback) {
+            setQuestion(trimmedQuestion);
+            setAnonymousFallback(true);
+          } else {
+            setQuestion('');
+          }
           setAnonymousAnswerReturned(true);
         }
       } catch (error) {
@@ -323,11 +395,16 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
           && anonymousAttemptRef.current === attemptId
           && !(error instanceof Error && error.name === 'AbortError')
         ) {
-          setAnonymousError("We couldn't get an answer. Please try again.");
-          setAnonymousTimedOut(false);
-          setAnonymousMessages((prev) => prev.filter(
-            (message) => message.id !== questionMessageId && message.id !== answerMessageId
-          ));
+          if (receivedFallback) {
+            setQuestion(trimmedQuestion);
+            setAnonymousFallback(true);
+            setAnonymousAnswerReturned(true);
+          } else {
+            setAnonymousError('error');
+            setAnonymousMessages((prev) => prev.filter(
+              (message) => message.id !== questionMessageId && message.id !== answerMessageId
+            ));
+          }
         }
       } finally {
         clearAnonymousAttemptTimers(attemptId);
@@ -347,7 +424,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
     creating.current = true;
     setSubmitting(true);
     try {
-      const conv = await createInquiry(listingId, question.trim());
+      const conv = await (requestSeller
+        ? createInquiry(listingId, question.trim(), true)
+        : createInquiry(listingId, question.trim()));
       if (!current()) return;
       setConversation(conv);
       setMessages(conv.messages);
@@ -358,21 +437,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       if (lastMsg) updateSince(lastMsg.created_at);
     } catch (err) {
       if (!current()) return;
-      if (err instanceof AxiosError) {
-        const detail = err.response?.data?.detail;
-        if (err.response?.status === 409) {
-          const message = 'You already have an inquiry for this listing. Check your dashboard.';
-          setSubmissionError(message);
-          toast(message, 'info');
-        } else {
-          const message = typeof detail === 'string' ? detail : 'Failed to submit question.';
-          setSubmissionError(message);
-          toast(message, 'error');
-        }
-      } else {
-        const message = 'An unexpected error occurred.';
+      if (err instanceof AxiosError && err.response?.status === 409) {
+        const message = 'You already have an inquiry for this listing. Check your dashboard.';
         setSubmissionError(message);
-        toast(message, 'error');
+        toast(message, 'info');
+      } else {
+        setSubmissionError(customerRefusal(err, INQUIRY_REFUSALS, QUESTION_SEND_FAILED));
       }
     } finally {
       if (current()) {
@@ -398,7 +468,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       setRefreshError('');
       setShowTyping(false);
     } catch {
-      if (current() && version === readVersion.current) setRefreshError('Failed to refresh conversation.');
+      if (current() && version === readVersion.current) setRefreshError(customerActionError("refresh your conversation"));
     } finally {
       if (current() && version === readVersion.current) setRefreshing(false);
     }
@@ -422,8 +492,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
       if (!ack.success) throw new Error('Reply not accepted');
     } catch (err) {
       if (current()) {
-        const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
-        setReplyError(typeof detail === 'string' ? detail : 'Failed to send reply. Please revise and try again.');
+
+        setReplyError(customerRefusal(err, INQUIRY_REFUSALS, customerActionError("send your reply")));
         sending.current = false;
         setReplying(false);
       }
@@ -441,12 +511,25 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
 
   const escalatedStatus = conversation?.status === 'escalated' || conversation?.status === 'awaiting_seller';
   const showAnonymousWaitNotice = anonymousSubmissionInProgress && anonymousWaitElapsed;
+  const showSellerButton = isAuthenticated
+    && (hasSellerDraft || submissionError === QUESTION_SEND_FAILED || !!anonymousError || anonymousFallback);
+  const publicInformationLinks = (schemaHref || documentationHref || sampleHref) && (
+    <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+      {schemaHref && <a href={schemaHref} className="underline">{recovery.schema}</a>}
+      {documentationHref && <a href={documentationHref} className="underline">{recovery.documentation}</a>}
+      {sampleHref && <a href={sampleHref} className={sampleHref === '#listing-sample-preview'
+        ? 'hidden underline group-has-[#listing-sample-preview]/listing:inline'
+        : 'underline'}>{recovery.sample}</a>}
+    </span>
+  );
 
   // Show conversation thread if already submitted
   if (conversation) {
     return (
       <div className="rounded-xl border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">Your Inquiry</h3>
+        <h3 id="ask-a-question" tabIndex={-1} className="scroll-mt-24 font-semibold text-gray-900 mb-4">
+          Your Inquiry
+        </h3>
         <div className="max-h-80 overflow-y-auto mb-4">
           <ConversationThread
             messages={messages}
@@ -458,8 +541,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         {escalatedStatus && (
           <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 mb-3">
             <p className="text-sm text-yellow-800">
-              Escalated to seller - you&apos;ll be notified when they respond.
+              Your question was passed to the seller. We&apos;ll notify you when they reply.
             </p>
+            {publicInformationLinks}
           </div>
         )}
 
@@ -504,11 +588,15 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
   // Initial question form
   return (
     <div className="rounded-xl border border-gray-200 p-6">
-      <h3 className="font-semibold text-gray-900 mb-3">Ask a Question</h3>
-      <p className="text-sm text-gray-500 mb-4">
+      <h3 id="ask-a-question" tabIndex={-1} className="scroll-mt-24 font-semibold text-gray-900 mb-3">Ask a Question</h3>
+      <p id="listing-question-guidance" className="text-sm text-gray-500 mb-4">
         {isAuthenticated
-          ? 'Get an instant AI-powered answer, or your question will be forwarded to the seller.'
-          : 'allAI checks current public information to answer questions about this listing.'}
+          ? 'allAI looks for an answer in the public listing information first. If it can’t answer, ai.market passes your question to the seller.'
+          : <>allAI answers using public listing information. If you need an answer from the seller, you must{' '}
+              <Link href={signInHref} onClick={preserveAnonymousDraft} className="font-medium text-[#3F51B5] underline">
+                sign in to contact them through ai.market
+              </Link>.
+            </>}
       </p>
       {anonymousMessages.length > 0 && (
         <div className="max-h-80 overflow-y-auto mb-4" aria-live="polite">
@@ -516,18 +604,34 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
             messages={anonymousMessages}
             viewerRole="buyer"
             showTypingIndicator={submitting && !anonymousAnswerStarted}
+            renderContent={(message) => {
+              if (message.role !== 'allai') return;
+              if (message.safeOutcome === 'no_matches' || message.safeOutcome === 'answer_unverified'
+                || message.safeOutcome === 'retrieval_unavailable') {
+                return <>
+                  {message.safeOutcome === 'retrieval_unavailable' ? recovery.retrievalUnavailable : recovery.noAnswer}
+                  {publicInformationLinks}
+                  {message.fallbackDestinations?.support && <Link href={message.fallbackDestinations.support} className="mt-2 inline-block underline">{recovery.support}</Link>}
+                  {isAuthenticated && <span className="mt-2 block">You can send your question below so ai.market can pass it to the seller if needed.</span>}
+                </>;
+              }
+              if (message.safeOutcome) return resources.safeOutcomes[message.safeOutcome];
+              return <AllAIMarkdown theme="light">{message.content}</AllAIMarkdown>;
+            }}
           />
         </div>
       )}
       <textarea
+        aria-label="Your question"
+        aria-describedby="listing-question-guidance"
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="What would you like to know about this dataset?"
         rows={3}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
+        className="w-full scroll-mt-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5] focus:border-transparent resize-none"
       />
       <button
-        onClick={handleSubmit}
+        onClick={() => void handleSubmit()}
         disabled={submitting || !question.trim()}
         className="mt-3 w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
@@ -542,7 +646,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
               : 'Submitting...'}
           </>
         ) : (
-          'Submit Question'
+          isAuthenticated ? 'Submit Question' : 'Ask allAI'
         )}
       </button>
       {(!isAuthenticated || anonymousSubmissionInProgress) && (
@@ -556,7 +660,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
             <>
               allAI is checking current public information. You may keep waiting, or{' '}
               <Link
-                href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+                href={signInHref}
                 onClick={preserveAnonymousDraft}
                 className="text-[#3F51B5] hover:underline"
               >
@@ -567,32 +671,35 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle }: Props) {
         </p>
       )}
       {isAuthenticated && submissionError && (
-        <p className="text-xs text-red-600 mt-2" role="alert">
-          {submissionError}
-        </p>
+        <div className="text-sm text-gray-700 mt-2" role="alert">
+          <p>{submissionError === INQUIRY_UNAVAILABLE ? <>This listing isn&apos;t available for questions right now. <Link href="/find-data" className="underline">Browse similar data.</Link></> : submissionError}</p>
+          {publicInformationLinks}
+        </div>
       )}
-      {anonymousTimedOut && anonymousError && (
-        <p className="text-xs text-red-600 mt-2" role="alert">
-          {anonymousError}{' '}
-          <Link
-            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+      {anonymousError && (
+        <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 mt-3" role="alert">
+          <p>{anonymousError === 'timeout' ? recovery.timeout : recovery.retrievalUnavailable}</p>
+          {publicInformationLinks}
+          {!isAuthenticated && <Link
+            href={signInHref}
             onClick={preserveAnonymousDraft}
-            className="text-[#3F51B5] hover:underline"
+            className="mt-2 inline-block text-[#3F51B5] hover:underline"
           >
-            sign in to ask the seller.
-          </Link>
-        </p>
+            {recovery.signIn}
+          </Link>}
+        </div>
       )}
-      {anonymousError && !anonymousTimedOut && (
-        <p className="text-xs text-red-600 mt-2" role="alert">
-          {anonymousError}
-        </p>
+      {showSellerButton && (
+        <button type="button" onClick={() => void handleSubmit(true)} disabled={submitting || !question.trim()}
+          className="mt-3 w-full rounded-lg border border-[#3F51B5] px-4 py-2.5 text-sm font-medium text-[#3F51B5] hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50">
+          Send to seller
+        </button>
       )}
-      {anonymousAnswerReturned && (
+      {anonymousAnswerReturned && !isAuthenticated && (
         <p className="text-xs text-gray-500 mt-2 text-center">
           Want to contact the seller?{' '}
           <Link
-            href={`/login?redirect=/listings/${encodeURIComponent(listingSlug)}`}
+            href={signInHref}
             onClick={preserveAnonymousDraft}
             className="text-[#3F51B5] hover:underline"
           >

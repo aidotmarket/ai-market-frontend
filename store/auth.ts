@@ -225,9 +225,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
     refreshAuth: async () => {
       const owner = authSessionOwner();
       if (hasPendingLogin() || get().pendingTwoFactor) return;
+      const previousToken = get().token;
       const { refreshAccessToken } = await import('@/api/client');
       assertAuthSessionOwner(owner);
-      await refreshAccessToken();
+      await refreshAccessToken(previousToken);
       assertAuthSessionOwner(owner);
 
       try {
@@ -246,9 +247,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
       set({ isLoading: true, pendingTwoFactor: null });
 
       try {
+        const previousToken = get().token;
         const { refreshAccessToken } = await import('@/api/client');
         assertAuthSessionOwner(owner);
-        await refreshAccessToken();
+        await refreshAccessToken(previousToken);
         assertAuthSessionOwner(owner);
         const user = await authApi.getMe();
         assertAuthSessionOwner(owner);

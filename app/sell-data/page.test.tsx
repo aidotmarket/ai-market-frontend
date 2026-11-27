@@ -13,40 +13,73 @@ import SellDataPage, { metadata } from './page';
 afterEach(cleanup);
 
 describe('SellDataPage', () => {
+  it('opens with how allAI helps sellers list and sell their data', async () => {
+    render(await SellDataPage());
+    const heading = screen.getByRole('heading', { level: 1, name: 'Sell your data with help from allAI' });
+    const openingCopy = heading.nextElementSibling?.textContent;
+
+    expect(openingCopy).toMatch(/allAI walks you through creating a listing/);
+    expect(openingCopy).toMatch(/buyer questions, negotiation, and checkout/);
+    expect(`${heading.textContent} ${openingCopy}`).not.toMatch(
+      /gateway|network policy|opaque (?:file )?IDs|keyed commitments|egress|firewall|canary|SHA-256/i,
+    );
+  });
+
   it.each([false, true])('offers both hosting choices when authenticated=%s', async (isAuthenticated) => {
     mocks.auth.isAuthenticated = isAuthenticated;
     const { container } = render(await SellDataPage());
-    const section = screen.getByRole('region', { name: 'Where is your data?' });
+    const section = screen.getByRole('region', { name: 'Choose where to keep your data' });
     const cards = within(section).getAllByRole('article');
 
     expect(cards).toHaveLength(2);
     expect(section.previousElementSibling?.querySelector('h1')).toBeTruthy();
     expect(section.nextElementSibling?.id).toBe('how-it-works');
-    expect(within(section).getByText('Is your data hosted in the cloud on AWS or Cloudflare, or will you host it on your own servers?')).toBeTruthy();
-    expect(within(cards[0]).getByRole('heading', { name: 'My data is in the cloud, or I want to put it in the cloud.' })).toBeTruthy();
+    const hostingOptions = /your own AWS S3 bucket, your own Cloudflare R2 bucket, or on your own infrastructure with the self-hosted AIM Data Gateway/;
+    expect(within(section).getByText(hostingOptions)).toBeTruthy();
+    expect(within(cards[0]).getByRole('heading', { name: 'Connect your cloud storage' })).toBeTruthy();
     expect(within(cards[0]).getByRole('link', { name: isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account' }).getAttribute('href')).toBe(
       isAuthenticated ? '/dashboard/seller-workspace' : '/register?redirect=%2Fdashboard%2Fseller-workspace'
     );
-    expect(within(cards[0]).getByText(/Connect the bucket read-only/)).toBeTruthy();
+    expect(within(cards[0]).getByText(/read-only access/)).toBeTruthy();
+    expect(within(cards[0]).getByText(/There is nothing to install/)).toBeTruthy();
     expect(within(cards[0]).getByText(/time-limited links/)).toBeTruthy();
-    expect(within(cards[1]).getByRole('heading', { name: 'I will host it on my own infrastructure.' })).toBeTruthy();
-    expect(within(cards[1]).getByRole('link', { name: 'Set up a gateway' }).getAttribute('href')).toBe(
+    expect(within(cards[1]).getByRole('heading', { name: 'Set up AIM Data for self-hosting' })).toBeTruthy();
+    expect(within(cards[1]).getByRole('link', { name: isAuthenticated ? 'Set up a gateway' : 'Create a free account' }).getAttribute('href')).toBe(
       isAuthenticated ? '/dashboard/gateways' : '/register?redirect=%2Fdashboard%2Fgateways'
     );
-    expect(within(cards[1]).getByText(/Confirm each file/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/keyed commitments automatically/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/raw SHA-256/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/keep your data on your own server, you'll need someone who can install and run the AIM Data Gateway using a tool called Docker/)).toBeTruthy();
+    expect(within(cards[1]).getByRole('link', { name: 'Read the AIM Data setup guide' }).getAttribute('href')).toBe('/aim-data');
+    expect(within(cards[1]).getByText(/automatically sends generated file references, fingerprints made with a secret key, file sizes, formats, and timestamps/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/uses a neutral name unless you choose a display name/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/After you confirm a file, it sends a checksum and, for supported formats, a structural description with the row count and selected column names and types/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/roughly how much is missing and a range for the number of distinct values/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/These messages contain no data values/)).toBeTruthy();
     expect(within(cards[1]).getByText(/public sample/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/refuses to start as root/)).toBeTruthy();
-    expect(within(cards[1]).getByText(/canary reports open access/)).toBeTruthy();
+    expect(within(cards[1]).getByText(/After purchase, buyers download the files directly through your gateway/)).toBeTruthy();
+    expect(within(cards[1]).getByRole('link', { name: 'Technical details for your IT team' }).getAttribute('href')).toBe('/aim-data#network-requirements');
 
     const structuredData = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(structuredData['@type']).toBe('Service');
     expect(structuredData.name).toBe('Sell data on ai.market');
     expect(structuredData.description).toBe(metadata.description);
     expect(metadata.title).toEqual({ absolute: 'Sell data on ai.market' });
-    expect(metadata.description).toContain('AWS S3 or Cloudflare R2');
-    expect(metadata.description).toContain('AIM Data gateway');
+    expect(metadata.description).toMatch(hostingOptions);
+  });
+
+  it.each([false, true])('shows exactly one primary final action when authenticated=%s', async (isAuthenticated) => {
+    mocks.auth.isAuthenticated = isAuthenticated;
+    render(await SellDataPage());
+    const finalCta = within(screen.getByRole('region', { name: 'List your data' }));
+    const links = finalCta.getAllByRole('link');
+    const primaryAction = finalCta.getByRole('link', {
+      name: isAuthenticated ? 'Open Seller Workspace' : 'Create Your Account',
+    });
+
+    expect(finalCta.getByText('allAI helps you get your first listing ready. List free and pay nothing until a sale clears.')).toBeTruthy();
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(
+      isAuthenticated ? ['/dashboard/seller-workspace', '/dashboard/gateways', '/dashboard/listings'] : ['/register'],
+    );
+    expect(links.filter((link) => link.classList.contains('bg-[#0F6E56]'))).toEqual([primaryAction]);
   });
 });
 

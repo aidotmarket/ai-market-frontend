@@ -17,6 +17,9 @@ vi.mock('@/components/legal/VersionedTermsCopy', () => ({ useServedTermsVersion:
 
 // Frozen output of main 8074c2ca using the same props, mocks and jsdom origin.
 // Captured from its BuyButton and createCheckout; tests require no repository history.
+// Intl.DisplayNames country labels vary with Node's ICU release. Keep country
+// values, order and attributes in the parity check while excluding those labels.
+const stableMarkup = (markup: string) => markup.replace(/(<option value="[A-Z]{2}"[^>]*>)[^<]*(<\/option>)/g, '$1$2');
 afterEach(() => { vi.unstubAllEnvs(); mocks.post.mockReset(); });
 it.each([false, true])('matches origin/main 8074c2ca checkout markup with flag off, authenticated=%s', authenticated => {
   vi.stubEnv('NEXT_PUBLIC_CHECKOUT_DOMAIN_SERVICE_ENABLED', 'false');
@@ -29,8 +32,8 @@ it.each([false, true])('matches origin/main 8074c2ca checkout markup with flag o
   const expectedMarkup = reference.markup[authenticated ? 'true' : 'false'];
   expect(expectedMarkup).toHaveLength(variants.length);
   for (const [index, extra] of variants.entries()) {
-    expect(renderToStaticMarkup(<BuyButton {...props} {...extra} />))
-      .toBe(expectedMarkup[index]);
+    expect(stableMarkup(renderToStaticMarkup(<BuyButton {...props} {...extra} />)))
+      .toBe(stableMarkup(expectedMarkup[index]));
   }
 });
 it('matches origin/main 8074c2ca POST URL and serialized acceptance body with flag off', async () => {

@@ -25,7 +25,7 @@ export default function OrderVersionAccessSummary({ order, compact = false }: Or
         </p>
       )}
       {order.newer_version_available && (
-        <Link href={listingHref} className="inline-block font-medium text-[#3F51B5] hover:underline">
+        <Link href={listingHref} prefetch={false} className="inline-block font-medium text-[#3F51B5] hover:underline">
           Newer version available
         </Link>
       )}

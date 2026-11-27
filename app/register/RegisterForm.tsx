@@ -91,7 +91,7 @@ export default function RegisterForm() {
               Creating an account or signing in does not charge you. After you sign in, you will return to this listing. <VersionedTermsCopy legacy="Checkout shows the final total, including payment-provider costs and applicable tax, before you choose whether to confirm." terms12={CARD_REGISTER_CHECKOUT} />
             </p>
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              <Link href={listingRedirect} className="underline font-medium">Back to listing</Link>
+              <Link href={listingRedirect} prefetch={false} className="underline font-medium">Back to listing</Link>
               <Link href="/pricing" className="underline font-medium">Pricing</Link>
               <Link href={`/legal/terms?redirect=${encodeURIComponent(listingRedirect)}#fees`} className="underline font-medium">Fees and terms</Link>
             </p>
@@ -207,18 +207,14 @@ export default function RegisterForm() {
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            Want to sell data? You can enable selling from your{' '}
-            <Link href="/dashboard" className="text-[#3F51B5] hover:underline">
-              dashboard
-            </Link>{' '}
-            after you sign up.
+            Want to sell data? You can enable selling from your dashboard after you sign up.
           </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
           <Link href={loginHref} className="text-[#3F51B5] hover:underline">
-            Log in
+            Sign in
           </Link>
         </p>
       </div>

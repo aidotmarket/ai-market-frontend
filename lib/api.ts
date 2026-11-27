@@ -1,3 +1,5 @@
+import {ListingUnavailable, listingHttpStatus} from './listing-http-status';
+import {requestPublicListing, syntheticListingFetchOptions} from './public-listing-read';
 import {verifyCurrentListing} from './publicPresentation';
 import type { ListingPublicListResponse } from '@/types';
 import type {ListingDocument} from '@/types/listingDocuments';
@@ -122,11 +124,12 @@ export async function fetchFeaturedFeed(params?: {
   return res.json();
 }
 
-export async function fetchPublicListing(slug: string) {
-  const res = await fetch(`${API_URL}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) return null;
+export async function fetchPublicListing(slug: string, userAgent?: string | null) {
+  const res = await requestPublicListing(API_URL, slug, userAgent);
+  if (!res.ok) {
+    const status = listingHttpStatus(res.status);
+    throw new ListingUnavailable(status === 204 ? 503 : status);
+  }
   const listing = await res.json();
   await verifyCurrentListing(listing);
   return listing;
@@ -166,10 +169,10 @@ export async function fetchListingVersions(listingId: string) {
   return res.json();
 }
 
-export async function fetchListingAccessWindowDays(listingId: string): Promise<number | null> {
-  const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}`, {
-    next: { revalidate: 10 },
-  });
+export async function fetchListingAccessWindowDays(listingId: string, userAgent?: string | null): Promise<number | null> {
+  // Harness reads must neither consume nor populate ordinary visitors' Data Cache.
+  const options = syntheticListingFetchOptions(userAgent) ?? { next: { revalidate: 10 } };
+  const res = await fetch(`${API_URL}/api/v1/listings/${encodeURIComponent(listingId)}`, options);
   if (!res.ok) return null;
   const listing = await res.json();
   return typeof listing.access_window_days === 'number' ? listing.access_window_days : null;
@@ -177,7 +180,11 @@ export async function fetchListingAccessWindowDays(listingId: string): Promise<n
 
 export async function resolveListingUUID(uuid: string) {
   const res = await fetch(`${API_URL}/api/v1/public/listings/resolve/${encodeURIComponent(uuid)}`);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const status = listingHttpStatus(res.status);
+    if (status === 404 || status === 410 || status === 451) throw new ListingUnavailable(status);
+    return null;
+  }
   return res.json();
 }
 
@@ -189,15 +196,18 @@ export async function fetchDataRequests(params?: {
   page?: number;
   per_page?: number;
   category?: string;
+  search?: string;
 }) {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.per_page) searchParams.set('per_page', String(params.per_page));
   if (params?.category) searchParams.set('category', params.category);
+  if (params?.search) searchParams.set('search', params.search);
 
   const qs = searchParams.toString();
   const res = await fetch(`${API_URL}/api/v1/data-requests${qs ? `?${qs}` : ''}`, {
     cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) return null;
   return res.json();
@@ -302,13 +312,16 @@ export async function withdrawSummary(id: string, request: SummaryApprovalReques
   return (await api.post<SummaryDecision>(`${summaryPath(id)}/withdraw`, request, {signal})).data;
 }
 
-export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Promise<ListingSummary | null> {
+export async function fetchBuyerSummary(slug: string, signal: AbortSignal): Promise<{
+  at_a_glance: ListingSummary | null;
+  license_display: import('@/lib/publicPresentation').LicenseDisplay | null;
+}> {
   const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}`, {
     cache: 'no-store', credentials: 'omit', signal,
   });
   if (!response.ok) throw new Error('Summary could not be refreshed');
-  const listing: {at_a_glance?: ListingSummary} = await response.json();
-  return listing.at_a_glance ?? null;
+  const listing: {at_a_glance?: ListingSummary; license_display?: import('@/lib/publicPresentation').LicenseDisplay} = await response.json();
+  return {at_a_glance: listing.at_a_glance ?? null, license_display: listing.license_display ?? null};
 }
 
 export interface LogicalTypeParameters {
@@ -376,12 +389,22 @@ export async function saveListingEnrichment(id: string, request: EnrichmentWrite
 // Preview calls use only identifiers. Never route a package body, row, filter,
 // arbitrary exception, or detector output through this API client.
 export async function fetchPreviewManifest(slug: string, signal: AbortSignal): Promise<import('./listing-preview/types').Manifest | null> {
+  const manifest = await readPreviewManifest(slug, signal);
+  return manifest === 'missing' ? null : manifest;
+}
+
+export async function readPreviewManifest(slug: string, signal: AbortSignal): Promise<import('./listing-preview/types').Manifest | 'missing' | null> {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/public/listings/${encodeURIComponent(slug)}/preview-manifest`, {
       cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal,
     });
-    if (response.status !== 200 || signal.aborted) return null;
-    const {metadataResponse} = await import('./listing-preview/transport');
+    if (signal.aborted || (response.status !== 200 && response.status !== 404)) return null;
+    const {boundedBody, metadataResponse} = await import('./listing-preview/transport');
+    if (response.status === 404) {
+      const bytes = await boundedBody(response, 1024, signal, 404);
+      const error = JSON.parse(new TextDecoder().decode(bytes)) as {detail?: unknown} | null;
+      return error?.detail === 'Preview unavailable' ? 'missing' : null;
+    }
     const value = await metadataResponse(response, signal, true) as import('./listing-preview/types').Manifest;
     return value?.profile === 'aim-listing-preview-v1' && value.package_profile === 'aim-preview-package-v2' && value.preview_type === 'table' && value.content_type === 'tabular' ? value : null;
   } catch {return null;}

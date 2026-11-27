@@ -1,10 +1,10 @@
 import {beforeEach,expect,it,vi} from 'vitest';
-import {readPublication,publishListing,readPublicationPage,setPublicationVisibility} from './sellerListingPublication';
+import {hasOwnerListings,readPublication,publishListing,readPublicationPage,setPublicationVisibility} from './sellerListingPublication';
 import type {ApprovalReceipt} from './sellerListingReview';
 import {nativeClient,nativeSession} from './connector-seller-settings';
 import {useAuthStore} from '@/store/auth';
 import {createStandardSelection} from './listingLicenses';
-const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client',()=>({api}));
+const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));vi.mock('./client', async original => ({ ...await original<typeof import('./client')>(), api }));
 const id='00000000-0000-4000-8000-000000000001';
 const approval={id,review_hash:'a'.repeat(64),render_hash:'b'.repeat(64)} as ApprovalReceipt;
 const receipt={id,approval_id:id,listing_id:id,listing_version_id:id,title:'Retail',slug:'retail',status:'published',is_listed:true,published_at:'2026-09-08T00:00:00Z',review_hash:approval.review_hash,render_hash:approval.render_hash};
@@ -46,4 +46,23 @@ it('publishes a signed preparation through the first-party session client',async
   await publishListing(approval,id,signal,id);
   expect(post).toHaveBeenCalledWith('/seller-workspace/listing-publication',{request_id:id,approval_id:id,review_hash:approval.review_hash,render_hash:approval.render_hash,preparation_id:id,csrf:nativeSession().csrf},{signal,headers:nativeSession().headers});
   expect(api.post).not.toHaveBeenCalled();post.mockRestore();
+});
+
+it('distinguishes empty or flag-off admission from an uncertain owner read', async () => {
+  useAuthStore.setState({token: 'native-session'});
+  const get = vi.spyOn(nativeClient, 'get')
+    .mockResolvedValueOnce({data: {items: [], cursor: null}})
+    .mockRejectedValueOnce({isAxiosError: true, response: {status: 404, data: {detail: {code: 'NOT_FOUND'}}}})
+    .mockRejectedValueOnce({isAxiosError: true, response: {status: 503, data: {detail: {code: 'READ_UNCERTAIN'}}}})
+    .mockResolvedValueOnce({data: {items: [{listing_id: id}], cursor: null}});
+  try {
+    const {signal} = new AbortController();
+    await expect(hasOwnerListings(signal)).resolves.toBe(false);
+    await expect(hasOwnerListings(signal)).resolves.toBe(false);
+    await expect(hasOwnerListings(signal)).rejects.toMatchObject({response: {status: 503}});
+    await expect(hasOwnerListings(signal)).resolves.toBe(true);
+  } finally {
+    get.mockRestore();
+    useAuthStore.setState({token: null});
+  }
 });

@@ -2,12 +2,14 @@
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { browseResponse, conflictingShortDescription, listingSummaryCases, markdownDescription } from '@/tests/listingSummaryFixture';
 
 const auth = vi.hoisted(() => ({ isAuthenticated: false }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
 afterEach(cleanup);
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 
 const serverTerms = vi.hoisted(() => ({ getPublicTermsVersion: vi.fn().mockResolvedValue('1.1') }));
 vi.mock('@/lib/publicTermsVersion', () => serverTerms);
@@ -25,8 +27,9 @@ vi.mock('@/components/HomepageActivityTickerBeacons', () => ({
   HomepageActivityTickerBeacons: () => null,
 }));
 
-vi.mock('@/components/HeroSearch', () => ({
-  HeroSearch: () => <div>Search</div>,
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
 }));
 
 function request(id: string) {
@@ -48,7 +51,43 @@ function request(id: string) {
   };
 }
 
+describe('homepage listing grid', () => {
+  it.each(listingSummaryCases())('renders the browse excerpt for $state', async ({ summary }) => {
+    const listing = { ...browseResponse.items[0], summary };
+    const withMarkdown = {
+      ...listing, id: '26ab5022-cfcb-41a6-b1ee-2260ac308980', slug: 'dataset-with-markdown',
+      title: 'Dataset with extra Markdown', description: markdownDescription,
+    };
+    const response = { ...browseResponse, items: [listing, withMarkdown], pagination: { ...browseResponse.pagination, total: 2 } };
+    fetchPublicListings.mockResolvedValue(await Response.json(response).json());
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+    const { default: LandingPage } = await import('./page');
+
+    render(await LandingPage());
+    for (const item of [listing, withMarkdown]) {
+      const card = screen.getByRole('heading', { name: item.title }).closest('a')!;
+      expect(card.getAttribute('href')).toBe(`/listings/${item.slug}`);
+      expect(card.getAttribute('data-prefetch')).toBe('false');
+      expect(within(card).getByRole('paragraph').textContent)
+        .toBe(summary === undefined ? conflictingShortDescription : summary ?? '');
+    }
+  });
+});
+
 describe('homepage buyer requests', () => {
+  it('renders request Markdown as plain card text without changing its source', async () => {
+    const item = { ...request('markdown'), title: '**Title: Request for _retail_ data**', description: '## Needs\n- **Sales** and [regions](https://example.com)' };
+    fetchDataRequests.mockResolvedValue({ items: [item, request('2'), request('3')] });
+    const { default: LandingPage } = await import('./page');
+    render(await LandingPage());
+    const card = screen.getByRole('heading', { name: 'Request for retail data' }).closest('a')!;
+    expect(card.getAttribute('href')).toBe('/requests/request-markdown');
+    expect(within(card).getByText('Needs Sales and regions')).toBeTruthy();
+    expect(within(card).queryByRole('link', { name: 'regions' })).toBeNull();
+    expect(item.title).toBe('**Title: Request for _retail_ data**');
+  });
+
   it.each([true, false, undefined, 'true', 1, null])('tags only an explicit sample flag (%s) next to its buyer demand title', async is_sample => {
     const extra = is_sample === undefined ? {} : { is_sample };
     fetchDataRequests.mockResolvedValue({ items: [{ ...request('1'), ...extra }, { ...request('2'), title: 'Synthetic data request' }, request('3')] });
@@ -193,10 +232,81 @@ it.each(['1.1', '1.2'])('renders the cloud-first homepage copy under terms %s', 
   expect(sellData.getByText('Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.')).toBeTruthy();
 });
 
-it('uses the cloud-first description in homepage metadata', async () => {
-  const { metadata } = await import('./page');
-  const description = 'Non-custodial B2B data marketplace. List from your S3 or R2 bucket, or from your own servers with AIM Data. Find data with semantic search and data requests.';
-  expect(metadata.description).toBe(description);
-  expect(metadata.openGraph?.description).toBe(description);
-  expect(metadata.twitter?.description).toBe(description);
+describe('homepage hero and descriptions', () => {
+  const summary = 'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
+
+  beforeEach(() => {
+    fetchPublicListings.mockResolvedValue({ items: [] });
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [] });
+  });
+
+  it('renders the homepage hero copy and marketplace structured data', async () => {
+    const { default: LandingPage } = await import('./page');
+    const { container } = render(await LandingPage());
+    const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
+
+    expect(hero.getByText('Data marketplace for businesses')).toBeTruthy();
+    expect(hero.getByRole('heading', { level: 1, name: 'SEO for data.' }).textContent).toBe('SEO for data.');
+    expect(hero.getByText('Where AI search finds data.')).toBeTruthy();
+    expect(hero.getByText('Free to list; 5% only when it sells.')).toBeTruthy();
+    expect(hero.getByText('Your listings are published in formats AI agents and AI search can read, so buyers can find you.')).toBeTruthy();
+    expect(hero.getByText('Found in AI search.')).toBeTruthy();
+    expect(hero.getByText("Listings are open to AI search and agents. A buyer's agent can find data and start a purchase; the buyer confirms and pays in the browser.")).toBeTruthy();
+
+    const structuredData = container.querySelector('script[type="application/ld+json"]')!;
+    expect(JSON.parse(structuredData.textContent!)).toEqual([
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'ai.market',
+        url: 'https://ai.market',
+        description: summary,
+        sameAs: ['https://github.com/maxrobbins'],
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'ai.market',
+        url: 'https://ai.market',
+        description: summary,
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: 'https://ai.market/find-data?q={search_term_string}',
+          'query-input': 'required name=search_term_string',
+        },
+      },
+    ]);
+    expect(container.textContent).not.toMatch(/non-custodial B2B (?:data )?marketplace/i);
+  });
+
+  it('uses the homepage hero messaging for search and social metadata', async () => {
+    const { metadata } = await import('./page');
+    const title = 'ai.market — SEO for data';
+    const description = 'Where AI search finds data. Free to list; 5% only when it sells.';
+
+    expect(metadata.description).toBe(description);
+    expect(metadata.openGraph?.description).toBe(description);
+    expect(metadata.twitter?.description).toBe(description);
+    expect(metadata.title).toEqual({ absolute: title });
+    expect(metadata.openGraph?.title).toBe(title);
+    expect(metadata.twitter?.title).toBe(title);
+    expect(metadata.alternates?.canonical).toBe('/');
+  });
+
+  it('keeps search, buyer requests, and seller information at their existing destinations', async () => {
+    const { default: LandingPage } = await import('./page');
+    render(await LandingPage());
+    const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
+
+    const search = hero.getByRole('searchbox');
+    expect(search.getAttribute('placeholder')).toBe('Search datasets by topic, industry, or use case');
+    fireEvent.change(search, { target: { value: '  US retail sales  ' } });
+    fireEvent.click(hero.getByRole('button', { name: 'Search' }));
+    expect(push).toHaveBeenLastCalledWith('/find-data?q=US%20retail%20sales');
+    expect(hero.getByRole('link', { name: 'Browse Data' }).getAttribute('href')).toBe('/listings');
+    expect(hero.getByRole('link', { name: 'Post a Request' }).getAttribute('href')).toBe('/requests');
+    expect(screen.getByRole('link', { name: 'Post a Buyer Request' }).getAttribute('href')).toBe('/requests/new');
+    expect(screen.getByRole('link', { name: 'Sell Data' }).getAttribute('href')).toBe('/sell-data');
+  });
 });

@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
 import { createDataRequest } from '@/api/data-requests';
+import { buyerRequestAnonymizationEnabled, ownerRequestHref } from '@/lib/buyer-request-publication';
 import { AxiosError } from 'axios';
 import type { DataRequestUrgency } from '@/types';
 
@@ -70,7 +72,16 @@ function RequestForm({ accountId, retireVisit }: {
 
   if (!isAuthenticated) {
     router.push(`/login?redirect=${encodeURIComponent('/requests/new')}`);
-    return null;
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
+        <h1 className="text-2xl font-bold text-gray-900">Post a data request</h1>
+        <p className="mt-3 text-gray-600">Tell sellers what data you need. It's free, and sellers who have it come to you.</p>
+        <div className="mt-6 flex flex-col items-start gap-4">
+          <Link href="/login?redirect=%2Frequests%2Fnew" className="rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]">Sign in to post your request</Link>
+          <Link href="/register" className="text-sm font-medium text-[#3F51B5] underline">Create a free account</Link>
+        </div>
+      </div>
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -104,11 +115,13 @@ function RequestForm({ accountId, retireVisit }: {
       });
 
       if (!isCurrent()) return;
-      toast('Data request created as a draft. Open it from the detail page.', 'success');
-      router.push(`/requests/${result.slug}`);
+      toast('Saved as a draft. Review it and publish when you\'re ready.', 'success');
+      router.push(ownerRequestHref(result));
     } catch (err) {
       if (!isCurrent()) return;
-      if (err instanceof AxiosError) {
+      if (buyerRequestAnonymizationEnabled()) {
+        toast('Could not save your draft. Try again.', 'error');
+      } else if (err instanceof AxiosError) {
         const detail = err.response?.data?.detail;
         let message = 'Failed to create data request.';
         if (typeof detail === 'string') {
@@ -135,9 +148,9 @@ function RequestForm({ accountId, retireVisit }: {
 
   return (
     <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Post a Data Request</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Post a data request</h1>
       <p className="text-sm text-gray-500 mb-8">
-          Describe the data you need. We create it as a draft. Open it from the detail page.
+          Describe the data you need. We save it as a draft so you can review it before it goes live.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -245,7 +258,7 @@ function RequestForm({ accountId, retireVisit }: {
         {/* Provenance Requirements */}
         <div>
           <label htmlFor="provenance" className="block text-sm font-medium text-gray-700 mb-1">
-            Provenance Requirements
+            Where the data must come from (optional)
           </label>
           <textarea
             id="provenance"
@@ -262,7 +275,7 @@ function RequestForm({ accountId, retireVisit }: {
           disabled={submitting || !description.trim()}
           className="w-full rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {submitting ? 'Creating...' : 'Create Data Request'}
+          {submitting ? 'Saving draft' : 'Save draft'}
         </button>
       </form>
     </div>

@@ -115,7 +115,7 @@ for (const mode of ['confirm', 'deliver'] as const) {
   const label = mode === 'confirm' ? 'Confirm Receipt' : 'Mark Delivered';
   const busyLabel = mode === 'confirm' ? 'Confirming…' : 'Marking…';
   const success = mode === 'confirm' ? 'Receipt confirmed!' : 'Marked as delivered!';
-  const failure = mode === 'confirm' ? 'Failed to confirm receipt.' : 'Failed to mark as delivered.';
+  const failure = mode === 'confirm' ? "We couldn't confirm receipt just now. Try again, or contact support if it keeps happening." : "We couldn't mark as delivered just now. Try again, or contact support if it keeps happening.";
   const completed = mode === 'confirm' ? 'confirmed' : 'delivered';
   const method = () => mode === 'confirm' ? calls.confirmTransaction : calls.deliverTransaction;
   const page = () => <StrictMode><OrderDetailPage /></StrictMode>;

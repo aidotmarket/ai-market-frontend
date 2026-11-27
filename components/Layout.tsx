@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth';
 import NotificationCenter from '@/components/NotificationCenter';
 import { TermsSignUpLink } from '@/components/TermsSignUpLink';
 import NewsletterForm from '@/components/NewsletterForm';
+import { MARKETPLACE_LISTING_COVENANT_PATH, STANDARD_DATA_LICENCE_PATH } from '@/lib/publicLegalDocuments';
 
 const footerLinkSections = [
   {
@@ -19,7 +20,7 @@ const footerLinkSections = [
       { label: 'Browse Data', href: '/listings' },
       { label: 'Buyer Requests', href: '/requests' },
       { label: 'Partner Program', href: '/partner' },
-      { label: 'Verified shape', href: '/verified' },
+      { label: 'How we verify data', href: '/verified' },
       { label: 'Blog', href: '/blog' },
     ],
   },
@@ -48,6 +49,8 @@ const footerLinkSections = [
     title: 'Legal',
     links: [
       { label: 'Terms', href: '/legal/terms' },
+      { label: 'Standard Data Licence', href: STANDARD_DATA_LICENCE_PATH },
+      { label: 'Marketplace Listing Covenant', href: MARKETPLACE_LISTING_COVENANT_PATH },
       { label: 'Privacy Notice', href: '/legal/privacy' },
       { label: 'Cookie Policy', href: '/legal/cookies' },
     ],
@@ -107,7 +110,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <nav className="hidden md:flex items-center gap-6">
               <Link href="/find-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Find Data</Link>
-              <Link href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Buyer Requests</Link>
+              {/* Use a document navigation so this entry point can reach the board without the client router. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              <a href="/requests" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Buyer Requests</a>
               <Link href="/sell-data" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Sell Data</Link>
               <Link href="/pricing" className="text-sm text-[#666666] hover:text-[#1A1A1A]">Pricing</Link>
               <Link href="/protocol" className="text-sm text-[#666666] hover:text-[#1A1A1A]">The Protocol</Link>
@@ -189,7 +194,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main className="marketplace-main flex-1">{children}</main>
 
       <footer className="bg-[#1b2332] text-[#c1c9d4]">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 pt-12 pb-10">

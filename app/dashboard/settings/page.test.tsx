@@ -65,7 +65,7 @@ describe('SettingsPage capability refresh', () => {
     render(<SettingsPage />);
     expect(await screen.findByLabelText('Public business name')).toBeTruthy();
     expect(screen.getByLabelText('Company name')).toBeTruthy();
-    await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalled());
+    await waitFor(() => expect(vi.mocked(getSellerPublicProfile)).toHaveBeenCalledOnce());
   });
 
   it.each([
@@ -98,7 +98,7 @@ describe('SettingsPage capability refresh', () => {
     useAuthStore.setState({ user: { ...user, role: 'buyer' } });
     render(<SettingsPage />);
     const account = screen.getByRole('heading', { name: 'Account' }).closest('section')!;
-    const retry = await within(account).findByRole('button', { name: 'Retry' });
+    const retry = await within(account).findByRole('button', { name: 'Try again' });
     expect(within(account).queryByText('Buyer')).toBeNull();
     fireEvent.click(retry);
     await waitFor(() => expect(within(account).getByText('Role').nextElementSibling?.textContent).toBe('Seller'));
@@ -109,7 +109,7 @@ describe('SettingsPage capability refresh', () => {
     useAuthStore.setState({ user: { ...user, role: 'buyer' } });
     render(<SettingsPage />);
     await waitFor(() => expect(capabilitiesApi.getCapabilities).toHaveBeenCalled());
-    expect(screen.queryByLabelText('Public business name')).toBeNull();
+    await waitFor(() => expect(screen.queryByLabelText('Public business name')).toBeNull());
     expect(getSellerPublicProfile).not.toHaveBeenCalled();
   });
 
@@ -351,7 +351,7 @@ describe('SettingsPage capability refresh', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enable two-factor authentication' }));
     fireEvent.change(await screen.findByRole('textbox', { name: '6-digit code' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify and enable' }));
-    expect(await screen.findByText('Invalid verification code')).toBeTruthy();
+    expect(await screen.findByText("That code didn't match. Enter the newest code from your authenticator app.")).toBeTruthy();
     expect(screen.getByText('setup-secret')).toBeTruthy();
     expect(authApi.verify2FASetup).toHaveBeenCalledExactlyOnceWith('123456');
 

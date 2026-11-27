@@ -1,53 +1,31 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getCapabilities } from '@/api/capabilities';
-import { getSellerOrders, type SellerOrderListParams } from '@/api/seller';
+import { getSellerOrders, SELLER_ORDERS_MAX_LIMIT, type SellerOrderListParams } from '@/api/seller';
 import { formatDate, formatPrice } from '@/lib/format';
-import type { SellerOrder, SellerOrderStatus } from '@/types';
+import type { SellerOrder } from '@/types';
 import Link from 'next/link';
 import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
+import { getSellerStatusPresentation, isSellerOrderStatus } from '@/lib/sellerOrderStatus';
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+import SalesOrderDetails from './SalesOrderDetails';
+import { parseSalesFilter, parseSalesOffset, salesSearchParams, SALES_FILTERS, type SalesFilter } from './filters';
 
-type SalesFilter = 'pending_delivery' | 'all' | 'delivered' | 'completed';
-const PAGE_SIZE = 100;
-type SalesRequest = { filter: SalesFilter; offset: number; retryKey: number };
-
-const FILTERS: { value: SalesFilter; label: string }[] = [
-  { value: 'pending_delivery', label: 'Awaiting delivery' },
-  { value: 'all', label: 'All' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'completed', label: 'Completed' },
-];
-
-type SellerStatusPresentation = { label: string; css: string };
-
-const SELLER_STATUS: Record<SellerOrderStatus, SellerStatusPresentation> = {
-  created: { label: 'Order created', css: 'bg-gray-100 text-gray-600' },
-  paid: { label: 'Paid', css: 'bg-[#E8EAF6] text-[#303F9F]' },
-  in_escrow: { label: 'Payment held', css: 'bg-[#E8EAF6] text-[#303F9F]' },
-  pending_delivery: { label: 'Awaiting delivery', css: 'bg-gray-100 text-gray-700' },
-  delivered: { label: 'Delivered', css: 'bg-indigo-100 text-indigo-800' },
-  completed: { label: 'Completed', css: 'bg-green-100 text-green-800' },
-  disputed: { label: 'Disputed', css: 'bg-red-100 text-red-800' },
-  resolved: { label: 'Dispute resolved', css: 'bg-gray-100 text-gray-600' },
-  delivery_failed: { label: 'Delivery failed', css: 'bg-red-100 text-red-800' },
-  refunded: { label: 'Refunded', css: 'bg-gray-100 text-gray-600' },
-  cancelled: { label: 'Cancelled', css: 'bg-gray-100 text-gray-600' },
+type SalesRequest = { filter: SalesFilter; offset: number; retry: number };
+type SalesResult = { request: SalesRequest } & (
+  | { state: 'active'; rows: SellerOrder[]; hasNextPage: boolean }
+  | { state: 'provisioning' | 'blocked' | 'error' }
+);
+const EMPTY_ROWS: SellerOrder[] = [];
+const SELLER_AMOUNT_LABEL = 'You receive before card fees (USD)';
+// The API returns an array without a total. Reserve one row to detect another page.
+const SALES_PAGE_SIZE = SELLER_ORDERS_MAX_LIMIT - 1;
+const SALES_STATUS_HELP: Partial<Record<SalesFilter, string>> = {
+  delivered: 'Delivery is awaiting confirmation by the buyer or automatic confirmation.',
+  completed: 'Delivered sales can move here after buyer or automatic confirmation.',
 };
-
-const UNKNOWN_STATUS: SellerStatusPresentation = {
-  label: 'Status unavailable',
-  css: 'bg-gray-100 text-gray-600',
-};
-
-function isSellerOrderStatus(status: string): status is SellerOrderStatus {
-  return Object.prototype.hasOwnProperty.call(SELLER_STATUS, status);
-}
-
-function getSellerStatusPresentation(status: string): SellerStatusPresentation {
-  return isSellerOrderStatus(status) ? SELLER_STATUS[status] : UNKNOWN_STATUS;
-}
 
 function compareNullableDates(
   first: string | null,
@@ -101,64 +79,76 @@ function formatRelativeAge(date: string, now: Date): string {
 }
 
 function SalesPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedFilter = searchParams.get('status');
-  const initialFilter = FILTERS.some(({ value }) => value === requestedFilter)
-    ? (requestedFilter as SalesFilter)
-    : 'pending_delivery';
-  const [request, setRequest] = useState<SalesRequest>({ filter: initialFilter, offset: 0, retryKey: 0 });
-  const currentRequest = useRef(request);
-  const { filter, offset } = request;
-  const [rows, setRows] = useState<SellerOrder[]>([]);
-  const [pageState, setPageState] = useState<
-    'loading' | 'active' | 'provisioning' | 'blocked' | 'error'
-  >('loading');
+  const search = searchParams.toString();
+  const filter = parseSalesFilter(searchParams.get('status')) ?? 'pending_delivery';
+  const rawOffset = searchParams.get('offset');
+  const parsedOffset = parseSalesOffset(rawOffset, SALES_PAGE_SIZE);
+  const offset = parsedOffset ?? 0;
+  const hasInvalidOffset = rawOffset !== null && parsedOffset === undefined;
+  const [isNavigationPending, startNavigation] = useTransition();
+  const isNavigating = isNavigationPending || hasInvalidOffset;
+  const [retry, setRetry] = useState(0);
+  const [result, setResult] = useState<SalesResult>();
+  const currentResult = !isNavigating && result?.request.filter === filter &&
+    result.request.offset === offset && result.request.retry === retry ? result : undefined;
+  const pageState = currentResult?.state ?? 'loading';
+  const rows = currentResult?.state === 'active' ? currentResult.rows : EMPTY_ROWS;
+  const hasNextPage = currentResult?.state === 'active' && currentResult.hasNextPage;
   const reportedUnknownStatuses = useRef(new Set<string>());
 
-  function changeRequest(next: SalesRequest) {
-    if (currentRequest.current !== request) return;
-    // Retire callbacks immediately, including before the effect cleanup runs.
-    currentRequest.current = next;
-    setRows([]);
-    setPageState('loading');
-    setRequest(next);
+  function navigate(nextFilter: SalesFilter, nextOffset: number) {
+    if (isNavigating || (nextFilter === filter && nextOffset === offset)) return;
+    const next = salesSearchParams(search, nextFilter, nextOffset);
+    startNavigation(() => router.push(`/dashboard/sales?${next}`, { scroll: false }));
   }
 
   useEffect(() => {
+    if (!hasInvalidOffset) return;
+
+    const params = new URLSearchParams(search);
+    params.delete('offset');
+    const next = params.toString();
+    router.replace(`/dashboard/sales${next ? `?${next}` : ''}`, { scroll: false });
+  }, [hasInvalidOffset, router, search]);
+
+  useEffect(() => {
+    const request: SalesRequest = { filter, offset, retry };
     let cancelled = false;
-    const isCurrent = () => !cancelled && currentRequest.current === request;
-    setPageState('loading');
-    setRows([]);
+    setResult(undefined);
 
     async function fetchSales() {
       try {
         const capabilities = await getCapabilities();
-        if (!isCurrent()) return;
+        if (cancelled) return;
 
         const sellerStatus = capabilities.seller.effective_status;
         if (sellerStatus === 'provisioning') {
-          setPageState('provisioning');
+          setResult({ request, state: 'provisioning' });
           return;
         }
         if (sellerStatus !== 'active') {
-          setPageState('blocked');
+          setResult({ request, state: 'blocked' });
           return;
         }
 
-        const params: SellerOrderListParams =
-          request.filter === 'all'
-            ? { limit: PAGE_SIZE, offset: request.offset }
-            : { status_filter: request.filter, limit: PAGE_SIZE, offset: request.offset };
+        const params: SellerOrderListParams = {
+          limit: SELLER_ORDERS_MAX_LIMIT,
+          offset: request.offset,
+        };
+        if (request.filter !== 'all') params.status_filter = request.filter;
         const response = await getSellerOrders(params);
-        if (!isCurrent()) return;
+        if (cancelled) return;
 
-        setRows(sortSellerOrders(response.data, request.filter));
-        setPageState('active');
+        setResult({
+          request,
+          state: 'active',
+          rows: sortSellerOrders(response.data.slice(0, SALES_PAGE_SIZE), request.filter),
+          hasNextPage: response.data.length > SALES_PAGE_SIZE,
+        });
       } catch {
-        if (isCurrent()) {
-          setRows([]);
-          setPageState('error');
-        }
+        if (!cancelled) setResult({ request, state: 'error' });
       }
     }
 
@@ -166,7 +156,7 @@ function SalesPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [request]);
+  }, [filter, offset, retry]);
 
   useEffect(() => {
     for (const { status } of rows) {
@@ -185,28 +175,30 @@ function SalesPageContent() {
           {presentation.label}
         </span>
         {order.status === 'delivered' && order.delivered_at && (
-          <div className="mt-1 text-xs text-gray-500">{formatDate(order.delivered_at)}</div>
+          <div className="mt-1 text-xs text-gray-500">Delivered {formatDate(order.delivered_at)}</div>
         )}
         {order.status === 'completed' && order.completed_at && (
-          <div className="mt-1 text-xs text-gray-500">{formatDate(order.completed_at)}</div>
+          <div className="mt-1 text-xs text-gray-500">Completed {formatDate(order.completed_at)}</div>
         )}
       </>
     );
   };
 
   const renderPaid = (order: SellerOrder) =>
-    order.paid_at ? (
+    order.amount_cents !== 0 && order.paid_at ? (
       <>
         {formatDate(order.paid_at)} ({formatRelativeAge(order.paid_at, new Date())})
       </>
     ) : (
       <>
-        <div>Not paid</div>
+        <div>{order.amount_cents === 0 ? 'No payment due' : 'Not paid'}</div>
         {order.created_at && (
           <div className="mt-1 text-xs text-gray-500">Created {formatDate(order.created_at)}</div>
         )}
       </>
     );
+
+  const recordHref = (order: SellerOrder) => `${sellerLicenseRecordPath(order.id)}?status=${filter}`;
 
   return (
     <div className="space-y-6">
@@ -221,24 +213,29 @@ function SalesPageContent() {
       )}
 
       {(pageState === 'active' || pageState === 'loading' || pageState === 'error') && (
-        <div className="flex flex-wrap gap-2" aria-label="Sales status filter">
-          {FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={filter === value}
-              onClick={() => {
-                if (value !== filter) changeRequest({ filter: value, offset: 0, retryKey: 0 });
-              }}
-              className={`rounded-lg border px-4 py-2 text-sm font-medium ${
-                filter === value
-                  ? 'border-[#3F51B5] bg-[#3F51B5] text-white'
-                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Sales status filter">
+            {SALES_FILTERS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={filter === value}
+                aria-describedby={filter === value && SALES_STATUS_HELP[filter] ? 'sales-status-help' : undefined}
+                disabled={isNavigating}
+                onClick={() => navigate(value, 0)}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                  filter === value
+                    ? 'border-[#3F51B5] bg-[#3F51B5] text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {SALES_STATUS_HELP[filter] && (
+            <p id="sales-status-help" className="text-sm text-gray-600">{SALES_STATUS_HELP[filter]}</p>
+          )}
         </div>
       )}
 
@@ -255,7 +252,7 @@ function SalesPageContent() {
           <p className="mt-2 text-sm text-red-700">We couldn&apos;t load your sales. Try again.</p>
           <button
             type="button"
-            onClick={() => changeRequest({ ...request, retryKey: request.retryKey + 1 })}
+            onClick={() => setRetry((attempt) => attempt + 1)}
             className="mt-4 inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
           >
             Try again
@@ -293,11 +290,14 @@ function SalesPageContent() {
 
       {pageState === 'active' && rows.length > 0 && (
         <>
+          <p className="text-sm text-gray-600">
+            The amount you receive before card fees is the gross amount less ai.market’s 5% commission. If a card processing fee applies, it’s deducted from your payout. The amounts shown here exclude that fee.
+          </p>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Sale', 'Listing', 'Gross (USD)', 'You receive (USD)', 'Status', 'Paid'].map((label) => (
+                  {['Sale', 'Listing', 'Gross (USD)', SELLER_AMOUNT_LABEL, 'Status', 'Paid'].map((label) => (
                     <th key={label} className="px-4 py-3 text-left font-medium text-gray-700">{label}</th>
                   ))}
                 </tr>
@@ -306,8 +306,9 @@ function SalesPageContent() {
                 {rows.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                      {order.order_number}
-                      {order.license_record_available && <Link href={sellerLicenseRecordPath(order.id)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                      <span>{order.order_number}</span>
+                      <div className="mt-2"><SalesOrderDetails order={order} /></div>
+                      {order.license_record_available && <Link href={recordHref(order)} className="mt-2 block font-sans text-sm font-medium text-[#3F51B5] underline">License record</Link>}
                     </td>
                     <td className="px-4 py-3 text-gray-900">{order.listing_title}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatPrice(order.amount_cents / 100)}</td>
@@ -327,11 +328,12 @@ function SalesPageContent() {
                   <div><dt className="font-medium text-gray-500">Sale</dt><dd className="font-mono text-xs text-gray-900">{order.order_number}</dd></div>
                   <div><dt className="font-medium text-gray-500">Listing</dt><dd className="text-gray-900">{order.listing_title}</dd></div>
                   <div><dt className="font-medium text-gray-500">Gross (USD)</dt><dd className="text-gray-900">{formatPrice(order.amount_cents / 100)}</dd></div>
-                  <div><dt className="font-medium text-gray-500">You receive (USD)</dt><dd className="text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</dd></div>
+                  <div><dt className="font-medium text-gray-500">{SELLER_AMOUNT_LABEL}</dt><dd className="text-gray-900">{formatPrice(order.seller_amount_cents / 100)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Status</dt><dd>{renderStatus(order)}</dd></div>
                   <div><dt className="font-medium text-gray-500">Paid</dt><dd className="text-gray-900">{renderPaid(order)}</dd></div>
                 </dl>
-                {order.license_record_available && <Link href={sellerLicenseRecordPath(order.id)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">Licence record</Link>}
+                <div className="mt-4"><SalesOrderDetails order={order} /></div>
+                {order.license_record_available && <Link href={recordHref(order)} className="mt-4 inline-block text-sm font-medium text-[#3F51B5] underline">License record</Link>}
               </article>
             ))}
           </div>
@@ -342,16 +344,16 @@ function SalesPageContent() {
           <button
             type="button"
             disabled={offset === 0 || pageState === 'loading'}
-            onClick={() => changeRequest({ ...request, offset: Math.max(0, offset - PAGE_SIZE) })}
+            onClick={() => navigate(filter, Math.max(0, offset - SALES_PAGE_SIZE))}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
-          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / PAGE_SIZE + 1}</span>
+          <span aria-live="polite" className="text-sm text-gray-600">Page {offset / SALES_PAGE_SIZE + 1}</span>
           <button
             type="button"
-            disabled={pageState !== 'active' || rows.length < PAGE_SIZE}
-            onClick={() => changeRequest({ ...request, offset: offset + PAGE_SIZE })}
+            disabled={pageState !== 'active' || !hasNextPage}
+            onClick={() => navigate(filter, offset + SALES_PAGE_SIZE)}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
@@ -363,6 +365,7 @@ function SalesPageContent() {
 }
 
 export default function SalesPage() {
+  const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   return (
     <Suspense
       fallback={(
@@ -372,7 +375,7 @@ export default function SalesPage() {
         </div>
       )}
     >
-      <SalesPageContent />
+      <SalesPageContent key={owner} />
     </Suspense>
   );
 }

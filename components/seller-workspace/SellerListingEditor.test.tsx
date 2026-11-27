@@ -5,18 +5,67 @@ import SellerListingEditor from './SellerListingEditor';
 import { AxiosError } from 'axios';
 afterEach(cleanup);
 
-describe('Allai seller listing review', () => {
+it('uses allAI casing throughout the listing assistant text and accessible labels', () => {
+  render(<SellerListingEditor assistant={vi.fn()} />);
+  for (const text of [
+    'allAI, our assistant, can draft this for you from your files. Review her suggestions, ask for changes, and decide what buyers will see.',
+    'allAI requests use your existing starter credits. Editing and saving your draft do not use credits.',
+    'allAI reads your file names and sizes to write the draft. It never opens your files.',
+    'Review title with allAI',
+    'See allAI’s suggested changes in the boxes on the left, under each field.',
+  ]) expect(screen.getByText(text)).toBeTruthy();
+  expect(screen.getByRole('complementary', { name: 'allAI listing assistant' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'allAI' })).toBeTruthy();
+  expect(screen.getByLabelText('Message allAI about your listing')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Change it with allAI' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Send to allAI' })).toBeTruthy();
+});
+
+it('uses allAI casing while drafting and presenting suggestions', async () => {
+  let finish!: (value: { message: string; proposals: { field: 'title'; value: string; reasoning: string }[] }) => void;
+  const assistant = vi.fn(() => new Promise<{ message: string; proposals: { field: 'title'; value: string; reasoning: string }[] }>(resolve => { finish = resolve; }));
+  render(<SellerListingEditor assistant={assistant} />);
+  fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
+  expect(screen.getByRole('button', { name: 'allAI is working…' })).toBeTruthy();
+  expect(screen.getByRole('status').textContent).toBe('allAI is preparing suggestions…');
+  await act(async () => finish({ message: 'Ready', proposals: [{ field: 'title', value: 'Retail sales', reasoning: '' }] }));
+  expect(screen.getByText('allAI suggests')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Use all allAI suggestions' })).toBeTruthy();
+});
+
+it.each([
+  [409, 'allAI is already working or receiving too many requests. Your draft is still here. Try again shortly.'],
+  [429, 'allAI is already working or receiving too many requests. Your draft is still here. Try again shortly.'],
+  [500, 'allAI could not respond. Your draft is still here. Try again.'],
+])('uses allAI casing in the %s recovery message', async (status, message) => {
+  const assistant = vi.fn().mockRejectedValue(new AxiosError('failure', undefined, undefined, undefined, { status } as never));
+  render(<SellerListingEditor assistant={assistant} />);
+  fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
+  expect(await screen.findByText(message)).toBeTruthy();
+});
+
+it('uses allAI casing when updated files need a new description', () => {
+  const { rerender } = render(<SellerListingEditor sourceVersion={2} initialContent={{ brief: '', title: '', description: 'Previous description', category: '', tags: '', price: '', license: '' }} />);
+  expect(screen.getByRole('button', { name: 'Ask allAI to update it' })).toBeTruthy();
+  expect(screen.getByText('allAI is unavailable. Edit the description and confirm it matches your files.')).toBeTruthy();
+  rerender(<SellerListingEditor sourceVersion={2} initialContent={{ brief: '', title: '', description: 'Previous description', category: '', tags: '', price: '', license: '' }} assistant={vi.fn()} />);
+  expect(screen.getByText('Add a brief above before asking allAI to update it.')).toBeTruthy();
+});
+
+describe('allAI seller listing review', () => {
   it('explains why drafting is disabled before a brief is entered',()=>{
     render(<SellerListingEditor assistant={vi.fn()} />);
-    expect((screen.getByRole('button',{name:'Ask Allai to draft my listing'}) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Describe your data above to ask Allai for a draft.')).toBeTruthy();
+    expect((screen.getByRole('button',{name:'Ask allAI to draft my listing'}) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Describe your data above to ask allAI for a draft.')).toBeTruthy();
     expect(screen.getByText(/Add or accept .* text before marking it reviewed/)).toBeTruthy();
   });
   it('explains exhausted starter credits while keeping manual editing available', async () => {
     const assistant = vi.fn().mockRejectedValue(new AxiosError('credits', undefined, undefined, undefined, { status: 402 } as never));
     render(<SellerListingEditor assistant={assistant} />);
-    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
     await screen.findByText(/not enough starter credits/);
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My own title' } });
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My own title');
@@ -30,22 +79,22 @@ describe('Allai seller listing review', () => {
     }).mockResolvedValue({ message: 'Fresh response', proposals: [] });
     const { rerender } = render(<SellerListingEditor assistant={assistant} active />);
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Keep my title' } });
-    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
     rerender(<SellerListingEditor assistant={assistant} active={false} />);
     expect(signal.aborted).toBe(true);
     rerender(<SellerListingEditor assistant={assistant} active />);
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Keep my title');
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
     await screen.findByText('Fresh response');
     await act(async () => finish({ message: 'Old response', proposals: [] }));
     expect(screen.queryByText('Old response')).toBeNull();
   });
   it('does not send seller content when the listing assistant is unavailable', () => {
     render(<SellerListingEditor />);
-    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales by region' } });
-    expect((screen.getByRole('button', { name: 'Ask Allai to draft my listing' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/Allai listing assistance is not connected yet/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales by region' } });
+    expect((screen.getByRole('button', { name: 'Ask allAI to draft my listing' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/allAI listing assistance is not connected yet/)).toBeTruthy();
   });
 
   it('requires seller acceptance and ignores proposed price or ownership changes', async () => {
@@ -56,11 +105,11 @@ describe('Allai seller listing review', () => {
       { field: 'ownership', value: 'confirmed', reasoning: '' },
     ] });
     render(<SellerListingEditor assistant={assistant} />);
-    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales by region' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales by region' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
     await screen.findByText('Here is a draft for your review.');
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Use all Allai suggestions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use all allAI suggestions' }));
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Regional retail sales');
     expect((screen.getByLabelText('Tags') as HTMLInputElement).value).toBe('retail, sales, regions');
     expect((screen.getByLabelText('Your price (USD)') as HTMLInputElement).value).toBe('');
@@ -72,11 +121,11 @@ describe('Allai seller listing review', () => {
     const assistant = vi.fn().mockRejectedValueOnce(new Error('failure')).mockImplementationOnce((_request, requestSignal) => { signal = requestSignal; return new Promise(() => {}); });
     const { unmount } = render(<SellerListingEditor assistant={assistant} />);
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My title' } });
-    fireEvent.change(screen.getByLabelText('Give Allai a starting point'), { target: { value: 'Retail sales' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' }));
+    fireEvent.change(screen.getByLabelText('Give allAI a starting point'), { target: { value: 'Retail sales' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' }));
     await screen.findByRole('alert');
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My title');
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ask Allai to draft my listing' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ask allAI to draft my listing' })));
     expect(assistant.mock.calls[1][0]).toEqual(assistant.mock.calls[0][0]);
     unmount();
     expect(signal.aborted).toBe(true);
@@ -119,11 +168,11 @@ it('keeps an over-limit description intact and blocks both save and Next',()=>{
  expect(save.disabled).toBe(true);expect(next.disabled).toBe(true);fireEvent.click(save);fireEvent.click(next);expect(onSave).not.toHaveBeenCalled();expect(onNext).not.toHaveBeenCalled();
  fireEvent.change(field,{target:{value:'😀'.repeat(10000)}});expect(save.disabled).toBe(false);expect(next.disabled).toBe(false);
 });
-it('renders an Allai description proposal with the listing renderer before acceptance',async()=>{
+it('renders an allAI description proposal with the listing renderer before acceptance',async()=>{
  const assistant=vi.fn().mockResolvedValue({message:'Suggested',proposals:[{field:'description',value:'# Suggested\n\n**Details** and [link](https://example.com)',reasoning:''}]});
  render(<SellerListingEditor assistant={assistant}/>);
- fireEvent.change(screen.getByLabelText('Give Allai a starting point'),{target:{value:'Data'}});
- fireEvent.click(screen.getByRole('button',{name:'Ask Allai to draft my listing'}));
+ fireEvent.change(screen.getByLabelText('Give allAI a starting point'),{target:{value:'Data'}});
+ fireEvent.click(screen.getByRole('button',{name:'Ask allAI to draft my listing'}));
  expect((await screen.findByRole('heading',{name:'Suggested'})).tagName).toBe('H2');
  expect(screen.queryByRole('link',{name:'link'})).toBeNull();
  expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('');

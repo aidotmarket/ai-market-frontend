@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 
 const listingsApi = vi.hoisted(() => ({ getListingOwnership: vi.fn() }));
 vi.mock('@/api/listings', () => listingsApi);
+vi.mock('next/link', () => import('@/tests/listingLinkPrefetchMock'));
 beforeEach(() => {
   listingsApi.getListingOwnership.mockResolvedValue(false);
   useAuthStore.setState({ hydrated: true, isLoading: false });
@@ -443,7 +444,7 @@ describe('BuyButton licence acceptance', () => {
 
     expect(parseCheckoutRefusal(error)).toEqual({
       code: 'LEGAL_IDENTITY_CONFLICT',
-      message: 'Your legal identity records conflict — billing_entity: Buyer Holdings Ltd (GB) versus typed: Buyer Data Ltd (IE). Reconcile them before purchasing.',
+      message: 'The legal name you entered (Buyer Data Ltd, IE) differs from your billing details (Buyer Holdings Ltd, GB). Use the same name, or update your legal details.',
       reconciliationUrl: '/settings/organization/legal-identity?org=org-1',
     });
   });
@@ -454,7 +455,7 @@ describe('BuyButton licence acceptance', () => {
       data: { detail: { code: 'SELLER_TERMS_ACCEPTANCE_PENDING' } },
       status: 409, statusText: 'Conflict', headers: {}, config: {} as never,
     };
-    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms.');
+    expect(parseCheckoutRefusal(error).message).toBe('This listing cannot be purchased until the seller accepts the current terms. Choose another listing, or ask the seller when it will be ready.');
   });
 
   const customText = '<script>alert(1)</script> **bold**\n\tCafé\n';
@@ -708,8 +709,9 @@ describe('SignedOutPurchase', () => {
         versionLabel="2026-Q3"
         accessWindowDays={14}
         license="CC-BY-4.0"
-        dataFormat="json_lines"
+        dataFormat="csv"
         fulfillmentType="file_download"
+        downloadDescription="1 file"
       />,
     );
     const unavailableFacts = renderToStaticMarkup(
@@ -728,13 +730,23 @@ describe('SignedOutPurchase', () => {
     expect(knownFacts).toContain('Selected version</dt><dd class="font-medium text-gray-900">2026-Q3');
     expect(knownFacts).toContain('Download window</dt><dd class="font-medium text-gray-900">14 days after purchase');
     expect(knownFacts).toContain('License</dt><dd class="font-medium text-gray-900">CC-BY-4.0');
-    expect(knownFacts).toContain('Data format</dt><dd class="font-medium text-gray-900">Json lines');
-    expect(knownFacts).toContain('Fulfillment type</dt><dd class="font-medium text-gray-900">File download');
+    expect(knownFacts).toContain('Data format (as described by the seller)</dt><dd class="font-medium text-gray-900">CSV');
+    expect(knownFacts).toContain('Download</dt><dd class="font-medium text-gray-900">1 file</dd>');
     expect(unavailableFacts).not.toContain('Selected version');
     expect(unavailableFacts).not.toContain('Download window');
     expect(unavailableFacts).not.toContain('License');
     expect(unavailableFacts).not.toContain('Data format');
     expect(unavailableFacts).not.toContain('Fulfillment type');
+  });
+
+  it.each([
+    ['one ZIP archive (7.52 MB)', 'one ZIP archive (7.52 MB)'],
+    ['2 files (CSV, Parquet · 7.52 MB)', '2 files (CSV, Parquet · 7.52 MB)'],
+    [undefined, 'Download link after purchase'],
+  ])('shows the download preview for %s', (downloadDescription, label) => {
+    const html = renderToStaticMarkup(<SignedOutPurchase slug="dataset" price={10} pricingType="one_time"
+      fulfillmentType="file_download" downloadDescription={downloadDescription} />);
+    expect(html).toContain(`Download</dt><dd class="font-medium text-gray-900">${label}</dd>`);
   });
 });
 
@@ -844,8 +856,9 @@ describe('connector checkout handoff and domain purchase', () => {
   it.each(['SELLER_PAYOUT_READINESS_UNKNOWN', 'SELLER_PAYOUT_NOT_READY', 'REFERENCE_DELIVERY_UNREADY'])('renders %s as a block with its web path and never redirects', async code => {
     vi.mocked(createCheckout).mockRejectedValue(error(409, { code, web_path: '/listings/listing-1' }));
     await accept({ handoffToken });
-    await screen.findByRole('link', { name: 'Review listing' });
-    expect(screen.getByRole('link', { name: 'Review listing' }).getAttribute('href')).toBe('/listings/listing-1');
+    const listingLink = await screen.findByRole('link', { name: 'Review listing' });
+    expect(listingLink.getAttribute('href')).toBe('/listings/listing-1');
+    expect(listingLink.getAttribute('data-prefetch')).toBe('false');
     expect(screen.getAllByRole('alert').some(element => element.textContent?.includes('Checkout is blocked'))).toBe(true);
     expect((screen.getByRole('button', { name: 'Accept and continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
     expect(createCheckout).toHaveBeenCalledOnce();
@@ -973,4 +986,34 @@ describe('connector checkout handoff and domain purchase', () => {
       expect(view.container.innerHTML).toBe(baseline);
     }
   });
+});
+
+it.each([
+ ['You already have an active order for this listing (#12345)', 'You already have an order for this listing (#12345). View it in My Purchases.', '/dashboard/orders'],
+ ['Cannot purchase your own listing', 'You cannot purchase your own listing.', undefined],
+ [{code:'listing_not_available',message:'private diagnostic'}, 'This listing is no longer for sale.', '/find-data'],
+ ['Listing not found', 'This listing is no longer for sale.', '/find-data'],
+ ['Payment processing error. Please try again later.', "We couldn't start your purchase just now. Try again, or contact support if it keeps happening.", undefined],
+ [{code:'UNKNOWN',message:'private diagnostic'}, "We couldn't start your purchase just now. Try again, or contact support if it keeps happening.", undefined],
+])('maps actionable checkout refusal %j', (detail, message, webPath) => {
+ const error=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail},headers:{},statusText:'Conflict',config:{} as never});
+ expect(parseCheckoutRefusal(error,false)).toMatchObject({message});
+ expect(parseCheckoutRefusal(error,false).webPath).toBe(webPath);
+});
+it.each(['PRICE_INVALID', 'CURRENCY_UNSUPPORTED', 'LISTING_VERSION_UNAVAILABLE', 'WORKSPACE_DELIVERY_UNREADY', 'DELIVERY_READINESS_UNKNOWN'])('uses fixed blocked copy for domain refusal %s with a web path', code => {
+ const error=new AxiosError('refused',undefined,undefined,undefined,{status:409,data:{detail:{code,message:'private diagnostic',web_path:'/listings/example'}},headers:{},statusText:'Conflict',config:{} as never});
+ const result=parseCheckoutRefusal(error,true);
+ expect(result.message).toBe('Checkout is blocked for this listing. Review the listing for details.');
+ expect(result.webPath).toBe('/listings/example');
+ expect(result.blocked).toBe(true);
+});
+
+it.each([
+ ['ACTIVE_ORDER', 'You already have an order for this listing. View it in My Purchases.', '/dashboard/orders'],
+ ['OWN_LISTING', 'You cannot purchase your own listing.', undefined],
+ ['LISTING_UNAVAILABLE', 'This listing is no longer for sale.', '/find-data'],
+])('keeps domain refusal %s blocked with its recovery link', (code, message, webPath) => {
+ const error = new AxiosError('refused', undefined, undefined, undefined, {status:409, data:{detail:{code}}, headers:{}, statusText:'Conflict', config:{} as never});
+ expect(parseCheckoutRefusal(error, true)).toMatchObject({code, message, blocked:true});
+ expect(parseCheckoutRefusal(error, true).webPath).toBe(webPath);
 });

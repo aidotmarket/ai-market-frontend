@@ -1,3 +1,4 @@
+import {customerRefusal} from '@/lib/customerMessages';
 import axios from 'axios';
 import { SellerWorkspaceApiError, type WorkspaceObject } from '@/api/sellerWorkspace';
 
@@ -9,17 +10,27 @@ export type FolderProgress = { files: number; bytes: number };
 export class FolderRequestError extends FolderSelectionError {
   constructor(error: SellerWorkspaceApiError | import('axios').AxiosError, readonly progress: FolderProgress) {
     const status = error instanceof SellerWorkspaceApiError ? error.status : error.response?.status;
-    const detail: unknown = error instanceof SellerWorkspaceApiError ? error.detail
-      : error.response?.data && (error.response.data as { detail?: unknown }).detail;
-    const reason = typeof detail === 'string' ? detail
-      : status === undefined ? 'the connection to ai.market was interrupted'
-      : status === 400 ? 'the folder listing request was invalid'
+    const reason = status === undefined ? 'the connection to ai.market was interrupted'
+      : status === 400 ? 'the folder could not be opened; choose the folder again'
       : status === 401 || status === 403 ? 'your sign-in or access to this connection changed'
       : status === 404 ? 'the connection or folder was not found'
       : status === 429 ? 'too many requests to your storage; wait a minute and try again'
       : status !== undefined && status >= 500 && status < 600 ? 'the storage provider did not respond'
       : 'the storage request failed';
-    super(reason);
+    super(customerRefusal(error, {
+      'Connection scope is invalid': 'the storage folder scope changed; check the connection and choose the folder again',
+      'Connection authorization is unavailable': 'storage access has expired; reconnect your storage before choosing the folder',
+      authorization_expired: 'storage access has expired; reconnect your storage before choosing the folder',
+      invalid_scope: 'the storage folder scope changed; check the connection and choose the folder again',
+      'Folder listing cursor is invalid; start again': 'the folder check is no longer valid; choose the folder again',
+      'Folder listing cursor has expired; start again': 'the folder check expired; choose the folder again',
+      'Folder listing cursor has already been used': 'the folder check has already been used; choose the folder again',
+      'Folder listing scan has exceeded its maximum lifetime; start again': 'the folder check took too long; choose the folder again',
+      'Folder listing scan has exceeded its page limit; start again': 'this folder has too many pages to check; choose a smaller folder',
+      'Folder listing scope is invalid': 'the folder is outside the connected storage scope; choose a folder within it',
+      'File discovery is unavailable': 'your storage files could not be checked; try again later',
+
+    }, reason));
   }
 }
 

@@ -1,11 +1,31 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import PrivacyNoticePage from './page';
 
 describe('PrivacyNoticePage', () => {
+  afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
+
+  it('adds exactly the approved UTF-8 paragraph under information use when released', () => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', '');
+    const held = render(<PrivacyNoticePage />);
+    expect(held.container.textContent).not.toContain('When you prepare a data request');
+    vi.stubEnv('NEXT_PUBLIC_BUYER_REQUEST_ANONYMIZATION_ENABLED', 'true');
+    const released = render(<PrivacyNoticePage />);
+    const paragraph = released.getByText(/^When you prepare a data request/);
+    expect(paragraph.tagName).toBe('P');
+    expect(createHash('sha256').update(paragraph.textContent!, 'utf8').digest('hex'))
+      .toBe('964398c4f9cb50e14fc2645becdf1eb0104f9482696eac6f31b1e5031dfa4131');
+    expect(paragraph.nextElementSibling?.textContent).toBe('AI assistants and connectors');
+    expect(paragraph.previousElementSibling?.previousElementSibling?.previousElementSibling?.textContent)
+      .toBe('How We Use Your Information');
+    paragraph.remove();
+    expect(released.container.innerHTML).toBe(held.container.innerHTML);
+  });
+
   it('publishes the AI assistants section after information use with the approved retention period', () => {
     const { container } = render(<PrivacyNoticePage />);
     const heading = screen.getByRole('heading', { name: 'AI assistants and connectors' });

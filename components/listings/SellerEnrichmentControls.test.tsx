@@ -108,7 +108,7 @@ it('replaces stale save success when aggregate removal is declined', async () =>
 });
 
 it.each([
-  ['verified_sample_unavailable_above_25_column_cap', 'A verified sample is not available for a dataset above the approved 25-column cap. This is a product limit, not an error in your dataset.'],
+  ['verified_sample_unavailable_above_25_column_cap', "Verified samples support up to 25 columns. Choose a file with fewer columns, or continue preparing your listing without a verified sample."],
   ['dictionary_must_match_committed_dataset_schema_republish_through_aim_data', 'The dictionary must match the committed dataset schema. Update the source file and publish a new listing version to restore agreement.'],
   ['dictionary_field_unknown', 'A dictionary field no longer matches the listing. Reload the optional details; if it still differs, publish a new listing version from the source file.'],
   ['dictionary_removal_forbidden', 'Dictionary fields cannot be removed here. Restore the field, or publish a new listing version with the changed schema.'],

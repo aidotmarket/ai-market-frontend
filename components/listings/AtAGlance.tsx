@@ -1,10 +1,11 @@
 import { formatBytes } from '@/lib/formatBytes';
 import SchemaTable from './SchemaTable';
+import {CORRECTION_NOTICE_BUYER, readLicenseDisplay, record, type LicenseDisplay} from '@/lib/publicPresentation';
 import type {AggregateStatistics, DerivationSource, ListingSummary, SummaryField} from '@/lib/api';
 
 export const provenanceLabels = {
   aim_metadata: 'from listing metadata', seller_entered: 'provided by the seller',
-  allai_generated: 'generated and checked', absent: 'not available',
+  allai_generated: 'generated and checked', absent: 'Not provided',
 } as const;
 
 // §C includes Price between Licence and Delivery. The summary contract has no
@@ -59,11 +60,17 @@ function AggregateStatisticsView({statistics}: {statistics: AggregateStatistics}
   </div>;
 }
 
-// One inert renderer for the seller preview and the public approved projection.
-// It intentionally has no audience input: identical data must produce identical markup.
-export default function AtAGlance({summary}: {summary?: ListingSummary | null}) {
-  if (!summary || !hasSupportedSummaryFields(summary)) return null;
-  const rawDescriptions = summary.field_descriptions?.provenance === 'absent' ? [] : summary.field_descriptions?.value;
+export function summaryLicenseDisplay(value: unknown): LicenseDisplay | null {
+  if (!record(value) || value.provenance !== 'platform_license_correction') return null;
+  try {return readLicenseDisplay(value);} catch {return null;}
+}
+
+// A public display overlay never changes the original seller-approved evidence.
+// Seller previews omit licenseDisplay and retain the original summary.
+export default function AtAGlance({summary, licenseDisplay}: {summary?: ListingSummary | null; licenseDisplay?: LicenseDisplay | null}) {
+  const currentDisplay = summaryLicenseDisplay(licenseDisplay);
+  if (!hasSupportedSummaryFields(summary) && !currentDisplay) return null;
+  const rawDescriptions = summary?.field_descriptions?.provenance === 'absent' ? [] : summary?.field_descriptions?.value;
   const descriptions = (Array.isArray(rawDescriptions) ? rawDescriptions : []).map(detail => ({
     name: typeof detail?.name === 'string' || typeof detail?.name === 'number' ? String(detail.name) : '',
     description: typeof detail?.description === 'string' ? detail.description : undefined,
@@ -72,19 +79,20 @@ export default function AtAGlance({summary}: {summary?: ListingSummary | null}) 
   return <section aria-label="At a glance" className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 break-words">
     <h2 className="text-lg font-semibold text-gray-900">At a glance</h2>
     {summaryFields.map(([key, label]) => {
-      const field = summary[key] as SummaryField<unknown> | null | undefined;
-      if (!field || field.provenance === 'absent') return null;
-      const value = field.value;
-      return <div key={key} className="min-w-0">
+      const field = summary?.[key] as SummaryField<unknown> | null | undefined;
+      const correction = key === 'license' ? currentDisplay : null;
+      if ((!field || field.provenance === 'absent') && !correction) return null;
+      const value = correction ? correction.license_label : field!.value;
+      return <div key={key} id={key === 'key_fields' ? 'listing-key-fields' : undefined} className="min-w-0">
         <h3 className="text-sm font-medium text-gray-900">{label}</h3>
-        {key === 'key_fields' ? <SchemaTable variant="summary" columns={summary.key_fields?.value ?? []} descriptions={descriptions} />
+        {key === 'key_fields' ? <SchemaTable variant="summary" columns={summary?.key_fields?.value ?? []} descriptions={descriptions} />
           : key === 'field_descriptions' ? <ul className="space-y-1 text-sm text-gray-700">{descriptions.map(d =>
             <li key={d.name}><span className="font-mono">{d.name}</span>{d.description && <>: {d.description}</>}{d.unit && <> — {d.unit}</>}</li>)}</ul>
           : key === 'aggregate_statistics' ? <AggregateStatisticsView statistics={value as AggregateStatistics} />
           : Array.isArray(value) ? <ul className="list-inside list-disc text-sm text-gray-700">{(value as string[]).map((item, i) => <li key={i}>{item}</li>)}</ul>
           : key === 'size_bytes' && typeof value === 'number' ? <p className="text-sm text-gray-700" title={`${value.toLocaleString('en-US')} bytes`}>{formatBytes(value)}</p>
           : <p className="text-sm text-gray-700">{typeof value === 'number' ? value.toLocaleString('en-US') : String(value)}{key === 'freshness' && ' (declared cadence)'}</p>}
-        <Provenance field={field} />
+        {correction ? <p className="mt-1 text-xs text-gray-600">{CORRECTION_NOTICE_BUYER}</p> : <Provenance field={field!} />}
       </div>;
     })}
   </section>;

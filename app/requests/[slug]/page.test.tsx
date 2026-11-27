@@ -21,11 +21,13 @@ vi.mock('./DataRequestDetailClient', () => ({
   default: ({
     slug,
     initialRequest,
+    boardQuery,
   }: {
     slug: string;
     initialRequest: DataRequestDetail | null;
+    boardQuery: string;
   }) => (
-    <main data-slug={slug} data-has-initial-request={initialRequest !== null}>
+    <main data-slug={slug} data-has-initial-request={initialRequest !== null} data-board-query={boardQuery}>
       {initialRequest && <h1>{initialRequest.title}</h1>}
     </main>
   ),
@@ -80,6 +82,21 @@ describe('DataRequestDetailPage Demand JSON-LD', () => {
     delete process.env.NEXT_PUBLIC_ENABLE_REQUEST_JSONLD;
   });
 
+  it('does not serialize a private draft or its proposed address into server HTML or metadata', async () => {
+    const request = makeRequest({
+      slug: null, status: 'draft', title: 'Synthetic private original',
+      publication_preparation: { status: 'preparing' },
+    });
+    fetchDataRequest.mockResolvedValue(request);
+    const { default: Page, generateMetadata } = await importPage();
+    const props = { params: Promise.resolve({ slug: '00000000-0000-4000-8000-000000000001' }) };
+    expect(await generateMetadata(props)).toEqual({ title: 'Data Request', robots: { index: false, follow: false } });
+    const html = renderToStaticMarkup(await Page(props));
+    expect(html).toContain('data-has-initial-request="false"');
+    expect(html).not.toContain('Synthetic private original');
+    expect(extractJsonLdScripts(html)).toHaveLength(0);
+  });
+
   it('server-renders exactly one Demand JSON-LD script from the backend payload', async () => {
     const request = makeRequest();
     fetchDataRequest.mockResolvedValueOnce(request);
@@ -94,6 +111,18 @@ describe('DataRequestDetailPage Demand JSON-LD', () => {
     expect(scripts).toHaveLength(1);
     expect(JSON.parse(scripts[0])).toEqual(request.jsonld);
     expect(html).toContain('Need Claims Data');
+  });
+
+  it('passes only the originating board filters to the detail client', async () => {
+    fetchDataRequest.mockResolvedValueOnce(makeRequest());
+    const { default: Page } = await importPage();
+
+    const html = renderToStaticMarkup(await Page({
+      params: Promise.resolve({ slug: 'need-claims-data' }),
+      searchParams: Promise.resolve({ page: '3', category: 'retail', search: 'sales & inventory', response_id: 'response-1' }),
+    }));
+
+    expect(html).toContain('data-board-query="page=3&amp;category=retail&amp;search=sales+%26+inventory"');
   });
 
   it('suppresses Demand JSON-LD when the request flag is false', async () => {

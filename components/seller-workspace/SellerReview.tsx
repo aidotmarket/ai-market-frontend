@@ -1,4 +1,5 @@
 'use client';
+import {DescribeListingAction} from './GuidedListingFlow';
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
@@ -20,7 +21,7 @@ export default function SellerReview({active, enabled}: {active: boolean; enable
   const [filesReady, setFilesReady] = useState(true);
   const [loadedRender, setLoadedRender] = useState<string | null>(null);
   const review=flow?flow.review:localReview;
-  const error=flow?flow.reviewError:localError;
+  const error=flow?null:localError;
   const loading=flow?flow.reviewLoading:localLoading;
   const descriptionBlocked=!!flow&&flow.steps.slice(0,4).some(s=>s.state!=='done'&&s.state!=='skipped');
   const selectionBlocked=draftStatus.selectionSavePending||draftStatus.selectionSaveFailed;
@@ -31,16 +32,19 @@ export default function SellerReview({active, enabled}: {active: boolean; enable
     setLoading(true); setError(null); setReview(null); setLoadedRender(null); setFilesReady(true);
     readListingReview(request.signal,draftStatus.draft_id).then(result => { if (!request.signal.aborted) setReview(result); }).catch(error => {
       if (request.signal.aborted) return;
-      setError(listingReviewErrorReason(error));
+      const detail=axios.isAxiosError(error)?error.response?.data?.detail:undefined;
+      const code=typeof detail==='string'?detail:detail?.code;
+      setError(['source_required','draft_required','source_connection_changed'].includes(code)?listingReviewErrorReason(error):"We couldn't load your saved review. Try again.");
     }).finally(() => { if (!request.signal.aborted) setLoading(false); });
     return () => request.abort();
   }, [active, enabled, retry,selectionBlocked,draftStatus.draft_id]);
-  if (!enabled) return <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Saved listing review is not available yet. You can continue preparing your listing with Allai.</p>;
+  if (!enabled) return <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Saved reviews are not enabled here yet. Open Describe and price to keep preparing your listing with allAI. <DescribeListingAction/></p>;
   return <section aria-label="Review saved listing" className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-gray-900">Review your saved listing</h2><p className="mt-2 text-sm text-gray-600">This review uses your saved file choices and listing edits. Publication status appears below your approved review.</p></div><button type="button" disabled={loading||selectionBlocked} onClick={() => flow?flow.refreshReview():setRetry(value => value + 1)} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm disabled:opacity-50">Refresh saved review</button></div>
-    {descriptionBlocked&&<p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{flow?.steps.find(s=>s.next)?.reason}</p>}
+    {descriptionBlocked&&!flow?.reviewError&&<p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{flow?.steps.find(s=>s.next)?.reason}</p>}
     {selectionBlocked&&<p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{draftStatus.selectionSavePending?'Review is disabled while your file choice is being saved.':'Review is disabled because your last file choice was not saved. Retry that choice before reviewing.'}</p>}
     {loading && <p role="status" className="text-sm text-gray-600">Loading your saved listing and file selection…</p>}
+    {flow?.polishNotice && <p role="status" className="text-sm text-green-900">{flow.polishNotice}</p>}
     {error && <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{error}</p>}
     {review && <><ReviewFields review={review}/>{review.source_page && <ReviewFiles key={`files:${review.review_hash}`} review={review} active={active} onReady={setFilesReady} />}{review.sample_decision==='member_files'&&<SampleReview review={review}/>}<section aria-label="Saved listing preview" className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 sm:p-6"><p className="text-sm text-gray-600">This review uses your saved listing fields. Your brief, conversation and unaccepted suggestions are private.</p><ApprovedListingPreview key={review.render_hash} onLoad={() => setLoadedRender(review.render_hash)} title="Saved original seller review" html={review.rendered_html} /></section>{review.missing_fields.length > 0 && <p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{reviewRefusal(review)}</p>}<p className="text-sm text-gray-600">Approval retains this original review and its signing hashes. The current public display is separate and may carry a platform licence correction.</p>{review.approval_available && review.missing_fields.length === 0 && <SellerApproval key={`approval:${review.review_hash}`} review={review} active={active} rendered={filesReady && loadedRender === review.render_hash} disabled={descriptionBlocked||selectionBlocked||(draftStatus.available&&JSON.stringify(review.sample_object_indices??[])!==JSON.stringify(draftStatus.sampleIndices))} />}</>}
     {flow?.publication?.publication && <a className="block text-sm text-indigo-700 underline" href={`/listings/${encodeURIComponent(flow.publication.publication.slug)}`}>View separately attributed current public display</a>}

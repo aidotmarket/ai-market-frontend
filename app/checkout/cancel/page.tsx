@@ -16,7 +16,7 @@ export default function CheckoutCancelPage() {
             href="/dashboard/orders"
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Check My Purchases
+            My purchases
           </Link>
           <Link
             href="/listings"
@@ -28,7 +28,7 @@ export default function CheckoutCancelPage() {
             href="mailto:support@ai.market"
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Need help?
+            Contact support
           </a>
         </div>
       </div>

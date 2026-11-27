@@ -390,3 +390,41 @@ export async function uploadWorkspaceSample(connectionId:string,sourceVersion:nu
       onUploadProgress:event=>onProgress(event.loaded,event.total ?? file.size)},
   )).data;
 }
+
+// C2 first-party intake. Private purchaser data is never sent to approval.
+export interface AuthorityCapabilities {
+  import_enabled:boolean; contract_version:string; handoff_versions:number[];
+}
+export type AuthorityTarget =
+  | {type:'bucket';selection:import('./sellerListingSource').SourceContent}
+  | {type:'gateway';gateway_id:string;file_ids:string[];expected_metadata_revision:number};
+export interface AuthorityImportRequest {
+  contract_version:'listing-authority-v1'; handoff:string; idempotency_key:string;
+  account_id:string; account_confirmed:true; target_confirmed:true; target:AuthorityTarget;
+}
+export interface AuthorityImportReceipt {
+  import_id:string; draft_id:string; listing_id:string|null; authority_version_id:string;
+}
+export interface PurchaserView {
+  door_host:string|null; seller_attestation:string;
+  files:Array<{file_id:string;delivery_name:string;size_bytes:number;columns:Array<{name:string;type?:string}>}>;
+}
+export interface AuthorityReview {
+  authority_version_id:string; binding_hash:string;
+  public_review:{public_fields:Record<string,unknown>;rendered_html:string;render_hash:string;presentation_version:string;inventory_version:string};
+  native_confirmed:boolean; purchaser_confirmed:boolean; purchaser_view:PurchaserView|null;
+  purchaser_view_hash:string|null; gateway_metadata_revision:number|null;
+}
+
+export async function getAuthorityCapabilities(){const {nativeRead}=await import('./connector-seller-settings');return nativeRead<AuthorityCapabilities>('/listing-authority/capabilities');}
+export const authorityAvailable=(c:AuthorityCapabilities)=>c.import_enabled===true&&c.contract_version==='listing-authority-v1'&&c.handoff_versions.includes(1);
+export async function importAuthorityDraft(body:AuthorityImportRequest){const {nativeWrite}=await import('./connector-seller-settings');return nativeWrite<AuthorityImportReceipt>('/listing-authority/imports',body);}
+export async function readAuthorityReview(id:string){const {nativeRead}=await import('./connector-seller-settings');return nativeRead<AuthorityReview>('/listing-authority/versions/'+encodeURIComponent(id)+'/review');}
+export async function confirmAuthorityReview(review:AuthorityReview,kind:'native'|'purchaser',key:string){
+  const {nativeWrite}=await import('./connector-seller-settings');
+  return nativeWrite<{event_id:string;authority_version_id:string}>('/listing-authority/versions/'+encodeURIComponent(review.authority_version_id)+'/confirm-'+kind,{
+    contract_version:'listing-authority-v1',authority_version_id:review.authority_version_id,
+    expected_binding_hash:review.binding_hash,idempotency_key:key,confirmed:true,
+    ...(kind==='purchaser'?{gateway_metadata_revision:review.gateway_metadata_revision,view_hash:review.purchaser_view_hash}:{}),
+  });
+}

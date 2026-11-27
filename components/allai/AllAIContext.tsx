@@ -25,9 +25,11 @@ import {
   type AnonymousMessagePayload,
 } from '@/api/anonymousChat';
 import type { TicketStatusCardData } from './TicketStatusCard';
+import { anonymousFallbackDestinations, type FallbackDestinations } from '@/lib/anonymous-allai-fallback';
 import {
   ANONYMOUS_ALLAI_LOCALES,
   anonymousAllAIResources,
+  isAnonymousSafeOutcome,
   preferredAnonymousAllAILocale,
   type AnonymousAllAILocale,
   type AnonymousSafeOutcome,
@@ -41,6 +43,9 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   failureNotice?: string;
+  listingFailure?: 'error' | 'timeout';
+  fallbackDestinations?: FallbackDestinations;
+  showAimDataSetupGuide?: boolean;
   timestamp: number;
   ticketStatusCards?: TicketStatusCardData[];
   historical?: boolean;
@@ -80,6 +85,7 @@ interface AllAIContextValue {
   isStreaming: boolean;
   sendMessage: (text: string) => Promise<void>;
   page: string;
+  isSignedIn: boolean;
   locale: AnonymousAllAILocale;
   setLocale: (locale: AnonymousAllAILocale) => void;
   anonymousSurfaceActive: boolean;
@@ -134,17 +140,6 @@ function extractTicketStatusCards(evt: Record<string, any>): TicketStatusCardDat
   );
 }
 
-function isAnonymousSafeOutcome(value: unknown): value is AnonymousSafeOutcome {
-  return (
-    value === 'no_matches' ||
-    value === 'retrieval_unavailable' ||
-    value === 'answer_unverified' ||
-    value === 'surface_disabled' ||
-    value === 'rate_limited' ||
-    value === 'unsupported_language'
-  );
-}
-
 function isAnonymousNextStep(value: unknown): value is AnonymousNextStep {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -190,6 +185,13 @@ export function useAllAI() {
   const ctx = useContext(AllAIContext);
   if (!ctx) throw new Error('useAllAI must be used within AllAIProvider');
   return ctx;
+}
+
+export function useAllAILocale() {
+  const context = useContext(AllAIContext);
+  return context?.locale ?? preferredAnonymousAllAILocale(
+    typeof navigator === 'undefined' ? undefined : navigator.language
+  );
 }
 
 export function AllAIProvider({ children }: { children: ReactNode }) {
@@ -394,13 +396,13 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     if (isOpen && !greetingSentRef.current && messages.length === 0 && user) {
       greetingSentRef.current = true;
       const name = user.first_name || user.email?.split('@')[0] || '';
-      const roleGreeting = user.role === 'seller'
-        ? "I can help you manage your listings, understand marketplace trends, or answer questions about ai.market."
-        : "I can help you find data, submit requests, or answer questions about ai.market.";
+      const greeting = user.role === 'seller'
+        ? `Hey${name ? ' ' + name : ''}, would you like help with your listings, marketplace trends, or questions about ai.market?`
+        : `Hey${name ? ' ' + name : ''}! I can help you find data, submit requests, or answer questions about ai.market. What can I help with?`;
       setMessages([{
         id: 'greeting-0',
         role: 'assistant',
-        content: `Hey${name ? ' ' + name : ''}! ${roleGreeting} What can I help with?`,
+        content: greeting,
         timestamp: Date.now(),
       }]);
     } else if (isOpen && !greetingSentRef.current && messages.length === 0 && !user) {
@@ -428,6 +430,19 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
+      const resources = anonymousAllAIResources(locale);
+      const showAimDataSetupGuide = !user && contextPath === '/aim-data';
+      if (trimmed.length > 4000) {
+        setMessages((prev) => [...prev, {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: resources.safeOutcomes.message_too_long,
+          safeOutcome: 'message_too_long',
+          showAimDataSetupGuide,
+          timestamp: Date.now(),
+        }]);
+        return;
+      }
       supportRef.current?.suspendConversation(); supportRef.current = null; setSupportSession(null);
       // This is the general lane, including notification and wizard callers.
       // The report composer sends explicitly through its visit's guide command.
@@ -437,7 +452,6 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           setReportSession(null);
         } else leaveReportIssue();
       }
-      const resources = anonymousAllAIResources(locale);
       if (anonymousSurfaceActive && !anonymousAvailable) {
         setMessages((prev) => [
           ...prev,
@@ -468,12 +482,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
       ]);
       setIsStreaming(true);
 
+      const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
+      const signedOutGatewayHelp = !user && (contextPath === '/aim-data' || contextPath === '/support');
+
       try {
         const sessionId = await ensureSession();
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
         const context: AnonymousMessagePayload['context'] = { page: contextPath };
         if (listingMatch) context.listing_id = listingMatch[1];
 
@@ -511,17 +527,35 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
           });
         }
 
+        if (res.status === 422) {
+          const validationBody = await res.json().catch(() => null);
+          const messageTooLong = Array.isArray(validationBody?.detail) &&
+            validationBody.detail.some((issue: unknown) => {
+              if (!issue || typeof issue !== 'object') return false;
+              const { loc, type } = issue as { loc?: unknown; type?: unknown };
+              return Array.isArray(loc) && loc.at(-1) === 'message' && type === 'string_too_long';
+            });
+          if (messageTooLong) {
+            setMessages((prev) => prev.map((m) => m.id === assistantId
+              ? { ...m, content: resources.safeOutcomes.message_too_long, safeOutcome: 'message_too_long', showAimDataSetupGuide }
+              : m));
+            return;
+          }
+        }
+
         if (res.status === 429) {
-          const limitContent = anonymousSurfaceActive
-            ? resources.safeOutcomes.rate_limited
-            : "You've reached the message limit for this session. Please try again later.";
+          const limitBody = await res.json().catch(() => null);
+          const limitOutcome = limitBody?.detail?.dimension === 'turn_input'
+            ? 'message_too_long' : 'rate_limited';
+          const limitContent = resources.safeOutcomes[limitOutcome];
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content: limitContent,
-                    safeOutcome: anonymousSurfaceActive ? 'rate_limited' : undefined,
+                    safeOutcome: limitOutcome,
+                    showAimDataSetupGuide,
                   }
                 : m
             )
@@ -547,9 +581,10 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         try {
           await readAnonymousMessageStream(res.body, (evt) => {
             if (evt.type === 'answer' && typeof evt.text === 'string') {
-              const nextStep = anonymousSurfaceActive && isAnonymousNextStep(evt.next_step)
-                ? evt.next_step
-                : undefined;
+              const step = evt.next_step;
+              const nextStep = isAnonymousNextStep(step) &&
+                (anonymousSurfaceActive || (signedOutGatewayHelp && step.action === 'view_aim_data'))
+                ? step : undefined;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -571,13 +606,18 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             if (evt.type === 'safe_failure' && isAnonymousSafeOutcome(evt.outcome)) {
               const outcome = evt.outcome;
               const fallback = resources.safeOutcomes[outcome];
+              const surface = listingMatch ? 'listing' : contextPath === '/' ? 'homepage' : undefined;
+              const fallbackDestinations = surface && anonymousFallbackDestinations(evt, surface);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: typeof evt.text === 'string' && evt.text ? evt.text : fallback,
+                        content: !signedOutGatewayHelp && !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
                         safeOutcome: outcome,
+                        fallbackDestinations,
+                        showAimDataSetupGuide,
+                        listingFailure: undefined,
                       }
                     : m
                 )
@@ -599,11 +639,14 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
             const error = evt.error ?? (evt.type === 'error' ? evt.message : undefined);
             if (typeof error === 'string' && error) {
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: error || 'Something went wrong.' }
-                    : m
-                )
+                prev.map((m) => {
+                  if (m.id !== assistantId || ((listingMatch || signedOutGatewayHelp) && m.safeOutcome)) return m;
+                  if (signedOutGatewayHelp) {
+                    if (m.factRevisionSet || m.nextStep) return m;
+                    return { ...m, content: resources.genericError, showAimDataSetupGuide };
+                  }
+                  return listingMatch ? { ...m, listingFailure: 'error' } : { ...m, content: error };
+                })
               );
             }
 
@@ -647,7 +690,15 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                 )
               );
             }
-          });
+          }, undefined, controller.signal);
+          if ((listingMatch || signedOutGatewayHelp) && !controller.signal.aborted) {
+            setMessages((prev) => prev.map((m) => {
+              if (m.id !== assistantId || m.content.trim() || m.ticketStatusCards?.length || m.nextStep) return m;
+              return listingMatch
+                ? { ...m, listingFailure: 'error' }
+                : { ...m, content: resources.genericError, showAimDataSetupGuide };
+            }));
+          }
         } catch (readErr) {
           // On timeout, abort the request so the connection is torn down
           if (readErr instanceof Error && readErr.message === 'Stream read timeout') {
@@ -657,14 +708,16 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         }
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
+          const failure = err?.message === 'Stream read timeout' ? 'timeout' : 'error';
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? m.content
-                  ? { ...m, failureNotice: resources.genericError }
-                  : { ...m, content: resources.genericError }
-                : m
-            )
+            prev.map((m) => {
+              if (m.id !== assistantId || m.safeOutcome) return m;
+              if (listingMatch) return { ...m, listingFailure: failure };
+              if (signedOutGatewayHelp && (m.factRevisionSet || m.nextStep)) return m;
+              return m.content.trim()
+                ? { ...m, failureNotice: resources.genericError, showAimDataSetupGuide }
+                : { ...m, content: resources.genericError, showAimDataSetupGuide };
+            })
           );
         }
       } finally {
@@ -672,7 +725,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         abortRef.current = null;
       }
     },
-    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, leaveReportIssue]
+    [anonymousAvailable, anonymousSurfaceActive, ensureSession, isStreaming, locale, pathname, contextPath, token, user, leaveReportIssue]
   );
 
   const open = useCallback(() => {
@@ -701,7 +754,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
         supportSession, openSupportConversation, leaveSupportConversation,
         reportSession, openReportIssue, leaveReportIssue, separateViewReport, previousReports, selectReport,
         isOpen, open, close, toggle, messages, isStreaming, sendMessage, page: contextPath,
-        locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
+        isSignedIn: Boolean(user), locale, setLocale, anonymousSurfaceActive, anonymousAvailable,
         onFieldProposal: onFieldProposalState, setOnFieldProposal,
         onBatchProposal: onBatchProposalState, setOnBatchProposal,
         formSnapshotGetter: formSnapshotGetterState, setFormSnapshotGetter,

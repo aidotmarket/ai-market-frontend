@@ -391,3 +391,21 @@ it.each(['owner','principal','ABA'])('ignores superseding exact result after %s 
   await act(async()=>exact.resolve(ok([row({revision:4})])));
   expect(screen.queryByText(row().intent.email)).toBeNull();expect(screen.queryByRole('button',{name:'Confirm email change'})).toBeNull();expect(writes()).toHaveLength(1);
 });
+
+it('recovers an initial failed pending-changes read on valid token rotation, without submitting a decision', async () => {
+  ports.adapter.mockRejectedValueOnce(rejection(503));
+  render(<PendingProfileChanges />); await screen.findByText(/Account changes could not be checked/);
+  act(() => useAuthStore.setState({ token: token(7200) }));
+  await screen.findByText(row().intent.email);
+  expect(screen.queryByText(/Account changes could not be checked/)).toBeNull();
+  expect(reads()).toHaveLength(2); expect(writes()).toHaveLength(0);
+});
+it('recovers once when session recovery precedes the initial failed response, and never loops', async () => {
+  const late = deferred<ReturnType<typeof ok>>(); ports.adapter.mockReturnValueOnce(late.promise).mockRejectedValue(rejection(503));
+  render(<PendingProfileChanges />);
+  act(() => useAuthStore.setState({ token: token(7200) }));
+  await act(async () => late.reject(rejection(503)));
+  await screen.findByText(/Account changes could not be checked/);
+  await act(async () => {});
+  expect(reads()).toHaveLength(2); expect(writes()).toHaveLength(0);
+});

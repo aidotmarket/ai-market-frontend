@@ -1,10 +1,13 @@
 'use client';
 
+import { customerLoadError } from '@/lib/customerMessages';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { getMyDataRequestsPage, type MyDataRequestsPage as RequestsPage } from '@/api/data-requests';
 import { formatDate } from '@/lib/format';
+import { ownerRequestHref } from '@/lib/buyer-request-publication';
+import { requestUrgencyLabel } from '@/lib/request-urgency';
 import { AxiosError } from 'axios';
 import type { DataRequestStatus, DataRequestUrgency } from '@/types';
 
@@ -56,8 +59,8 @@ function OwnedRequests() {
       })
       .catch((err) => {
         if (obsolete) return;
-        const detail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
-        setError(typeof detail === 'string' && detail.trim() ? detail : 'Failed to load your data requests.');
+
+        setError(customerLoadError("data requests"));
       })
       .finally(() => {
         if (!obsolete) setLoading(false);
@@ -94,7 +97,10 @@ function OwnedRequests() {
     );
   }
 
-  const requests = result?.items ?? [];
+  const requests = (result?.items ?? []).map((request) => ({
+    ...request,
+    title: request.draft_fields?.title?.trim() || request.title?.trim() || 'Untitled request',
+  }));
   if (requests.length === 0 && page === 1) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -140,14 +146,14 @@ function OwnedRequests() {
             {requests.map((req) => (
               <tr key={req.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
-                  <Link href={`/requests/${req.slug}`} className="text-[#3F51B5] hover:underline font-medium">
+                  <Link href={ownerRequestHref(req)} className="text-[#3F51B5] hover:underline font-medium">
                     {req.title}
                   </Link>
                 </td>
                 <td className="px-4 py-3">{statusBadge(req.status)}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${URGENCY_BADGE[req.urgency] || ''}`}>
-                    {req.urgency}
+                    {requestUrgencyLabel(req.urgency)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500">{req.response_count}</td>
@@ -163,7 +169,7 @@ function OwnedRequests() {
         {requests.map((req) => (
           <Link
             key={req.id}
-            href={`/requests/${req.slug}`}
+            href={ownerRequestHref(req)}
             className="block rounded-lg border border-gray-200 p-4 hover:bg-gray-50"
           >
             <div className="flex items-center justify-between mb-2">
@@ -172,7 +178,7 @@ function OwnedRequests() {
             </div>
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${URGENCY_BADGE[req.urgency] || ''}`}>
-                {req.urgency}
+                {requestUrgencyLabel(req.urgency)}
               </span>
               <span>{req.response_count} responses &middot; {formatDate(req.created_at)}</span>
             </div>

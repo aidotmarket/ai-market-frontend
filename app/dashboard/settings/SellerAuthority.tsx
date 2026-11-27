@@ -1,9 +1,13 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useSectionRecoveryRead } from '@/hooks/useSectionRecoveryRead';
 import { useAuthStore } from '@/store/auth';
 import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { fields, verbs, newDecision, nativeSession, readAuthority, reviewAuthority, setAuthority, reviewStopAuthority, stopAuthority, validLimits, type AuthoritySet, type AuthorityStatus, type DecisionReview, type StandingLimits, type WebDecision } from '@/api/connector-seller-settings';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
+import { dangerButtonClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
+
+import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 
 const empty: StandingLimits = { grant_ids: [], client_ids: [], operations: [], categories: [], source_kinds: [], connection_ids: [], mutable_fields: [], max_batch: 1,
   daily_items: {}, concurrent_operations: 1, price_min_cents: null, price_max_cents: null, max_price_delta_cents: null, currency: 'USD', sample_rule: 'none_or_unchanged_approved', expires_at: '' };
@@ -12,8 +16,9 @@ const names = { grant_ids: 'Selected native grants (UUIDs)', client_ids: 'Select
 export default function SellerAuthority() {
   const switches = useSellerSwitches();
   const { user, token } = useAuthStore();
+  const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   if (!user || !token) return null;
-  return <AuthorityScreen key={user.id} switches={switches} />;
+  return <AuthorityScreen key={JSON.stringify([user.id, owner])} switches={switches} />;
 }
 export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | null }) {
   const token = useAuthStore(s => s.token);
@@ -27,18 +32,23 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
   const [message, setMessage] = useState('');
   const mounted = useRef(true); const pending = useRef<AuthoritySet | null>(null);
   const stopping = useRef<ReturnType<typeof newDecision> | null>(null);
+  useEffect(() => {
+    stopping.current = null; pending.current = null;
+    setStopReview(null); setReview(null);
+  }, [token]);
   const readGeneration = useRef(0);
-  const refresh = async () => {
+  const refresh = useCallback(async (active: () => boolean = () => true) => {
     const generation = ++readGeneration.current;
-    const current = () => mounted.current && generation === readGeneration.current && token === useAuthStore.getState().token;
+    const current = () => active() && mounted.current && generation === readGeneration.current;
     setStopReview(null); setReview(null); pending.current = null;
     try {
       const data = await readAuthority();
       if (current()) { setStatus(data); setLimits(data.limits && validLimits(data.limits) ? data.limits : empty); setError(null); }
-    } catch(e) { if (current()) setError(e); }
-  };
+    } catch(e) { if (current()) { setError(e); throw e; } }
+  }, []);
   // Cleanup invalidates reads even if a later effect sets mounted back to true.
-  useEffect(() => { mounted.current = true; setStatus(null); setLimits(empty); void refresh(); return () => { mounted.current = false; ++readGeneration.current; }; }, [token]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; ++readGeneration.current; }; }, []);
+  const retry = useSectionRecoveryRead(refresh);
   const edit = (next: StandingLimits) => { stopping.current = null; setStopReview(null); setLimits(next); setReview(null); pending.current = null; setMessage(''); };
   const prepare = async () => {
     if (!status || busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()) return;
@@ -51,7 +61,7 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
   const save = async () => {
     if (!review || busy || !effects) return;
     setBusy(true); setError(null);
-    try { await setAuthority({ ...review.body, review_hash: review.result.review_hash }); if (mounted.current) { setMessage('Standing authority saved.'); await refresh(); } }
+    try { await setAuthority({ ...review.body, review_hash: review.result.review_hash }); if (mounted.current) { setMessage('AI assistant permissions saved.'); await refresh(); } }
     catch(e) { if (mounted.current) { setError(e); setReview(null); } } finally { if (mounted.current) setBusy(false); }
   };
   const stop = async () => {
@@ -72,42 +82,57 @@ export function AuthorityScreen({ switches }: { switches: SellerSwitchReport | n
     if (!stopReview || busy) return;
     setBusy(true); setError(null);
     try { await stopAuthority({ ...stopReview.body, review_hash: stopReview.result.review_hash });
-      if (mounted.current) { stopping.current = null; setMessage('Standing authority revoked. Completed effects remain completed.'); await refresh(); }
+      if (mounted.current) { stopping.current = null; setMessage('Automatic assistant changes stopped. Changes already completed will stay in place.'); await refresh(); }
     } catch(e) { if (mounted.current) { setError(e); setStopReview(null); } }
     finally { if (mounted.current) setBusy(false); }
   };
-  return <section id="seller-authority" aria-label="Seller standing authority" className="mt-6 space-y-4 rounded-xl border bg-white p-6">
-    <h2 className="text-lg font-semibold">Seller standing authority</h2>
-    <button type="button" disabled={!status || busy} onClick={() => void stop()} className="rounded border border-red-700 px-4 py-2 text-red-800">Stop automatic seller actions</button>
-    <p>After authenticated review and confirmation, Stop revokes standing authority immediately for unexecuted items. Successful items remain completed.</p>
-    <button type="button" onClick={() => { stopping.current = null; void refresh(); }}>Refresh authority and budget</button>
-    {stopReview && <section aria-label="Exact server Stop review"><h3>Review withdrawal of standing authority</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()}>Confirm Stop automatic seller actions</button></section>}
+  const active = !!(status?.enabled && status.limits?.expires_at && Date.parse(status.limits.expires_at) > Date.now());
+  return <section id="seller-authority" aria-label="AI assistant permissions" className="mt-6 space-y-4 rounded-xl border bg-white p-6">
+    <h2 className="text-lg font-semibold">AI assistant permissions</h2>
+    <button type="button" disabled={!status || busy} onClick={() => void stop()} className={dangerButtonClass}>Review stopping assistant changes</button>
+    <p>Review and confirm to stop all future automatic assistant changes. Changes already completed will stay in place.</p>
+    <button type="button" onClick={() => { stopping.current = null; retry(); }} className={secondaryButtonClass}>Refresh permissions</button>
+    {stopReview && <section aria-label="Exact server Stop review"><h3>Review stopping assistant changes</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(stopReview.result, null, 2)}</pre><button disabled={busy} onClick={() => void confirmStop()} className={dangerButtonClass}>Stop all automatic assistant changes</button></section>}
     {message && <p role="status">{message}</p>}
-    {status && <><p>Authority version {status.version} · {status.enabled ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
-      <p>Single and bulk actions share this budget across all grants and clients. Absolute request ceiling: 50 items. Requests are never automatically split.</p>
-      <table><caption>Shared UTC daily budget</caption><thead><tr><th>Operation</th><th>Limit</th><th>Reserved</th><th>Succeeded</th><th>Remaining</th></tr></thead><tbody>{verbs.map(v => {
+    {status && <><p>{active && status.limits
+      ? <>Your AI assistant can {status.limits.operations?.map(v => ({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]).join(', ').replace(/, (?=[^,]*$)/, ' and ')} some of your listings, within the limits below, until {new Date(status.limits.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.</>
+      : "Your AI assistant can't change your listings right now."}</p>
+      {active && status.limits?.operations.map(v => {
+        const used = status.usage.find(u => u.action === `aim.listing.${v}`);
+        const remaining = Math.max(0, (status.limits?.daily_items?.[v] ?? 0) - (used?.reserved ?? 0) - (used?.success ?? 0));
+        return remaining === 0 && <p key={v}>Today’s {({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]} limit has been reached.</p>;
+      })}
+      {!effects && <p>Editing permissions is unavailable on this page right now. You can still check status and stop the assistant here.</p>}
+      <details className="rounded-lg border p-4"><summary className="min-h-11 cursor-pointer font-medium">Limits and usage details</summary>
+      <p>Authority version {status.version} · {active ? 'Active' : 'Off or expired'} · UTC day {status.utc_day}</p>
+      <p>Each request can change up to 50 listings. Single and bulk changes share these daily limits across all connected assistants.</p>
+      <div className="overflow-x-auto"><table className="w-full border-collapse text-sm text-left">
+        <caption className="caption-top pb-3 text-left font-medium text-gray-700">Shared daily limits (UTC)</caption>
+        <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Operation', 'Limit', 'Reserved', 'Succeeded', 'Remaining'].map(label =>
+          <th key={label} scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{verbs.map(v => {
         const used = status.usage.find(u => u.action === `aim.listing.${v}`); const limit = status.limits?.daily_items?.[v] ?? 0;
-        return <tr key={v}><th>{v}</th><td>{limit}</td><td>{used?.reserved ?? 0}</td><td>{used?.success ?? 0}</td><td>{Math.max(0, limit - (used?.reserved ?? 0) - (used?.success ?? 0))}</td></tr>;
-      })}</tbody></table>
-      {!effects && <p>Seller effects are off. Status and Stop remain available.</p>}
+        return <tr key={v} className="border-b border-gray-100"><th scope="row" className="px-4 py-3 font-medium">{({ update: 'Edit', publish: 'Publish', unpublish: 'Unpublish' })[v]}</th>{[limit, used?.reserved ?? 0, used?.success ?? 0,
+          Math.max(0, limit - (used?.reserved ?? 0) - (used?.success ?? 0))].map((value, index) => <td key={index} className="px-4 py-3 tabular-nums">{value}</td>)}</tr>;
+      })}</tbody></table></div></details>
       {effects && <><form onSubmit={e => { e.preventDefault(); void prepare(); }} className="space-y-4">
-        <fieldset disabled={busy || !effects} className="grid gap-4 sm:grid-cols-2"><legend>Edit standing limits</legend>
+        <fieldset disabled={busy || !effects} className="grid gap-4 sm:grid-cols-2"><legend>Choose allowed changes</legend>
           {lists.map(k => <label key={k}>{names[k]} (one per line)<textarea className="block w-full rounded border p-2" value={limits[k].join('\n')} onChange={e => edit({ ...limits, [k]: e.target.value.split('\n').filter(Boolean) })} /></label>)}
           {verbs.map(v => <div key={v}><label><input type="checkbox" checked={limits.operations.includes(v)} onChange={e => {
             const daily = { ...limits.daily_items }; if (e.target.checked) daily[v] = 1; else delete daily[v];
             edit({ ...limits, operations: e.target.checked ? [...limits.operations, v] : limits.operations.filter(x => x !== v), daily_items: daily });
-          }} />{v}</label>{limits.operations.includes(v) && <label>Daily {v} items<input className="block rounded border p-2" type="number" min="1" max="1000000" value={limits.daily_items[v] ?? 1} onChange={e => edit({ ...limits, daily_items: { ...limits.daily_items, [v]: Number(e.target.value) } })} /></label>}</div>)}
+          }} />{({ update: 'Edit', publish: 'Publish', unpublish: 'Unpublish' })[v]}</label>{limits.operations.includes(v) && <label>Daily {({ update: 'edit', publish: 'publish', unpublish: 'unpublish' })[v]} limit<input className="block rounded border p-2" type="number" min="1" max="1000000" value={limits.daily_items[v] ?? 1} onChange={e => edit({ ...limits, daily_items: { ...limits.daily_items, [v]: Number(e.target.value) } })} /></label>}</div>)}
           {(['aws', 'r2', 'gateway', 'none'] as const).map(v => <label key={v}><input type="checkbox" checked={limits.source_kinds.includes(v)} onChange={e => edit({ ...limits, source_kinds: e.target.checked ? [...limits.source_kinds, v] : limits.source_kinds.filter(x => x !== v) })} />Source: {v}</label>)}
           {fields.map(v => <label key={v}><input type="checkbox" checked={limits.mutable_fields.includes(v)} onChange={e => edit({ ...limits, mutable_fields: e.target.checked ? [...limits.mutable_fields, v] : limits.mutable_fields.filter(x => x !== v) })} />Mutable field: {v}</label>)}
           {(['max_batch', 'concurrent_operations', 'price_min_cents', 'price_max_cents', 'max_price_delta_cents'] as const).map(k => <label key={k}>{k.replaceAll('_', ' ')}<input className="block rounded border p-2" type="number" min={k === 'max_batch' || k === 'concurrent_operations' ? 1 : 0} max={k === 'max_batch' || k === 'concurrent_operations' ? 50 : undefined} value={limits[k] ?? ''} onChange={e => edit({ ...limits, [k]: e.target.value === '' ? null : Number(e.target.value) })} /></label>)}
           <label>Expiry (ISO timestamp with UTC offset)<input className="block rounded border p-2" value={limits.expires_at} onChange={e => edit({ ...limits, expires_at: e.target.value })} /></label>
           <p>Currency USD. Samples must be absent or unchanged and already approved. New presentation or sample content still requires web review. Limits never sign licences.</p>
         </fieldset>
-        <button type="submit" disabled={busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()}>Review exact standing limits</button>
+        <button type="submit" disabled={busy || !effects || !validLimits(limits) || Date.parse(limits.expires_at) <= Date.now()} className={primaryButtonClass}>Review permissions</button>
       </form>
-      {review && <section aria-label="Exact server authority review"><h3>Exact native decision</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()}>Save reviewed standing authority</button></section>}
+      {review && <section aria-label="Exact server authority review"><h3>Review assistant permissions</h3><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(review.result, null, 2)}</pre><button disabled={busy || !effects} onClick={() => void save()} className={primaryButtonClass}>Allow changes</button></section>}
       </>}
     </>}
     <NativeSellerAuth error={error} />
+    {!!error && <button type="button" onClick={retry} className={secondaryButtonClass}>Try again</button>}
   </section>;
 }

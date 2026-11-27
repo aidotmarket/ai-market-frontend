@@ -1,3 +1,4 @@
+import { buyerRequestAnonymizationEnabled } from '@/lib/buyer-request-publication';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -35,6 +36,10 @@ export default function PrivacyNoticePage() {
         <p>
           We may use your information to monitor and analyze trends, usage, and activities in connection with the Services, to detect, investigate, and prevent fraudulent transactions and other illegal activities, to protect the rights and property of ai.market and others, and to personalize and improve the Services and provide content and features that match your profile or interests.
         </p>
+
+        {buyerRequestAnonymizationEnabled() && (
+          <p>When you prepare a data request for publication, ai.market first removes identifying details where it can. We may send the full remaining request text to the model provider we already use for allAI so it can suggest wording that removes identifying details. The text may still contain personal information and is subject to the same retention terms as other text processed through that allAI service. We show you the proposed wording. We publish it only after you approve that exact version and it passes our privacy checks.</p>
+        )}
 
         <h2 id="ai-assistants">AI assistants and connectors</h2>
         <p>

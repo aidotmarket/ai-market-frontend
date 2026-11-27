@@ -285,6 +285,7 @@ export interface ListingListItem extends GeneratedSampleFields {
   slug: string;
   title: string;
   short_description: string | null;
+  summary?: string | null;
   data_format?: string | null;
   price: number;
   pricing_type: PricingType;
@@ -308,6 +309,7 @@ export interface ListingPublicListItem extends GeneratedSampleFields {
   slug: string;
   title: string;
   short_description: string | null;
+  summary?: string | null;
   category: string;
   tags: string[];
   fulfillment_type: string;
@@ -405,6 +407,7 @@ export interface MarketplacePublisher {
   stripe_connected?: boolean | null;
   provider_observed_at?: string | null;
   completed_order_count?: number | null;
+  seller_domain_verified?: boolean | null;
   // Seller-wide reputation is independent of listing.rating_avg/rating_count.
   seller_rating_count?: number | null;
   seller_rating_average?: number | null;
@@ -419,7 +422,6 @@ export interface SourcePublisher {
 export type PublisherPublicInfo = LegacyPublisher | MarketplacePublisher | SourcePublisher;
 
 export interface ListingDetail extends GeneratedSampleFields {
-  share_card_url?: string | null;
   verification_scope?: string | null;
   file_breakdown?: FileBreakdownGroup[] | null;
   public_reference?: PublicSourceReference | null;
@@ -431,6 +433,7 @@ export interface ListingDetail extends GeneratedSampleFields {
   description: string;
   description_html?: string | null;
   short_description: string | null;
+  summary?: string | null;
   publisher?: PublisherPublicInfo | null;
   pricing: {
     price: number;
@@ -501,6 +504,7 @@ export interface SearchResultItem extends GeneratedSampleFields {
   slug: string;
   description: string | null;
   short_description: string | null;
+  summary?: string | null;
   category: string;
   price: number;
   privacy_score: number | null;
@@ -527,6 +531,8 @@ export interface SearchResponse {
   query: string;
   facets: FacetInfo;
   fallback?: boolean;
+  suggested_query?: string | null;
+  hint?: string | null;
 }
 
 // ============================================================================
@@ -862,7 +868,21 @@ export interface LicenseDeletionConfirmation {
   occurred_at: string;
 }
 
+export interface PurchasedPresentation {
+  state: 'approved' | 'redacted' | 'unavailable';
+  approval_id?: string | null;
+  listing_version_id?: string | null;
+  render_hash?: string | null;
+  rendered_html?: string | null;
+  notice?: string | null;
+}
+
 export interface BuyerOrderDetail extends BuyerOrder {
+  auto_confirm_at?: string | null;
+  confirmed_at?: string | null;
+  purchased_presentation?: PurchasedPresentation | null;
+  listing_notice?: string | null;
+  delivery_access_state?: string | null;
   workspace_delivery?: boolean;
   buyer_id: string;
   seller_id: string;
@@ -1027,7 +1047,7 @@ export type RequestPublicationReason =
 export interface DataRequestListItem {
   is_sample?: boolean;
   id: string;
-  slug: string;
+  slug: string | null;
   title?: string;
   description: string;
   categories: string[];
@@ -1036,13 +1056,37 @@ export interface DataRequestListItem {
   price_range_max: number | null;
   currency: string;
   status: DataRequestStatus;
-  response_count: number;
+  response_count?: number;
   buyer_display_name: string | null;
   created_at: string;
   updated_at: string | null;
 }
 
+export interface RequestPublicationBinding {
+  revision: string;
+  render_digest: string;
+  screening_policy_version: string;
+}
+
+export type RequestPublicationPreparation =
+  | { status: 'unprepared' | 'preparing' | 'correction_required' | 'approved' }
+  | {
+      status: 'preview_ready';
+      binding: RequestPublicationBinding;
+      public_content_hash: string;
+      policy_version: string;
+      presentation: {
+        language: string;
+        slug: string;
+        fields: { label: string; value: string }[];
+      };
+    };
+
 export interface DataRequestDetail extends DataRequestListItem {
+  publication_preparation?: RequestPublicationPreparation | null;
+  draft_fields?: Pick<DataRequestDetail,
+    'title' | 'description' | 'categories' | 'format_preferences' | 'regulatory_requirements' | 'provenance_requirements'
+  > | null;
   response_refusal?: string | null;
   format_preferences: string[];
   regulatory_requirements?: string[];

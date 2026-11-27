@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.workflow, github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   frontend:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 supports Ubuntu 24.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,5 +29,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Check Sell Data pricing in Chromium
+        run: npx playwright test --config playwright.navigation.config.ts
       - run: npm run test
       - run: npm run test:ssm-startup

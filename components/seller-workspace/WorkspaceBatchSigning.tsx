@@ -3,14 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useSellerSwitches, type SellerSwitchReport } from '@/hooks/useSellerSwitches';
 import { nativeClient, nativeSession } from '@/api/connector-seller-settings';
-import { licenseHashesFor, licenseDocumentPath, isCurrentLicenseSelection } from '@/api/listingLicenses';
+import { COVENANT_CONFIRMATION, licenseHashesFor, licenseDocumentPath, isCurrentLicenseSelection } from '@/api/listingLicenses';
 import { readSigningInstruments, signInstruments, type SigningInstrument, type SigningRequest, type PreparationView } from '@/api/seller-batch-signing';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 
 export default function WorkspaceBatchSigning({preparation,onSigned}:{preparation?: SigningInstrument;onSigned?:(rows:PreparationView[])=>void}) {
   const switches = useSellerSwitches(); const sessionIdentity = useAuthStore(authSessionIdentity);
   if (!sessionIdentity) return <p role="status">Licence signing is currently unavailable.</p>;
-  return <BatchSigningScreen key={sessionIdentity} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />;
+  const mode = switches?.profiles?.openai?.seller_mode;
+  return <>
+    {mode && <p>ChatGPT seller tools: {mode === 'full' ? 'Full.' : `${mode === 'fallback' ? 'Limited mode' : 'Paused'} (publishing and signing stay available here on ai.market).`}</p>}
+    <BatchSigningScreen key={JSON.stringify([sessionIdentity,preparation?.id,preparation?.coverage_hash])} switches={switches ?? {seller:false,bulk:false,effects:false}} preparation={preparation} onSigned={onSigned} />
+  </>;
 }
 export function BatchSigningScreen({ switches, preparation, onSigned }: { switches: SellerSwitchReport; preparation?: SigningInstrument; onSigned?:(rows:PreparationView[])=>void }) {
   const [ids, setIds] = useState(''); const [instruments, setInstruments] = useState<SigningInstrument[]>([]);
@@ -55,8 +59,10 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
       void load(preparation);
     }
   }, [preparation, enabled]);
-  const ready = switches.seller && switches.bulk && switches.effects && !error && consent && instruments.length > 0 && instruments.length <= 50
-    && instruments.every(i => isCurrentLicenseSelection(i.license_selection) && i.status === 'prepared' && i.signing_required && i.license_selection.kind === 'standard'
+  const ready = switches.seller && switches.bulk && switches.effects && !error && (preparation ? instruments[0]===preparation : consent)
+    && instruments.length > 0 && instruments.length <= 50
+    && instruments.every(i => isCurrentLicenseSelection(i.license_selection) && i.status === 'prepared' && i.signing_required &&
+      i.license_selection.seller_acceptance.authority_confirmed && i.license_selection.kind === 'standard'
       && !!texts[licenseDocumentPath('standard', i.license_selection.ai_training, i.license_selection.version)] && !!texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)]);
   const detail = (error as {response?: {data?: {detail?: string | {code?: string}}}})?.response?.data?.detail;
   const stale = instruments.some(i => !isCurrentLicenseSelection(i.license_selection)) ||
@@ -76,7 +82,7 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
   if (!enabled) return <><p role="status">Licence signing is currently unavailable.</p>{!!error&&<p role="alert">Licence signing could not be confirmed. Refresh and review again before signing.</p>}</>;
   return <section aria-label="Workspace batch licence signing" className="space-y-4 rounded-xl border bg-white p-6">
     <h2 className="text-xl font-semibold">Sign your licence</h2>
-    <p>You’re signing the licence buyers will accept and the ai.market listing covenant for this listing. Read both below, tick the box, then sign. Nothing is published by signing.</p>
+    <p>{preparation ? 'Sign the saved licence choice for this listing.' : 'Read each licence and covenant below, then confirm and sign the batch.'} Signing saves the signature. Nothing is published by signing.</p>
     {!preparation && <><label>Listing preparation IDs (one per line)<textarea className="block w-full rounded border p-2" value={ids} disabled={busy} onChange={e => { setIds(e.target.value); setInstruments([]); setTexts({}); setConsent(false); setDone(false); setError(null); request.current = null; }} /></label>
     <button type="button" className="rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={busy || !switches.effects} onClick={() => void load()}>Load licences</button></>}
     {(instruments.length > 50 || (!preparation && ids.split(/\s+/).filter(Boolean).length > 50)) && <p role="alert">You can sign up to 50 listings at once.</p>}
@@ -90,9 +96,9 @@ export function BatchSigningScreen({ switches, preparation, onSigned }: { switch
         <h4>Marketplace Listing Covenant (version {i.license_selection.covenant_version})</h4><pre className="max-h-96 overflow-auto whitespace-pre-wrap font-sans">{texts[licenseDocumentPath('covenant', undefined, i.license_selection.covenant_version)] ?? 'Covenant unavailable'}</pre>
       </>}
     </section>)}
-    <label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={consent} disabled={busy || done || stale || !instruments.length} onChange={e => setConsent(e.target.checked)} /><span>I have read {instruments.length > 1 ? `all ${instruments.length} licences and covenants` : 'the licence and covenant'} above, the covenant facts are true, and I am authorised to accept them for the seller.</span></label>
+    {!preparation&&<label className="flex items-start gap-3"><input className="mt-1 h-4 w-4 shrink-0" type="checkbox" checked={consent} disabled={busy || done || stale || !instruments.length} onChange={e => setConsent(e.target.checked)} /><span>{COVENANT_CONFIRMATION}</span></label>}
     <button type="button" className="block rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600" disabled={!ready || busy || done} onClick={() => void sign()}>{instruments.length === 1 ? 'Sign licence' : `Sign ${instruments.length} licences`}</button>
-    {!consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
+    {!preparation && !consent && !done && instruments.length > 0 && <p className="text-sm text-gray-600">Tick the box above to sign.</p>}
     {done && <p role="status">Licence signed. Your listing is not published yet. Go back to the review step and publish when ready.</p>}
     {!switches.effects && <p>Seller effects are off. Signing is unavailable.</p>}
     <NativeSellerAuth error={stale ? null : error} />

@@ -2,6 +2,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('@/components/seller-workspace/VectoraizImport',()=>({default:()=>null}));
 import GatewayPage from '@/app/dashboard/gateways/[id]/page';
 const route = vi.hoisted(() => ({ id: 'gateway-1' }));
 const api = vi.hoisted(() => ({ received: vi.fn(), get: vi.fn(), list: vi.fn(), files: vi.fn(), write: vi.fn(), push: vi.fn() }));

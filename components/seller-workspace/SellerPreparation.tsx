@@ -3,10 +3,12 @@ import {useEffect,useRef,useState} from 'react';
 import {nativeAuthError} from '@/api/connector-seller-settings';
 import {authSessionIdentity,useAuthStore} from '@/store/auth';
 import type {ApprovalReceipt} from '@/api/sellerListingReview';
+import {isSignableLicenseSelection} from '@/api/listingLicenses';
 import {lookupPreparation,prepareListing,preparationRequest,preparationError,preparationErrorCode,preparationUnavailable,preparationStatus,type PreparationRequest,type PreparedListing} from '@/api/sellerListingPreparation';
 import type {SigningInstrument} from '@/api/seller-batch-signing';
 import NativeSellerAuth from '@/components/NativeSellerAuth';
 import WorkspaceBatchSigning from './WorkspaceBatchSigning';
+import CovenantConfirmationStatus from './CovenantConfirmationStatus';
 
 export default function SellerPreparation({approval,active,onChange,onLoaded,published=false,publicationBlocked=false}:{approval:ApprovalReceipt;active:boolean;published?:boolean;publicationBlocked?:boolean;onChange:(value:PreparedListing|null)=>void;onLoaded:(ready:boolean)=>void}) {
   const sessionIdentity=useAuthStore(authSessionIdentity);
@@ -51,6 +53,7 @@ export default function SellerPreparation({approval,active,onChange,onLoaded,pub
   const authError=nativeAuthError(error);
   if(unavailable)return null;
   return <section aria-label="Listing preparation" className="space-y-4">
+    {approval.license_selection&&isSignableLicenseSelection(approval.license_selection)&&<CovenantConfirmationStatus confirmedAt={approval.covenant_confirmed_at}/>}
     <p role="status">{published?preparationStatus.published:value?preparationStatus[value.status]:loaded?'Ready to prepare your listing for publishing':'Checking listing status…'}</p>
     {!published&&justSigned&&<p role="status">Licence signed. Your listing is not published yet. Select Publish this listing when you’re ready.</p>}
     {!published&&loaded&&!value&&<button disabled={!active||busy||publicationBlocked} onClick={()=>void prepare()}>{busy?'Preparing…':'Prepare for publishing'}</button>}

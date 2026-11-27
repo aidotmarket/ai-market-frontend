@@ -40,17 +40,22 @@ const payload = {
   format_preferences: ['CSV', 'JSON'], price_range_min: 12.5, price_range_max: 400.75,
   currency: 'USD', urgency: 'urgent', provenance_requirements: fields.provenance.trim(),
 };
-const success = ['Data request created as a draft. Open it from the detail page.', 'success'];
+const success = ["Saved as a draft. Review it and publish when you're ready.", 'success'];
 
 async function mounted(strict = false, state = initialAuth()) {
   // Actual Zustand bound hook, including getState/subscribe/setState signatures.
   const useAuthStore = create(() => state);
   const calls = [], pushes = [], toasts = [], pending = [];
   const dependencies = {
+    'next/link': { default: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) },
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { useRouter: () => ({ push: (path) => pushes.push(path) }) },
     '@/store/auth': { useAuthStore },
     '@/components/Toast': { useToast: () => ({ toast: (...args) => toasts.push(args) }) },
+    '@/lib/buyer-request-publication': {
+      buyerRequestAnonymizationEnabled: () => false,
+      ownerRequestHref: ({ id, slug }) => `/requests/${encodeURIComponent(slug || id)}`,
+    },
     '@/api/data-requests': { createDataRequest: (data) => {
       // Normalize VM realm prototypes while preserving undefined payload fields.
       calls.push(structuredClone(data));
@@ -147,10 +152,10 @@ const test = (name, run) => cases.push([name, run]);
 for (const strict of [false, true]) test(`valid payload and ordinary success (StrictMode=${strict})`, async () => {
   const h = await mounted(strict);
   try {
-    assert.match(h.el.textContent, /We create it as a draft/);
+    assert.match(h.el.textContent, /We save it as a draft so you can review it before it goes live/);
     await h.fill(); await h.submit();
     assert.deepEqual(h.calls, [payload]);
-    assert.equal(h.button().textContent, 'Creating...');
+    assert.equal(h.button().textContent, 'Saving draft');
     await h.submit(); assert.equal(h.calls.length, 1);
     await h.settle(0);
     assert.deepEqual(h.toasts, [success]);
@@ -195,7 +200,7 @@ for (const error of [null, validationError('Synthetic obsolete failure')]) {
       await h.fill(); await h.submit();
       await h.settle(0, error);
       assert.deepEqual(h.toasts, []); assert.deepEqual(h.pushes, []);
-      assert.equal(h.button().textContent, 'Creating...');
+      assert.equal(h.button().textContent, 'Saving draft');
       await h.settle(1); assert.deepEqual(h.toasts, [success]);
     } finally { await h.close(); }
   });
@@ -234,7 +239,7 @@ for (const batched of [false, true]) test(`A -> B -> A retires old owner and fin
     await h.fill(); await h.submit();
     await h.settle(0);
     assert.deepEqual(h.toasts, []); assert.deepEqual(h.pushes, []);
-    assert.equal(h.button().textContent, 'Creating...'); assert.equal(h.button().disabled, true);
+    assert.equal(h.button().textContent, 'Saving draft'); assert.equal(h.button().disabled, true);
     await h.submit(); assert.equal(h.calls.length, 2);
     await h.settle(1); assert.deepEqual(h.toasts, [success]);
   } finally { await h.close(); }
@@ -250,7 +255,7 @@ test('same ID token and user-object refresh preserves draft and pending operatio
     await h.update({ user: { id: 'account-A' }, token: 'synthetic-again', isLoading: true });
     assert.equal(h.el.querySelector('form'), null);
     await h.update({ isLoading: false });
-    assert.deepEqual(h.values(), fields); assert.equal(h.button().textContent, 'Creating...');
+    assert.deepEqual(h.values(), fields); assert.equal(h.button().textContent, 'Saving draft');
     await h.settle(0); assert.deepEqual(h.toasts, [success]);
     assert.deepEqual(h.pushes, ['/requests/synthetic-0']); assert.equal(h.calls.length, 1);
   } finally { await h.close(); }
@@ -281,7 +286,7 @@ for (const strict of [false, true]) for (const error of [null, validationError('
       assert.deepEqual(h.values(), blank);
       await h.fill(); await h.submit();
       assert.equal(h.calls.length, 2);
-      assert.equal(h.button().textContent, 'Creating...');
+      assert.equal(h.button().textContent, 'Saving draft');
       assert.equal(h.button().disabled, true);
       await h.submit(); assert.equal(h.calls.length, 2);
       await h.settle(1);

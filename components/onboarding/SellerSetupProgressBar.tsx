@@ -1,5 +1,6 @@
 'use client';
 
+import { customerActionError } from '@/lib/customerMessages';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,15 +16,10 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { setupRestriction, providerSecurityMessage } from '@/lib/two-factor-policy';
 import { useToast } from '@/components/Toast';
+import { SELLER_SETUP_STEPS } from '@/lib/seller-setup-steps';
+export { SELLER_SETUP_STEPS } from '@/lib/seller-setup-steps';
 
 const CAPABILITIES_CHANGED_EVENT = 'capabilities:changed';
-
-export const SELLER_SETUP_STEPS: Array<{ id: CapabilityStep; label: string; href?: string }> = [
-  { id: 'profile_name', label: 'Profile name', href: '/dashboard/settings#profile' },
-  { id: 'company_name', label: 'Company name', href: '/dashboard/settings#company' },
-  { id: 'totp_enabled', label: '2FA', href: '/dashboard/settings#security' },
-  { id: 'stripe_payouts_live', label: 'Stripe payouts' },
-];
 
 export function notifyCapabilitiesChanged() {
   if (typeof window !== 'undefined') {
@@ -94,7 +90,7 @@ export default function SellerSetupProgressBar() {
           toast('Complete the sign-in security step before connecting payouts. Refresh seller setup if you already completed it.', 'info');
           void fetchCapabilities();
         } else {
-          toast('Failed to start Stripe connection', 'error');
+          toast(customerActionError("connect your payout account"), 'error');
         }
         setStripeLoading(false);
       }

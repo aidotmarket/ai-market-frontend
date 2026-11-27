@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -16,9 +16,11 @@ import {
   withdrawDataRequestPublication,
 } from '@/api/data-requests';
 import { authSessionOwner, isAuthSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
-import RequestConversation from '@/components/RequestConversation';
+import { buyerRequestAnonymizationEnabled, exactPublicationPreview, hasPrivatePublication, isRequestId, ownerRequestHref } from '@/lib/buyer-request-publication';
+import RequestConversation, { PRIVATE_CONVERSATION_HEADING_ID } from '@/components/RequestConversation';
 import { formatDate } from '@/lib/format';
 import { requestDisplayTitle } from '@/lib/request-display-title';
+import { requestUrgencyLabel } from '@/lib/request-urgency';
 import { AxiosError } from 'axios';
 import type { DataRequestDetail, DataRequestResponse, DataRequestUrgency } from '@/types';
 
@@ -98,23 +100,87 @@ function quoteErrorMessage(err: unknown): string {
 interface DataRequestDetailClientProps {
   slug: string;
   initialRequest: DataRequestDetail | null;
+  boardQuery?: string;
+}
+
+function conversationHref(search: string, responseId: string) {
+  const query = new URLSearchParams(search);
+  query.set('response_id', responseId);
+  return `?${query}#${PRIVATE_CONVERSATION_HEADING_ID}`;
+}
+
+function focusConversationHeading(heading: HTMLElement) {
+  heading.focus({ preventScroll: true });
+  heading.scrollIntoView?.();
 }
 
 export default function DataRequestDetailClient({
   slug,
   initialRequest,
+  boardQuery,
 }: DataRequestDetailClientProps) {
+  const boardHref = boardQuery ? `/requests?${boardQuery}` : '/requests';
   const { user, isAuthenticated } = useAuthStore();
   const router = useRouter();
+  const search = useSearchParams()?.toString() ?? '';
   const { toast } = useToast();
 
   const owner = useSyncExternalStore(subscribeAuthSessionOwner, authSessionOwner, authSessionOwner);
   const userId = user?.id;
   const context = `${slug}\0${isAuthenticated}\0${userId ?? ''}\0${owner}`;
   const [requestRecord, setRequestRecord] = useState({ context, value: initialRequest });
-  const request = requestRecord.context === context ? requestRecord.value : null;
+  const currentRecord = requestRecord.context === context ? requestRecord.value : null;
+  const request = currentRecord && hasPrivatePublication(currentRecord) && (!isAuthenticated || userId !== currentRecord.buyer_id)
+    ? null : currentRecord;
+  const responseCount = request?.response_count;
+  const hasResponseCount = typeof responseCount === 'number' && Number.isFinite(responseCount) && responseCount >= 0;
   const setRequest = (value: DataRequestDetail | null) => setRequestRecord({ context, value });
   const [conversationNavigation, setConversationNavigation] = useState(0);
+  // A denied selector hides the heading until the next selection settles.
+  const pendingConversationFocus = useRef<{ responseId: string; url: string } | null>(null);
+  const requestId = request?.id;
+
+  useLayoutEffect(() => {
+    const clearFocus = () => { pendingConversationFocus.current = null; };
+    window.addEventListener('popstate', clearFocus);
+    window.addEventListener('hashchange', clearFocus);
+    return () => {
+      clearFocus();
+      window.removeEventListener('popstate', clearFocus);
+      window.removeEventListener('hashchange', clearFocus);
+    };
+  }, [context, requestId]);
+
+  useLayoutEffect(() => {
+    if (pendingConversationFocus.current?.url !== window.location.href) pendingConversationFocus.current = null;
+  }, [search]);
+
+  const onConversationSelectionSettled = useCallback((responseId: string, heading: HTMLHeadingElement | null) => {
+    const intent = pendingConversationFocus.current;
+    pendingConversationFocus.current = null;
+    if (intent && heading && intent.responseId === responseId && intent.url === window.location.href && isAuthSessionOwner(owner)) {
+      focusConversationHeading(heading);
+    }
+  }, [owner]);
+
+  function activateConversation(event: React.MouseEvent<HTMLAnchorElement>, responseId: string) {
+    if (event.defaultPrevented) return;
+    const href = conversationHref(window.location.search, responseId);
+    pendingConversationFocus.current = null;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      // History can change before the router updates the rendered href.
+      event.currentTarget.href = href;
+      return;
+    }
+    event.preventDefault();
+    const url = new URL(href, window.location.href).href;
+    const heading = document.getElementById(PRIVATE_CONVERSATION_HEADING_ID);
+    if (!heading) pendingConversationFocus.current = { responseId, url };
+    if (window.location.href !== url) window.history.pushState(null, '', url);
+    setConversationNavigation(x => x + 1);
+    if (heading) focusConversationHeading(heading);
+  }
+  const [quoteRevision, setQuoteRevision] = useState(0);
   const [responses, setResponses] = useState<DataRequestResponse[]>([]);
   const [loading, setLoading] = useState(initialRequest === null);
   const [readError, setReadError] = useState<'unavailable' | 'gone' | null>(null);
@@ -122,6 +188,8 @@ export default function DataRequestDetailClient({
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingPublication, setUpdatingPublication] = useState(false);
+  const [previewInvalidated, setPreviewInvalidated] = useState(false);
+  const [preparationError, setPreparationError] = useState('');
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
@@ -163,6 +231,8 @@ export default function DataRequestDetailClient({
     setPublishing(false);
     setDeleting(false);
     setUpdatingPublication(false);
+    setPreviewInvalidated(false);
+    setPreparationError('');
     setEditing(false);
     setSavingEdit(false);
     setEditError('');
@@ -198,19 +268,29 @@ export default function DataRequestDetailClient({
   const responsePending = useRef(false);
 
   const isOwner = isAuthenticated && user && request && user.id === request.buyer_id;
+  const showOwnerResponseList = isOwner && responses.length > 0;
+  const showPublicResponseCount = hasResponseCount && !showOwnerResponseList;
+  const privatePublication = Boolean(request && hasPrivatePublication(request));
+  const gatedPublication = isOwner && privatePublication && buyerRequestAnonymizationEnabled();
+  const preparation = gatedPublication && !previewInvalidated ? request?.publication_preparation : null;
+  const preview = exactPublicationPreview(preparation);
+  const canPreparePreview = gatedPublication && request?.publication_preparation?.status === 'unprepared';
+  const currentVersionIsPublic = Boolean(request?.published_at && request.slug && request.publication_decision === 'eligible');
   const ownResponses = isOwner ? [] : responses;
   const responseRefusal = request?.response_refusal || null;
+  const isOpenForResponses = request?.status === 'open' || request?.status === 'responses_received';
   const lastCheckTime = checkedTime(request?.publication_checked_at);
   const nextCheckTime = checkedTime(request?.publication_retry_at);
 
   function startEditing() {
     if (!isOwner || !request || !['draft', 'open'].includes(request.status) || publishing || deleting || updatingPublication) return;
-    setEditTitle(request.title || '');
-    setEditDescription(request.description);
-    setEditCategories(request.categories.join(', '));
-    setEditFormats(request.format_preferences.join(', '));
-    setEditRegulatory(request.regulatory_requirements?.join(', ') || '');
-    setEditProvenance(request.provenance_requirements || '');
+    const fields = request.draft_fields ?? request;
+    setEditTitle(fields.title || '');
+    setEditDescription(fields.description);
+    setEditCategories(fields.categories.join(', '));
+    setEditFormats(fields.format_preferences.join(', '));
+    setEditRegulatory(fields.regulatory_requirements?.join(', ') || '');
+    setEditProvenance(fields.provenance_requirements || '');
     setEditError('');
     setEditing(true);
   }
@@ -221,6 +301,10 @@ export default function DataRequestDetailClient({
     const splitList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
     setSavingEdit(true);
     setEditError('');
+    if (privatePublication) {
+      setPreviewInvalidated(true);
+      setPreparationError('');
+    }
     const epoch = beginMutation();
     try {
       const updated = await updateDataRequest(request.id, {
@@ -233,11 +317,14 @@ export default function DataRequestDetailClient({
       });
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
+      setPreviewInvalidated(false);
       setEditing(false);
-      toast('Request changes saved. Review the public visibility status before confirming.', 'success');
+      toast(hasPrivatePublication(updated)
+        ? 'Draft changes saved. Prepare a new preview when you’re ready.'
+        : 'Request changes saved. Review the public visibility status before confirming.', 'success');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      const detail = err instanceof AxiosError ? err.response?.data?.detail : null;
+      const detail = !privatePublication && err instanceof AxiosError ? err.response?.data?.detail : null;
       const message = typeof detail === 'string'
         ? detail
         : Array.isArray(detail)
@@ -255,16 +342,19 @@ export default function DataRequestDetailClient({
     }
   }
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (recoverSavedQuote = false) => {
     const generation = ++loadGeneration.current;
     const epoch = contextEpoch.current;
     const startedDuringMutation = mutationPending.current;
     const isCurrent = () => isAuthSessionOwner(owner) && visitActive.current && !startedDuringMutation && epoch === contextEpoch.current && currentContext.current === context && generation === loadGeneration.current;
     try {
-      const data = await getDataRequest(slug);
+      const result = await getDataRequest(slug);
       if (!isCurrent()) return;
+      const data = result && hasPrivatePublication(result) && (!isAuthenticated || userId !== result.buyer_id) ? null : result;
       setRequest(data);
       setReadError(null);
+      setPreviewInvalidated(false);
+      setPreparationError('');
 
       // The API restricts nonowners to their own supplier responses.
       if (data && isAuthenticated && userId) {
@@ -275,7 +365,12 @@ export default function DataRequestDetailClient({
               ...resps,
               ...existing.filter((item) => !resps.some((saved) => saved.id === item.id)),
             ]);
-            if (resps.length > 0) setResponseError('');
+            if (resps.length > 0) {
+              setResponseError('');
+              if (recoverSavedQuote && userId !== data.buyer_id) {
+                setQuoteRevision(revision => revision + 1);
+              }
+            }
           }
         } catch {
           // May not have permission
@@ -310,12 +405,25 @@ export default function DataRequestDetailClient({
   }
 
   async function handlePublish() {
-    if (!request || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    if (!isOwner || !request || (privatePublication && (!canPreparePreview || preparationError)) || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setPublishing(true);
+    setPreparationError('');
     try {
       const updated = await publishDataRequest(request.id);
       if (!isCurrentMutation(epoch)) return;
+      if (gatedPublication) {
+        const servingSlug = request.published_at ? request.slug : null;
+        if (updated.id !== request.id || updated.buyer_id !== userId || updated.slug !== servingSlug
+          || !updated.publication_preparation || updated.publication_preparation.status === 'approved'
+          || (updated.publication_decision === 'eligible' && !currentVersionIsPublic)) {
+          setPreparationError('Could not load the private preview. Refresh the request and try again.');
+          return;
+        }
+        setRequest(updated);
+        setPreviewInvalidated(false);
+        return;
+      }
       setRequest(updated);
       toast(
         updated.publication_decision === 'eligible'
@@ -325,7 +433,9 @@ export default function DataRequestDetailClient({
       );
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (gatedPublication) {
+        setPreparationError('Could not prepare the request. Refresh the request to check its status.');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to publish.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -349,7 +459,9 @@ export default function DataRequestDetailClient({
       router.push('/dashboard/requests');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (privatePublication) {
+        toast('Could not delete the request. Refresh to check its status.', 'error');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to delete.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -363,17 +475,28 @@ export default function DataRequestDetailClient({
   }
 
   async function handleConfirmPublication() {
-    if (!request?.public_content_hash || !request.required_public_consent_policy_version || editing || savingEdit || publishing || deleting || updatingPublication) return;
+    const hash = preview?.public_content_hash ?? request?.public_content_hash;
+    const policy = preview?.policy_version ?? request?.required_public_consent_policy_version;
+    if (!isOwner || !request || !hash || !policy || (privatePublication && !preview) || mutationPending.current || editing || savingEdit || publishing || deleting || updatingPublication) return;
     const epoch = beginMutation();
     setUpdatingPublication(true);
+    setPreparationError('');
     try {
       const updated = await confirmDataRequestPublication(
         request.id,
-        request.public_content_hash,
-        request.required_public_consent_policy_version
+        hash,
+        policy,
+        ...(preview ? [preview.binding] as const : [])
       );
       if (!isCurrentMutation(epoch)) return;
+      if (preview && (updated.id !== request.id || updated.buyer_id !== userId
+        || updated.publication_decision !== 'eligible' || updated.slug !== preview.presentation.slug)) {
+        setPreviewInvalidated(true);
+        setPreparationError('Could not confirm publication. Refresh the request to check its status.');
+        return;
+      }
       setRequest(updated);
+      if (preview) setPreviewInvalidated(true);
       toast(
         updated.publication_decision === 'eligible'
           ? 'Your request is now available to the market.'
@@ -382,7 +505,12 @@ export default function DataRequestDetailClient({
       );
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (preview) {
+        setPreviewInvalidated(true);
+        setPreparationError(err instanceof AxiosError && err.response?.status === 409
+          ? 'This preview is no longer current. Refresh the request and review the latest version.'
+          : 'Could not confirm publication. Refresh the request to check its status.');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -403,10 +531,14 @@ export default function DataRequestDetailClient({
       const updated = await withdrawDataRequestPublication(request.id);
       if (!isCurrentMutation(epoch)) return;
       setRequest(updated);
+      if (privatePublication) setPreviewInvalidated(true);
       toast('Your request is now private.', 'success');
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
-      if (err instanceof AxiosError) {
+      if (privatePublication) {
+        setPreviewInvalidated(true);
+        setPreparationError('Could not make the request private. Refresh the request to check its status.');
+      } else if (err instanceof AxiosError) {
         toast(err.response?.data?.detail || 'Failed to update public visibility.', 'error');
       } else {
         toast('An unexpected error occurred.', 'error');
@@ -435,7 +567,10 @@ export default function DataRequestDetailClient({
       });
       if (!isCurrentMutation(epoch)) return;
       setResponses((existing) => [...existing.filter((item) => item.id !== response.id), response]);
-      setRequest({ ...request, response_count: request.response_count + 1 });
+      setQuoteRevision(revision => revision + 1);
+      if (hasResponseCount) {
+        setRequest({ ...request, response_count: responseCount + 1 });
+      }
     } catch (err) {
       if (!isCurrentMutation(epoch)) return;
       setResponseError(quoteErrorMessage(err));
@@ -444,7 +579,10 @@ export default function DataRequestDetailClient({
         const saved = await getDataRequestResponses(request.id);
         if (isCurrentMutation(epoch)) {
           setResponses(saved);
-          if (saved.length > 0) setResponseError('');
+          if (saved.length > 0) {
+            setResponseError('');
+            setQuoteRevision(revision => revision + 1);
+          }
         }
       } catch {
         // Keep the original outcome and entered fields visible.
@@ -476,20 +614,29 @@ export default function DataRequestDetailClient({
             Retry
           </button>
         )}
-        <Link
-          href="/requests"
+        {!readError && !isAuthenticated && buyerRequestAnonymizationEnabled() && isRequestId(slug) && (
+          <Link href={`/login?redirect=${encodeURIComponent(ownerRequestHref({ id: slug, slug: null }))}`} className="mr-3 text-sm text-[#3F51B5] underline">
+            Sign in to continue
+          </Link>
+        )}
+        <a
+          href={boardHref}
           className="rounded-lg bg-[#3F51B5] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#3545a0]"
         >
           Browse Requests
-        </Link>
+        </a>
       </div>
     );
   }
 
   const urgencyCss = URGENCY_BADGE[request.urgency] || URGENCY_BADGE.low;
   const statusCss = STATUS_BADGE[request.status] || STATUS_BADGE.draft;
+  const showPublicResponseStatus = !isOwner && showPublicResponseCount;
+  const publicResponseStatus = isOpenForResponses
+    ? (responseRefusal ? 'Responses unavailable' : 'Open for responses')
+    : 'Closed to responses';
   const canConfirmPublication =
-    Boolean(request.public_content_hash) &&
+    !privatePublication && Boolean(request.public_content_hash) &&
     Boolean(request.required_public_consent_policy_version) &&
     ['public_consent_required', 'public_content_changed', 'consent_withdrawn'].includes(
       request.publication_reason || ''
@@ -504,33 +651,40 @@ export default function DataRequestDetailClient({
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Back link */}
-      <Link href="/requests" className="text-sm text-[#3F51B5] hover:underline mb-6 inline-block">
+      <a href={boardHref} className="text-sm text-[#3F51B5] hover:underline mb-6 inline-block">
         &larr; Back to requests
-      </Link>
+      </a>
 
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start gap-3 mb-3">
-          <h1 className="text-2xl font-bold text-gray-900 flex-1">{requestDisplayTitle(request.title, request.description)}</h1>
+          <h1 className="min-w-0 flex-1 whitespace-normal wrap-anywhere text-2xl font-bold text-gray-900">{requestDisplayTitle(request.title, request.description, 'detail')}</h1>
           {request.is_sample === true && (
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 shrink-0">
               (SAMPLE)
             </span>
           )}
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
-            {request.status.replace('_', ' ')}
-          </span>
+          {!(showPublicResponseStatus && isOpenForResponses) &&
+            (request.status !== 'responses_received' || (!showPublicResponseCount && !showOwnerResponseList)) && (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${statusCss}`}>
+              {request.status.replace('_', ' ')}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${urgencyCss}`}>
-            {request.urgency} urgency
+            {requestUrgencyLabel(request.urgency)}
           </span>
           {priceRange && <span className="font-medium text-gray-700">{priceRange}</span>}
           {!priceRange && <span>Currency: {request.currency || 'USD'}</span>}
           <span>Posted {formatDate(request.created_at)}</span>
           {request.buyer_display_name && <span>by {request.buyer_display_name}</span>}
-          <span>{request.response_count} response{request.response_count !== 1 ? 's' : ''}</span>
+          {showPublicResponseCount && <span>{responseCount} response{responseCount !== 1 ? 's' : ''}</span>}
+          {showPublicResponseStatus && <span className="font-medium text-gray-700">{publicResponseStatus}</span>}
         </div>
+        {!isAuthenticated && hasResponseCount && responseCount > 0 && (
+          <p className="mt-2 text-sm text-gray-600">Responses are visible to the requester and to the sellers who sent them.</p>
+        )}
       </div>
 
       {/* Owner actions */}
@@ -545,7 +699,7 @@ export default function DataRequestDetailClient({
               Edit request
             </button>
           )}
-          {request.status === 'draft' && !editing && (
+          {request.status === 'draft' && !privatePublication && !editing && (
             <button
               onClick={handlePublish}
               disabled={publishing}
@@ -554,12 +708,16 @@ export default function DataRequestDetailClient({
               {publishing ? 'Opening...' : 'Open request'}
             </button>
           )}
-          <Link
-            href={`/requests/${request.slug}`}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Refresh
-          </Link>
+          {privatePublication ? (
+            <button type="button" onClick={retryRead} disabled={publishing || updatingPublication || savingEdit || editing || deleting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Refresh
+            </button>
+          ) : (
+            <Link href={ownerRequestHref(request)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Refresh
+            </Link>
+          )}
           {!editing && (
             <button
               onClick={handleDelete}
@@ -596,7 +754,7 @@ export default function DataRequestDetailClient({
             <input id="edit-request-regulatory" type="text" value={editRegulatory} onChange={(e) => setEditRegulatory(e.target.value)} placeholder="e.g., GDPR (comma-separated)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
           </div>
           <div>
-            <label htmlFor="edit-request-provenance" className="block text-sm font-medium text-gray-700 mb-1">Provenance Requirements</label>
+            <label htmlFor="edit-request-provenance" className="block text-sm font-medium text-gray-700 mb-1">Where the data must come from (optional)</label>
             <textarea id="edit-request-provenance" rows={3} value={editProvenance} onChange={(e) => setEditProvenance(e.target.value)} placeholder="Requirements for data origin, licensing, or compliance." className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]" />
           </div>
           {editError && <p role="alert" className="text-sm text-red-700">{editError}</p>}
@@ -607,7 +765,54 @@ export default function DataRequestDetailClient({
         </form>
       )}
 
-      {isOwner && request.publication_decision && (
+      {gatedPublication && (
+        <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6 space-y-3" aria-labelledby="preparation-heading">
+          <h2 id="preparation-heading" className="font-semibold text-gray-900">Prepare for publication</h2>
+          {currentVersionIsPublic && (
+            <p className="text-sm text-gray-700">The current version stays public while these changes are pending.</p>
+          )}
+          {preparationError && <p role="alert" className="text-sm text-red-700">{preparationError}</p>}
+          {preparation?.status === 'preparing' && (
+            <p role="status" className="text-sm text-gray-700">Your request is being checked. Refresh to see the result.</p>
+          )}
+          {preparation?.status === 'correction_required' && (
+            <p role="status" className="text-sm text-gray-700">This version is private. Edit the request to clarify its wording or remove identifying details, then prepare it again.</p>
+          )}
+          {(!request.publication_preparation || (preparation?.status === 'preview_ready' && !preview)) && (
+            <p role="status" className="text-sm text-gray-700">The preview is unavailable. Refresh to check the request status.</p>
+          )}
+          {!editing && preview && (
+            <div lang={preview.presentation.language} className="space-y-3">
+              <h3 className="font-medium text-gray-900">Preview for publication</h3>
+              <dl className="space-y-2 text-sm text-gray-700">
+                {preview.presentation.fields.map(({ label, value }, index) => (
+                  <div key={index}>
+                    <dt className="font-medium">{label}</dt>
+                    <dd className="whitespace-pre-wrap">{value}</dd>
+                  </div>
+                ))}
+                <div>
+                  <dt className="font-medium">Public address after approval</dt>
+                  <dd className="break-all">https://ai.market/requests/{preview.presentation.slug}</dd>
+                </div>
+              </dl>
+              <p className="text-sm text-gray-700">By approving this exact version, you agree that it may appear on ai.market, in search engines, to AI agents, and in relevant seller alerts.</p>
+              <button type="button" onClick={handleConfirmPublication} disabled={updatingPublication || publishing || deleting}
+                className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {updatingPublication ? 'Confirming…' : 'Approve this version'}
+              </button>
+            </div>
+          )}
+          {!editing && !preparationError && canPreparePreview && (
+            <button type="button" onClick={handlePublish} disabled={publishing || updatingPublication || deleting}
+              className="rounded-lg bg-[#3F51B5] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {publishing ? 'Preparing…' : 'Prepare preview'}
+            </button>
+          )}
+        </section>
+      )}
+
+      {isOwner && request.publication_decision && (!privatePublication || canWithdrawPublication) && (
         <section className="rounded-xl border border-[#D8DDF4] bg-[#F7F8FE] p-5 mb-6" aria-labelledby="publication-status-heading">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -615,9 +820,9 @@ export default function DataRequestDetailClient({
                 Public visibility: {request.publication_decision === 'eligible' ? 'Public' : 'Private'}
               </h2>
               <p className="mt-1 text-sm text-gray-700">
-                {request.publication_next_action || 'No public action is available.'}
+                {!privatePublication && (request.publication_next_action || 'No public action is available.')}
               </p>
-              {request.publication_reason && request.publication_reason !== 'eligible' && (
+              {!privatePublication && request.publication_reason && request.publication_reason !== 'eligible' && (
                 <p className="mt-1 text-xs text-gray-500">
                   Reason: {request.publication_reason.replaceAll('_', ' ')}
                 </p>
@@ -677,7 +882,7 @@ export default function DataRequestDetailClient({
 
       {/* Description */}
       <div className="rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Request</h2>
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">{privatePublication ? 'Your request' : 'Request'}</h2>
         <p className="text-gray-800 whitespace-pre-wrap">{request.description}</p>
       </div>
 
@@ -709,18 +914,18 @@ export default function DataRequestDetailClient({
         )}
         {request.provenance_requirements && (
           <div className="rounded-xl border border-gray-200 p-4 sm:col-span-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Provenance Requirements</h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Where the data must come from</h3>
             <p className="text-sm text-gray-800 whitespace-pre-wrap">{request.provenance_requirements}</p>
           </div>
         )}
       </div>
 
-      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={responses.length} navigationRevision={conversationNavigation} />
+      <RequestConversation requestId={request.id} requestStatus={request.status} quoteRevision={quoteRevision} navigationRevision={conversationNavigation} onSelectionSettled={onConversationSelectionSettled} />
 
       {/* Owner: Responses list */}
-      {isOwner && responses.length > 0 && (
+      {showOwnerResponseList && (
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Responses ({responses.length})</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{responses.length} response{responses.length !== 1 ? 's' : ''}</h2>
           <div className="space-y-4">
             {responses.map((resp) => (
               <div key={resp.id} className="rounded-xl border border-gray-200 p-4">
@@ -731,12 +936,7 @@ export default function DataRequestDetailClient({
                   </span>
                 </div>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap mb-2">{resp.proposal}</p>
-                <a href={`?response_id=${encodeURIComponent(resp.id)}`} onClick={event => {
-                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  window.history.pushState(null, '', `?response_id=${encodeURIComponent(resp.id)}`);
-                  setConversationNavigation(x => x + 1);
-                }} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
+                <a href={conversationHref(search, resp.id)} onClick={event => activateConversation(event, resp.id)} onAuxClick={event => activateConversation(event, resp.id)} className="text-sm text-[#3F51B5] underline focus:ring-2 focus:ring-[#3F51B5]">Open private conversation for this response</a>
                 <div className="flex gap-4 text-xs text-gray-500">
                   {resp.proposed_price != null && (
                     <span>Price: <span className="font-medium text-gray-700">${resp.proposed_price.toLocaleString()}</span></span>
@@ -764,20 +964,20 @@ export default function DataRequestDetailClient({
         </div>
       )}
 
-      {!isOwner && responseRefusal && (request.status === 'open' || request.status === 'responses_received') && (
+      {!isOwner && responseRefusal && isOpenForResponses && (
         <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           {responseRefusal}
         </p>
       )}
 
       {/* Seller: Submit Response form */}
-      {isAuthenticated && !isOwner && (request.status === 'open' || request.status === 'responses_received') && (
+      {isAuthenticated && !isOwner && isOpenForResponses && (
         <div className="rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Respond to Request</h2>
           {responseError && (
             <div role="alert" className="mb-4 text-sm text-red-700">
               <p>{responseError}</p>
-              <button type="button" onClick={() => loadData()} className="mt-2 underline">Check saved quotes</button>
+              <button type="button" onClick={() => loadData(true)} className="mt-2 underline">Check saved quotes</button>
             </div>
           )}
           <form onSubmit={handleSubmitResponse} className="space-y-4">
@@ -836,7 +1036,7 @@ export default function DataRequestDetailClient({
       )}
 
       {/* Not logged in CTA */}
-      {!isAuthenticated && (request.status === 'open' || request.status === 'responses_received') && (
+      {!isAuthenticated && request.slug && isOpenForResponses && (
         <div className="rounded-xl border border-gray-200 p-6 text-center">
           <p className="text-gray-600 mb-4">Have the data this buyer needs?</p>
           {responseRefusal ? (

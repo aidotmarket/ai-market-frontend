@@ -7,9 +7,8 @@ import {
   type ListingShareCaption,
   type ListingShareResponse,
 } from '@/api/share';
-import ShareKitModal, { PromoteNetworkButtons } from './ShareKitModal';
-import { preferredAnonymousAllAILocale } from '@/lib/i18n/anonymous-allai';
-import { PROMOTE_STRINGS, PROMOTE_NETWORKS } from '@/lib/i18n/promote';
+import ShareKitModal, { buildSocialShareDrafts } from './ShareKitModal';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
 
 interface SellerShareControlsProps {
   listingId: string;
@@ -44,7 +43,7 @@ export default function SellerShareControls({
   locale,
   compact = false,
 }: SellerShareControlsProps) {
-  const [open, setOpen] = useState(!compact);
+  const [open, setOpen] = useState(false);
   const [share, setShare] = useState<ListingShareResponse | null>(null);
   const [form, setForm] = useState<CaptionForm>(toCaptionForm(null));
   const [loading, setLoading] = useState(false);
@@ -53,98 +52,74 @@ export default function SellerShareControls({
   const [copied, setCopied] = useState(false);
   const [fallbackUsed, setFallbackUsed] = useState<boolean | null>(null);
   const [kitOpen, setKitOpen] = useState(false);
-
-  const [uiLocale, setUiLocale] = useState<ReturnType<typeof preferredAnonymousAllAILocale>>('en');
-  const t = PROMOTE_STRINGS[uiLocale];
-
-  const fetchEnabled = !compact || open;
+  const [linkedInClipboard, setLinkedInClipboard] = useState<'copied' | 'manual' | null>(null);
 
   useEffect(() => {
-    const detected = preferredAnonymousAllAILocale(navigator.language);
-    setUiLocale(detected);
-    setShare(null);
-    setKitOpen(false);
-    setError('');
-    if (!fetchEnabled) return;
+    if (!open || share) return;
+
     let active = true;
-    let newestRequest = 0;
-    let expiry: ReturnType<typeof setTimeout> | undefined;
-    let deadline = 0;
-    let captionInitialized = false;
-    async function refresh() {
-      const sequence = ++newestRequest;
-      const started = performance.now();
-      setLoading(true);
-      try {
-        const data = await fetchListingShare(listingId, { locale, uiLocale: detected });
-        if (!active || sequence !== newestRequest) return;
-        clearTimeout(expiry);
-        deadline = started + (data.promote?.ttl_seconds ?? 0) * 1000;
-        if (!data.promote || performance.now() >= deadline) {
-          setShare(null);
-          setKitOpen(false);
-          return;
-        }
+    setLoading(true);
+    setError('');
+    fetchListingShare(listingId, locale)
+      .then((data) => {
+        if (!active) return;
         setShare(data);
-        if (!captionInitialized) {
-          setForm(toCaptionForm(data.caption));
-          captionInitialized = true;
-        }
-        setError('');
-        expiry = setTimeout(() => { setShare(null); setKitOpen(false); }, deadline - performance.now());
-      } catch {
-        if (active && sequence === newestRequest) setError(PROMOTE_STRINGS[detected].unavailable);
-      } finally {
-        if (active && sequence === newestRequest) setLoading(false);
-      }
-    }
-    const onFocus = () => {
-      if (performance.now() >= deadline) { setShare(null); setKitOpen(false); }
-      void refresh();
-    };
-    void refresh();
-    const interval = setInterval(() => { void refresh(); }, 30000);
-    window.addEventListener('focus', onFocus);
+        setForm(toCaptionForm(data.caption));
+      })
+      .catch(() => {
+        if (!active) return;
+        setError('We could not load your sharing options just now. Try again, or contact support if it keeps happening.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
     return () => {
       active = false;
-      clearTimeout(expiry);
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
     };
-  }, [listingId, locale, fetchEnabled]);
+  }, [listingId, locale, open, share]);
 
   const effectiveLocale = locale ?? share?.locale;
   const captionStatus = share?.caption?.status;
   const isFlagged = captionStatus === 'flagged';
-  const promote = share?.promote;
-  const shareTitle = promote?.share_title;
-  const shareText = promote?.copy_text;
-  const shareUrl = share ? `${new URL(share.share_url).origin}/l/${share.short_code}` : '';
+  const shareTitle = form.og_title || share?.caption?.og_title || 'ai.market listing';
+  const shareText = form.caption_text || form.og_description || share?.caption?.caption_text || '';
+  // Regeneration can return a flagged draft that the owner share read would omit.
+  const socialDrafts = share && buildSocialShareDrafts(isFlagged ? { ...share, caption: null } : share);
+
+  async function copyLinkedInCaption(caption: string) {
+    try {
+      await navigator.clipboard.writeText(caption);
+      setLinkedInClipboard('copied');
+    } catch {
+      setLinkedInClipboard('manual');
+    }
+  }
 
   const statusMessage = useMemo(() => {
-    if (fallbackUsed) return t.fallback;
-    if (isFlagged) return t.flagged;
-    if (captionStatus) return `${t.status}: ${captionStatus}`;
+    if (fallbackUsed) return 'Fallback caption used. Review before posting.';
+    if (isFlagged) return 'Caption flagged for review. Public metadata will use the safe fallback.';
+    if (captionStatus) return `Caption status: ${captionStatus}`;
     return '';
-  }, [captionStatus, fallbackUsed, isFlagged, t]);
+  }, [captionStatus, fallbackUsed, isFlagged]);
 
   async function copyLink() {
-    if (!promote?.can_share) return;
+    if (!share?.share_url) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(share.share_url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      setError(t.copyError);
+      setError('Could not copy the share link.');
     }
   }
 
   async function nativeShare() {
-    if (!promote?.can_share) return;
+    if (!share) return;
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({
-          url: shareUrl,
+          url: share.share_url,
           title: shareTitle,
           text: shareText,
         });
@@ -173,7 +148,7 @@ export default function SellerShareControls({
         }
       }
     } catch {
-      setError(t.regenerateError);
+      setError('Could not regenerate the caption.');
     } finally {
       setSaving(false);
     }
@@ -194,36 +169,31 @@ export default function SellerShareControls({
         setFallbackUsed(null);
       }
     } catch {
-      setError(t.saveError);
+      setError('Could not save the caption.');
     } finally {
       setSaving(false);
     }
   }
 
-  if (!promote) return <div>
-    {compact && <button type="button" onClick={() => setOpen(value => !value)}
-      className="rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]">
-      {open ? t.hide : t.share}
-    </button>}
-    {open && loading && <p role="status" className="text-sm text-gray-500">{t.loading}</p>}
-    {open && error && <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-  </div>;
-
   return (
-    <div aria-label={t.share} className={compact ? 'text-left' : 'rounded-lg border border-gray-200 bg-white p-4'}>
+    <div className={compact ? (open ? 'min-w-0 basis-full text-left' : 'min-w-0 text-left') : 'rounded-lg border border-gray-200 bg-white p-4'}>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]"
+        onClick={() => {
+          setLinkedInClipboard(null);
+          setOpen((value) => !value);
+        }}
+        aria-expanded={open}
+        className={compact ? `min-h-11 w-auto! ${primaryButtonClass}` : 'rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]'}
       >
-        {open ? t.hide : t.share}
+        {open ? 'Hide share' : 'Share'}
       </button>
 
       {open && (
         <div className="mt-3 space-y-4">
           {loading && (
             <p className="text-sm text-gray-500" role="status">
-              {t.loading}
+              Loading share controls...
             </p>
           )}
 
@@ -233,44 +203,66 @@ export default function SellerShareControls({
             </div>
           )}
 
-          {share && (
+          {share && socialDrafts && (
             <>
-              <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+              <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
                 <div>
                   <img
                     src={share.card_url}
-                    alt={t.preview}
+                    alt="Share card preview"
                     className="aspect-[1.91/1] w-full rounded-md border border-gray-200 object-cover"
                   />
                   <p className="mt-2 break-all text-xs text-gray-500">{share.share_url}</p>
-                  <p className="mt-1 text-xs text-gray-500">{t.code}: {share.short_code}</p>
+                  <p className="mt-1 text-xs text-gray-500">Code: {share.short_code}</p>
                 </div>
 
                 <div className="space-y-3">
-                  {promote.can_share && <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <a href={socialDrafts.x.href} target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>
+                      Post on X
+                    </a>
+                    <a
+                      href={socialDrafts.linkedIn.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={secondaryButtonClass}
+                      onClick={() => void copyLinkedInCaption(socialDrafts.linkedIn.draft)}
+                    >
+                      Post on LinkedIn
+                    </a>
+                  </div>
+                  {linkedInClipboard === 'copied' && (
+                    <p role="status" className="text-xs text-gray-700">Caption copied. Paste it into your LinkedIn post.</p>
+                  )}
+                  {linkedInClipboard === 'manual' && (
+                    <div role="status" className="text-xs text-gray-700">
+                      <p>Copy this caption to paste into LinkedIn.</p>
+                      <p className="mt-1 whitespace-pre-line [overflow-wrap:anywhere]">{socialDrafts.linkedIn.draft}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={copyLink}
                       className="rounded-md bg-[#3F51B5] px-3 py-2 text-xs font-medium text-white hover:bg-[#303F9F]"
                     >
-                      {copied ? t.copied : t.copy}
+                      {copied ? 'Copied' : 'Copy link'}
                     </button>
                     <button
                       type="button"
                       onClick={nativeShare}
                       className="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                     >
-                      {t.native}
+                      Native share
                     </button>
                     <button
                       type="button"
                       onClick={() => setKitOpen(true)}
                       className="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                     >
-                      {t.kit}
+                      Share kit
                     </button>
-                  </div>}
-                  {promote.can_share && <PromoteNetworkButtons promote={promote} uiLocale={uiLocale} />}
+                  </div>
 
                   {statusMessage && (
                     <p className={`text-xs ${isFlagged || fallbackUsed ? 'text-amber-700' : 'text-gray-500'}`}>
@@ -278,9 +270,9 @@ export default function SellerShareControls({
                     </p>
                   )}
 
-                  {promote.can_share && <div className="space-y-2">
+                  <div className="space-y-2">
                     <label className="block text-xs font-medium text-gray-700">
-                      {t.title}
+                      OG title
                       <input
                         type="text"
                         value={form.og_title}
@@ -289,7 +281,7 @@ export default function SellerShareControls({
                       />
                     </label>
                     <label className="block text-xs font-medium text-gray-700">
-                      {t.description}
+                      OG description
                       <textarea
                         rows={2}
                         value={form.og_description}
@@ -298,7 +290,7 @@ export default function SellerShareControls({
                       />
                     </label>
                     <label className="block text-xs font-medium text-gray-700">
-                      {t.caption}
+                      Caption
                       <textarea
                         rows={3}
                         value={form.caption_text}
@@ -306,16 +298,16 @@ export default function SellerShareControls({
                         className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3F51B5]"
                       />
                     </label>
-                  </div>}
+                  </div>
 
-                  {promote.can_share && <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={regenerateCaption}
                       disabled={saving}
                       className="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
-                      {t.regenerate}
+                      Regenerate
                     </button>
                     <button
                       type="button"
@@ -323,20 +315,13 @@ export default function SellerShareControls({
                       disabled={saving}
                       className="rounded-md bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
                     >
-                      {t.save}
+                      Save edit
                     </button>
-                  </div>}
+                  </div>
                 </div>
               </div>
 
-              <table className="w-full text-left text-xs"><thead><tr>
-                <th>{t.network}</th><th>{t.opens} · {t.all}</th><th>{t.opens} · {t.d30}</th><th>{t.inquiries} · {t.all}</th><th>{t.inquiries} · {t.d30}</th>
-              </tr></thead><tbody>{promote.counts.map(row => <tr key={row.network}>
-                <th>{row.network === 'other' ? t.other : PROMOTE_NETWORKS[row.network]}</th><td>{row.opens.all}</td><td>{row.opens.d30}</td>
-                <td>{row.inquiries.all.masked ? t.masked : row.inquiries.all.value ?? '—'}</td><td>{row.inquiries.d30.masked ? t.masked : row.inquiries.d30.value ?? '—'}</td>
-              </tr>)}</tbody></table>
-              <p className="text-xs text-gray-500">{promote.rules}</p>
-              {kitOpen && promote.can_share && <ShareKitModal share={share} uiLocale={uiLocale} onClose={() => setKitOpen(false)} />}
+              {kitOpen && <ShareKitModal share={share} onClose={() => setKitOpen(false)} />}
             </>
           )}
         </div>

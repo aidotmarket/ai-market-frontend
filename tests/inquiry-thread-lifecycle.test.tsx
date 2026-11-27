@@ -176,12 +176,12 @@ describe.each(['detail', 'seller', 'widget'] as const)('%s mounted reply form', 
     expect(screen.queryByRole('status')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
     expect(client.post).toHaveBeenCalledTimes(1);
   });
-  it.each(['Message held for review. Please revise.', [{ loc: ['body', 'content'], msg: 'invalid' }]])('retains rejected draft and persistent safe error (%j)', async (detailValue) => {
+  it.each(['Message held for review. Please revise and try again.', [{ loc: ['body', 'content'], msg: 'invalid' }]])('retains rejected draft and persistent safe error (%j)', async (detailValue) => {
     await mountPage(kind);
     client.post.mockRejectedValue(new AxiosError('held', '422', undefined, undefined, { data: { detail: detailValue }, status: 422 } as never));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Retained draft' } });
     fireEvent.click(screen.getByRole('button', { name: 'Reply' })); await settle(); await tick(10000);
-    expect(screen.getByRole('alert').textContent).toBe(typeof detailValue === 'string' ? detailValue : 'Failed to send reply. Please revise and try again.');
+    expect(screen.getByRole('alert').textContent).toBe(typeof detailValue === 'string' ? 'Please revise your message before sending it again.' : "We couldn't send your reply just now. Try again, or contact support if it keeps happening.");
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Retained draft');
     expect((screen.getByRole('button', { name: 'Reply' }) as HTMLButtonElement).disabled).toBe(false);
   });

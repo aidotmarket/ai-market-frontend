@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import type { Message } from './AllAIContext';
-import Markdown from 'react-markdown';
+import AllAIMarkdown from './AllAIMarkdown';
 import TicketStatusCard from './TicketStatusCard';
 import AllAINextStep from './AllAINextStep';
+import { AllAIFallback, ListingRecoveryLinks } from './AllAIFallback';
 import { useAllAI } from './AllAIContext';
 import { anonymousAllAIResources } from '@/lib/i18n/anonymous-allai';
+import { useAuthStore } from '@/store/auth';
 
 function StreamingDots() {
   return (
@@ -25,7 +28,8 @@ export default function AllAIMessage({
   message: Message;
   isStreaming: boolean;
 }) {
-  const { locale, anonymousSurfaceActive } = useAllAI();
+  const { locale, anonymousSurfaceActive, page } = useAllAI();
+  const { user } = useAuthStore();
   const resources = anonymousAllAIResources(locale);
   if (message.role === 'system') {
     return (
@@ -46,7 +50,16 @@ export default function AllAIMessage({
   }
 
   // assistant
-  const showDots = isStreaming && !message.content;
+  const hasRecoveryLinks = !message.fallbackDestinations && (message.safeOutcome === 'answer_unverified' ||
+    message.safeOutcome === 'retrieval_unavailable' ||
+    message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited');
+  // Use the maintained customer copy even when a safe-failure event supplies older wording.
+  // Re-localise length errors too, without adding recovery links.
+  // Rate-limit copy is account-neutral: signing in does not lift limits.
+  const content = (hasRecoveryLinks || message.safeOutcome === 'message_too_long') && message.safeOutcome
+    ? resources.safeOutcomes[message.safeOutcome]
+    : message.content;
+  const showDots = isStreaming && !content && !message.listingFailure;
   const ticketStatusCards = message.ticketStatusCards ?? [];
   return (
     <div className="flex justify-start">
@@ -60,32 +73,43 @@ export default function AllAIMessage({
         )}
         {showDots ? (
           <StreamingDots />
-        ) : (
-          <Markdown
-            components={{
-              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-              strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-              em: ({ children }) => <em className="italic">{children}</em>,
-              a: ({ href, children }) => (
-                <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">
-                  {children}
-                </a>
-              ),
-              ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-              ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
-              li: ({ children }) => <li>{children}</li>,
-              code: ({ children }) => (
-                <code className="bg-white/10 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
-              ),
-            }}
-          >
-            {message.content}
-          </Markdown>
+        ) : message.fallbackDestinations ? (
+          <p><AllAIFallback destinations={message.fallbackDestinations} locale={locale} /></p>
+        ) : content.trim() && (
+          <AllAIMarkdown>{content}</AllAIMarkdown>
+        )}
+        {message.listingFailure && (
+          <div role="alert" className={content.trim() ? 'mt-2 text-amber-200' : undefined}>
+            <p>{resources.listingRecovery[message.listingFailure]} {resources.listingRecovery.guidance}</p>
+            <ListingRecoveryLinks search={resources.listingRecovery.search} support={resources.listingRecovery.support} />
+          </div>
+        )}
+        {hasRecoveryLinks && (
+          <div className="mt-2 flex flex-col items-start gap-1">
+            {message.safeOutcome !== 'no_matches' && page !== '/find-data' && (
+              <Link href="/find-data" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+                {resources.recoveryLinks.searchListings}
+              </Link>
+            )}
+            {!user && (
+              <p className="text-xs text-white/50">{resources.accountRequired}</p>
+            )}
+            <Link href={user ? '/requests/new' : `/register?redirect=${encodeURIComponent('/requests/new')}`} className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+              {message.safeOutcome === 'no_matches' ? resources.recoveryLinks.postRequest : resources.recoveryLinks.postRequestWithSellers}
+            </Link>
+          </div>
         )}
         {message.failureNotice && (
           <p role="alert" className="mt-2 text-amber-200">
             {message.failureNotice}
           </p>
+        )}
+        {message.showAimDataSetupGuide && !user && page === '/aim-data' && (
+          <div className="mt-2">
+            <Link href="/aim-data#gateway-setup" className="inline-flex min-h-11 items-center text-blue-400 underline hover:text-blue-300">
+              {resources.aimDataSetupGuide}
+            </Link>
+          </div>
         )}
         {ticketStatusCards.map((card) => (
           <TicketStatusCard key={`${message.id}-${card.public_ref}-${card.updated_at}`} card={card} />

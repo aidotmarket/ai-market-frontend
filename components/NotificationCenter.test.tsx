@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getNotificationClickAction, NotificationList } from './NotificationCenter';
 import type { NotificationItem } from '@/api/notifications';
 
@@ -16,6 +19,8 @@ const baseNotification: NotificationItem = {
   created_at: '2026-06-12T10:15:00Z',
   updated_at: '2026-06-12T10:15:00Z',
 };
+
+afterEach(cleanup);
 
 describe('NotificationList', () => {
   it('renders support ticket notification types and read/unread states', () => {
@@ -37,12 +42,25 @@ describe('NotificationList', () => {
       <NotificationList notifications={notifications} onNotificationClick={vi.fn()} />
     );
 
-    expect(html).toContain('support_ticket_status_changed');
-    expect(html).toContain('support_ticket_message');
+    expect(html).toContain('>Support ticket status changed</span>');
+    expect(html).toContain('>Support ticket message</span>');
     expect(html).toContain('Unread notification');
     expect(html).toContain('Read notification');
     expect(html).toContain('Ticket T-123 updated');
     expect(html).toContain('New support ticket message');
+  });
+
+  it.each([
+    ['data_request_matched', 'Data request match'],
+    ['future_event_type', 'Future event type'],
+    ['Future-event type', 'Notification'],
+  ])('uses a readable visible and accessible label for %s', (type, label) => {
+    const notification = { ...baseNotification, type, title: 'A new update', body: null };
+    render(<NotificationList notifications={[notification]} onNotificationClick={vi.fn()} />);
+
+    const item = screen.getByRole('button', { name: new RegExp(`${label}$`) });
+    expect(within(item).getByText(label)).toBeTruthy();
+    expect(item.textContent).not.toContain(type);
   });
 
   it('routes support ticket notification clicks to allAI instead of the portal URL', () => {
@@ -62,6 +80,24 @@ describe('NotificationList', () => {
     });
 
     expect(action).toEqual({ kind: 'route', href: '/dashboard/orders/o-1' });
+  });
+
+  it('shows a readable caption for an inquiry reply', () => {
+    const notification: NotificationItem = {
+      ...baseNotification,
+      type: 'inquiry_replied',
+      title: 'A seller replied to your inquiry',
+      body: null,
+      metadata: {},
+      link_url: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <NotificationList notifications={[notification]} onNotificationClick={vi.fn()} />
+    );
+
+    expect(html).toContain('>Inquiry reply</span>');
+    expect(html).not.toContain('inquiry_replied');
   });
 
   it('labels a terminated licence and keeps its record link routable', () => {

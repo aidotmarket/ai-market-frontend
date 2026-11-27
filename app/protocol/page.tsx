@@ -63,7 +63,7 @@ const platformDoesNot = [
   {
     label: 'Serve files',
     description:
-      "Files are served by the seller's own AWS or Cloudflare bucket, or by the seller gateway through the seller's HTTPS door",
+      "Files are served by the seller's own AWS or Cloudflare bucket, or by the seller gateway through the seller's own HTTPS endpoint",
   },
   {
     label: 'Lock in sellers',
@@ -96,7 +96,7 @@ const securitySections = [
   {
     label: 'WHAT LEAVES THE GATEWAY',
     description:
-      'Opaque file IDs and keyed commitments leave automatically, with an alias only if the seller sets one. After confirmation, structure and raw SHA-256 leave. No data values go to ai.market in these messages. The gateway sends delivery receipts and signed audit entries for every outbound message. The seller may separately publish a public sample.',
+      'The gateway automatically sends generated file references and fingerprints made with a secret key. It includes a display name if the seller sets one. After the seller confirms a file, the gateway sends a checksum of the file. For file formats it can summarize, it also sends the row count and the names and types of the columns the seller includes. No data values go to ai.market in these messages. The gateway sends delivery receipts and signed audit entries for every outbound message. The seller may separately publish a public sample.',
   },
   {
     label: 'NETWORK BOUNDARY',

@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/react';
 
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
+
 const api = vi.hoisted(() => ({
   fetchPublicListing: vi.fn(), fetchListingVersions: vi.fn(),
   fetchListingAccessWindowDays: vi.fn(), resolveListingUUID: vi.fn(),
@@ -24,7 +26,8 @@ const { default: Page, generateMetadata } = await import('./page');
 
 
 import { sampleFixture, originalSampleIdentities } from '@/tests/generatedSampleFixture';
-import { SAMPLE_COPY, SAMPLE_DATA_COPY, SAMPLE_MODEL_COPY, SAMPLE_STANDARD_COPY, STANDARD_DOCUMENTS } from '@/lib/generatedSample';
+import { listingSummaryCases } from '@/tests/listingSummaryFixture';
+import { SAMPLE_COPY, SAMPLE_DATA_COPY, SAMPLE_MODEL_COPY, SAMPLE_STANDARD_COPY, SAMPLE_UNAVAILABLE_COPY, STANDARD_DOCUMENTS } from '@/lib/generatedSample';
 
 async function render(listing = sampleFixture()) {
   api.fetchPublicListing.mockResolvedValue(listing);
@@ -93,14 +96,26 @@ describe('actual public sample detail SSR and metadata', () => {
   });
   it('emits safe metadata for valid and unavailable cases without retained claims', async () => {
     for (const generated_sample of [{label: 'SAMPLE', display_only: true}, null]) {
-      const listing = sampleFixture({generated_sample}); api.fetchPublicListing.mockResolvedValue(listing);
+      const listing = sampleFixture({generated_sample, description: '**RETAINED_UNSUPPORTED**', summary: 'Conflicting summary'});
+      api.fetchPublicListing.mockResolvedValue(await Response.json(listing).json());
       const metadata = await generateMetadata({params: Promise.resolve({slug: listing.slug})});
       expect(metadata.title).toBe(`${generated_sample ? 'SAMPLE' : 'Unavailable'} — ${listing.title}`);
-      expect(metadata.description).not.toContain('Old facility');
-      expect(metadata.description).not.toContain('RETAINED_UNSUPPORTED');
+      expect(metadata.description).toBe(generated_sample ? SAMPLE_COPY : SAMPLE_UNAVAILABLE_COPY);
       expect(metadata.openGraph).toMatchObject({title: metadata.title, description: metadata.description});
       expect(metadata.twitter).toMatchObject({title: metadata.title, description: metadata.description});
       expect(metadata.alternates?.canonical).toBe(`https://ai.market/listings/${listing.slug}`);
+    }
+  });
+  it.each(listingSummaryCases(SAMPLE_COPY))('keeps platform metadata for a serialized sample with $state', async ({ summary }) => {
+    const listing = sampleFixture({
+      description: SAMPLE_COPY, short_description: SAMPLE_COPY, summary,
+      availability: 'display_only', fulfillment_method: 'none',
+    });
+    api.fetchPublicListing.mockResolvedValue(await Response.json(listing).json());
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: listing.slug }) });
+    expect(metadata.title).toBe(`SAMPLE — ${listing.title}`);
+    for (const fields of [metadata, metadata.openGraph, metadata.twitter]) {
+      expect(fields).toHaveProperty('description', SAMPLE_COPY);
     }
   });
   it('honors noindex without emitting retained JSON-LD', async () => {
@@ -117,7 +132,7 @@ it.each(originalSampleIdentities)('preserves original public identity $id at $sl
   const metadata = await generateMetadata({params: Promise.resolve({slug: identity.slug})});
   expect(metadata.alternates?.canonical).toBe(`https://ai.market/listings/${identity.slug}`);
   expect(JSON.parse(document.querySelector('script')!.textContent!).url).toBe(`https://ai.market/listings/${identity.slug}`);
-  expect(api.fetchPublicListing).toHaveBeenCalledWith(identity.slug);
+  expect(api.fetchPublicListing).toHaveBeenCalledWith(identity.slug, null);
   assertNoCommercialMounts();
 });
 

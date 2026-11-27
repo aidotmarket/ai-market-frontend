@@ -7,6 +7,8 @@ export interface SellerOrderListParams {
   offset: number;
 }
 
+export const SELLER_ORDERS_MAX_LIMIT = 100;
+
 export const getSellerStats = () => api.get<SellerStats>('/seller/stats');
 export const getSellerFinancials = () => api.get('/seller/financials');
 export const getSellerOrders = (params: SellerOrderListParams) =>
