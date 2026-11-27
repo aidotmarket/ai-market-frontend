@@ -74,6 +74,54 @@ describe('SellerShareControls', () => {
     expect(fetchListingShare).toHaveBeenCalledWith('legacy-listing', undefined);
   });
 
+  it('opens each composer directly with the existing share URL and copies the LinkedIn caption', async () => {
+    const caption = 'Revenue & risk #数据';
+    const share = makeShare({ caption: { ...makeShare().caption!, caption_text: caption } });
+    fetchListingShare.mockResolvedValueOnce(share);
+    render(<SellerShareControls listingId="listing-1" compact />);
+
+    const toggle = screen.getByRole('button', { name: 'Share' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(fetchListingShare).not.toHaveBeenCalled();
+    fireEvent.click(toggle);
+    const x = await screen.findByRole('link', { name: 'Post on X' });
+    const linkedIn = screen.getByRole('link', { name: 'Post on LinkedIn' });
+    const xIntent = new URL(x.getAttribute('href')!);
+    const linkedInIntent = new URL(linkedIn.getAttribute('href')!);
+    expect(xIntent.origin + xIntent.pathname).toBe('https://twitter.com/intent/tweet');
+    expect(xIntent.searchParams.get('text')).toBe(caption);
+    expect(xIntent.searchParams.get('url')).toBe(share.share_url);
+    expect(linkedInIntent.origin + linkedInIntent.pathname).toBe('https://www.linkedin.com/sharing/share-offsite/');
+    expect([...linkedInIntent.searchParams]).toEqual([['url', share.share_url]]);
+
+    for (const link of [x, linkedIn]) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      link.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    }
+    fireEvent.click(x);
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    fireEvent.click(linkedIn);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(caption);
+    expect(await screen.findByText('Caption copied. Paste it into your LinkedIn post.')).toBeTruthy();
+    expect(updateListingShareCaption).not.toHaveBeenCalled();
+  });
+
+  it('keeps the LinkedIn composer link usable if clipboard access is denied', async () => {
+    const share = makeShare();
+    fetchListingShare.mockResolvedValueOnce(share);
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error('denied'));
+    render(<SellerShareControls listingId="listing-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    const linkedIn = await screen.findByRole('link', { name: 'Post on LinkedIn' });
+    linkedIn.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    fireEvent.click(linkedIn);
+    expect(await screen.findByText('Copy this caption to paste into LinkedIn.')).toBeTruthy();
+    expect(within(screen.getByRole('status')).getByText(share.caption!.caption_text)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Share kit' })).toBeTruthy();
+  });
+
   it('regenerates and accepts caption edits with the expected request bodies', async () => {
     fetchListingShare.mockResolvedValueOnce(makeShare());
     updateListingShareCaption
@@ -116,6 +164,8 @@ describe('SellerShareControls', () => {
       });
     });
     expect(await screen.findByText('Fallback caption used. Review before posting.')).toBeTruthy();
+    const x = screen.getByRole('link', { name: 'Post on X' });
+    expect(new URL(x.getAttribute('href')!).searchParams.get('text')).toBe('ai.market listing');
 
     fireEvent.change(screen.getByLabelText('OG title'), { target: { value: 'Seller title' } });
     fireEvent.change(screen.getByLabelText('OG description'), { target: { value: 'Seller description' } });
@@ -130,6 +180,9 @@ describe('SellerShareControls', () => {
         og_description: 'Seller description',
         caption_text: 'Seller caption',
       });
+    });
+    await waitFor(() => {
+      expect(new URL(x.getAttribute('href')!).searchParams.get('text')).toBe('Seller caption');
     });
   });
 

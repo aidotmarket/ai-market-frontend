@@ -7,8 +7,8 @@ import {
   type ListingShareCaption,
   type ListingShareResponse,
 } from '@/api/share';
-import ShareKitModal from './ShareKitModal';
-import { primaryButtonClass } from '@/components/ui/button-styles';
+import ShareKitModal, { buildSocialShareDrafts } from './ShareKitModal';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
 
 interface SellerShareControlsProps {
   listingId: string;
@@ -52,6 +52,7 @@ export default function SellerShareControls({
   const [copied, setCopied] = useState(false);
   const [fallbackUsed, setFallbackUsed] = useState<boolean | null>(null);
   const [kitOpen, setKitOpen] = useState(false);
+  const [linkedInClipboard, setLinkedInClipboard] = useState<'copied' | 'manual' | null>(null);
 
   useEffect(() => {
     if (!open || share) return;
@@ -83,6 +84,17 @@ export default function SellerShareControls({
   const isFlagged = captionStatus === 'flagged';
   const shareTitle = form.og_title || share?.caption?.og_title || 'ai.market listing';
   const shareText = form.caption_text || form.og_description || share?.caption?.caption_text || '';
+  // Regeneration can return a flagged draft that the owner share read would omit.
+  const socialDrafts = share && buildSocialShareDrafts(isFlagged ? { ...share, caption: null } : share);
+
+  async function copyLinkedInCaption(caption: string) {
+    try {
+      await navigator.clipboard.writeText(caption);
+      setLinkedInClipboard('copied');
+    } catch {
+      setLinkedInClipboard('manual');
+    }
+  }
 
   const statusMessage = useMemo(() => {
     if (fallbackUsed) return 'Fallback caption used. Review before posting.';
@@ -167,7 +179,10 @@ export default function SellerShareControls({
     <div className={compact ? (open ? 'min-w-0 basis-full text-left' : 'min-w-0 text-left') : 'rounded-lg border border-gray-200 bg-white p-4'}>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setLinkedInClipboard(null);
+          setOpen((value) => !value);
+        }}
         aria-expanded={open}
         className={compact ? `min-h-11 w-auto! ${primaryButtonClass}` : 'rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]'}
       >
@@ -188,7 +203,7 @@ export default function SellerShareControls({
             </div>
           )}
 
-          {share && (
+          {share && socialDrafts && (
             <>
               <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
                 <div>
@@ -202,6 +217,29 @@ export default function SellerShareControls({
                 </div>
 
                 <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <a href={socialDrafts.x.href} target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>
+                      Post on X
+                    </a>
+                    <a
+                      href={socialDrafts.linkedIn.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={secondaryButtonClass}
+                      onClick={() => void copyLinkedInCaption(socialDrafts.linkedIn.draft)}
+                    >
+                      Post on LinkedIn
+                    </a>
+                  </div>
+                  {linkedInClipboard === 'copied' && (
+                    <p role="status" className="text-xs text-gray-700">Caption copied. Paste it into your LinkedIn post.</p>
+                  )}
+                  {linkedInClipboard === 'manual' && (
+                    <div role="status" className="text-xs text-gray-700">
+                      <p>Copy this caption to paste into LinkedIn.</p>
+                      <p className="mt-1 whitespace-pre-line [overflow-wrap:anywhere]">{socialDrafts.linkedIn.draft}</p>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

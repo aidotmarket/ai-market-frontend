@@ -7,23 +7,33 @@ interface ShareKitModalProps {
   onClose: () => void;
 }
 
-export function buildShareKitDrafts(share: ListingShareResponse) {
+export function buildSocialShareDrafts(share: ListingShareResponse) {
   const caption = share.caption;
   const title = caption?.og_title || 'ai.market listing';
   const text = caption?.caption_text || caption?.og_description || title;
-  const emailBody = `${text}\n\n${share.share_url}`;
 
-  return [
-    {
+  return {
+    x: {
       platform: 'X/Twitter',
       draft: text,
       href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(share.share_url)}`,
     },
-    {
+    linkedIn: {
       platform: 'LinkedIn',
       draft: text,
       href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(share.share_url)}`,
     },
+  };
+}
+
+export function buildShareKitDrafts(share: ListingShareResponse) {
+  const { x, linkedIn } = buildSocialShareDrafts(share);
+  const title = share.caption?.og_title || 'ai.market listing';
+  const emailBody = `${x.draft}\n\n${share.share_url}`;
+
+  return [
+    x,
+    linkedIn,
     {
       platform: 'Email',
       draft: emailBody,
