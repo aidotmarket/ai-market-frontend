@@ -30,11 +30,12 @@ export function supportedVersion(value: unknown): value is PresentationVersion {
   return value === 'seller-listing-review-v2' || value === 'seller-listing-review-v3' || value === 'seller-listing-review-v4';
 }
 const baseFields = ['presentation_version', 'rendered_html', 'render_hash'];
+const optionalFields = ['sample_files', 'approved_display_html', 'presentation_display_version'];
 export const correctionFields = ['presentation_kind', 'listing_id', 'publication_id', 'listing_version_id', 'approval_id',
   'original_render_hash', 'original_admitted_render_hash', 'correction_id', 'correction_digest', 'provenance', 'license_label'];
 // Public envelopes require binding IDs, but those IDs also occur in ordinary
 // saved reviews and signing bindings. Only correction-specific data is refused
-// at the original-evidence boundary; the public schema stays closed above.
+// at the original-evidence boundary.
 const correctionMarkers = ['presentation_kind', 'provenance', 'license_label', 'original_render_hash', 'original_admitted_render_hash',
   'correction_id', 'correction_digest', 'license_display', 'public_presentation', 'approved_presentation'];
 export function refusePlatformCorrection(value: unknown): void {
@@ -46,20 +47,23 @@ export function refuseCorrectionFields(value: unknown): void {
 }
 export function readLicenseDisplay(value: unknown): LicenseDisplay | null {
   if (value == null) return null;
-  if (!record(value) || Object.keys(value).length !== 4 || value.license_label !== CURRENT_LICENSE_LABEL ||
+  if (!record(value) || value.license_label !== CURRENT_LICENSE_LABEL ||
       value.provenance !== 'platform_license_correction' || typeof value.correction_id !== 'string' || !UUID.test(value.correction_id) ||
       typeof value.correction_digest !== 'string' || !HASH.test(value.correction_digest))
     throw new Error('Current licence display could not be verified');
-  return value as unknown as LicenseDisplay;
+  return {license_label: value.license_label, provenance: value.provenance,
+    correction_id: value.correction_id, correction_digest: value.correction_digest};
 }
-export async function verifyPresentation(value: unknown, identity?: {
+type PresentationIdentity = {
   listing_id: string; publication_id?: string; listing_version_id?: string; approval_id?: string;
-}): Promise<PublicPresentation> {
-  const fail = () => { throw new Error('The approved listing presentation could not be verified'); };
+};
+const presentationError = 'The approved listing presentation could not be verified';
+export async function verifyPresentation(value: unknown, identity?: PresentationIdentity): Promise<PublicPresentation> {
+  const fail = () => { throw new Error(presentationError); };
   if (!record(value)) return fail();
   const corrected = value.presentation_kind === CORRECTION_KIND;
   const required = corrected ? [...baseFields, ...correctionFields] : baseFields;
-  if (required.some(key => !(key in value)) || Object.keys(value).some(key => ![...required, 'sample_files', 'approved_display_html', 'presentation_display_version'].includes(key)) ||
+  if (required.some(key => !(key in value)) || Object.keys(value).some(key => ![...required, ...optionalFields].includes(key)) ||
       !supportedVersion(value.presentation_version) || typeof value.rendered_html !== 'string' ||
       typeof value.render_hash !== 'string' || !HASH.test(value.render_hash)) return fail();
   // Display HTML is a separate description fragment; rendered_html remains the hashed evidence.
@@ -77,20 +81,27 @@ export async function verifyPresentation(value: unknown, identity?: {
   if (hash !== value.render_hash) return fail();
   return value as unknown as PublicPresentation;
 }
+export async function verifyPublicPresentation(value: unknown, identity?: PresentationIdentity): Promise<PublicPresentation> {
+  if (!record(value) || (value.presentation_kind !== CORRECTION_KIND && correctionMarkers.some(key => key in value)))
+    throw new Error(presentationError);
+  const fields = [...baseFields, ...optionalFields, ...correctionFields];
+  const projected = Object.fromEntries(fields.filter(key => key in value).map(key => [key, value[key]]));
+  return verifyPresentation(projected, identity);
+}
 /** Check every independent response binding actually supplied by this backend. */
 export async function verifyCurrentListing(listing: Record<string, unknown>): Promise<void> {
   const display = readLicenseDisplay(listing.license_display);
   const value = listing.approved_presentation;
   if (value != null) {
     if (typeof listing.id !== 'string') throw new Error('Missing listing identity');
-    const identity: {listing_id:string;publication_id?:string;listing_version_id?:string;approval_id?:string} = {listing_id: listing.id};
+    const identity: PresentationIdentity = {listing_id: listing.id};
     for (const key of ['publication_id', 'listing_version_id', 'approval_id'] as const) {
       if (key in listing) {
         if (typeof listing[key] !== 'string' || !UUID.test(listing[key] as string)) throw new Error('Invalid publication identity');
         identity[key] = listing[key] as string;
       }
     }
-    const approved = await verifyPresentation(value, identity);
+    const approved = await verifyPublicPresentation(value, identity);
     if (approved.presentation_kind === CORRECTION_KIND && (!display || display.correction_id !== approved.correction_id ||
         display.correction_digest !== approved.correction_digest)) throw new Error('Inconsistent current licence display');
     if (display && approved.presentation_kind !== CORRECTION_KIND) throw new Error('Inconsistent original presentation');

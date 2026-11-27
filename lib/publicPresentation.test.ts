@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {createHash} from 'node:crypto';
 import wire from '@/tests/fixtures/s1922-backend-wire.json';
-import {verifyPresentation, verifyCurrentListing, correctionFields, CORRECTION_KIND} from './publicPresentation';
+import {verifyPresentation, verifyPublicPresentation, verifyCurrentListing, readLicenseDisplay, correctionFields, CORRECTION_KIND} from './publicPresentation';
 const digest=(html:string)=>createHash('sha256').update(html,'utf8').digest('hex');
 describe('actual backend19ff184 original and corrected presentation readers',()=>{
   it.each(wire.public)('rejects null HTML on public $original.presentation_version presentations',async fixture=>{
@@ -22,12 +22,31 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     expect(c.render_hash).toBe(digest(c.rendered_html));
     expect(JSON.stringify(fixture)).toBe(before);
   });
+  it.each(wire.public)('projects additive public fields for $original.presentation_version with a strict verifier default', async fixture => {
+    for (const presentation of [fixture.original, fixture.corrected]) {
+      const known = {...presentation, approved_display_html: '<p>Coverage</p>', presentation_display_version: 'approved-display-v1'};
+      const additive = {...known, future_metadata: {enabled: true}};
+      await expect(verifyPublicPresentation(additive)).resolves.toEqual(known);
+      await expect(verifyPresentation(additive)).rejects.toThrow('The approved listing presentation could not be verified');
+      expect(additive.future_metadata).toEqual({enabled: true});
+    }
+    await expect(verifyCurrentListing({id: fixture.corrected.listing_id,
+      approved_presentation: {...fixture.original, future_metadata: true}})).resolves.toBeUndefined();
+  });
+  it('rejects correction markers in original public evidence even with additive fields', async () => {
+    const original = {...wire.public[0].original, future_metadata: true};
+    for (const key of [...correctionFields, 'license_display', 'public_presentation', 'approved_presentation']) {
+      await expect(verifyPublicPresentation({...original, [key]: null})).rejects.toThrow();
+    }
+  });
   it('requires every correction field and refuses unknown, null, partial, excess and malformed variants',async()=>{
     const c=wire.public[2].corrected;
     for(const key of correctionFields){
       const missing:Record<string,unknown>={...c};delete missing[key];
       await expect(verifyPresentation(missing)).rejects.toThrow();
       await expect(verifyPresentation({...c,[key]:null})).rejects.toThrow();
+      await expect(verifyPublicPresentation({...missing, future_metadata: true})).rejects.toThrow();
+      await expect(verifyPublicPresentation({...c, [key]: null, future_metadata: true})).rejects.toThrow();
     }
     for(const bad of [null,{}, {...c,presentation_kind:'unknown'}, {...c,presentation_version:'seller-listing-review-v5'},
       {...c,provenance:'seller_approved'}, {...c,license_label:'ai.market Standard Data Licence v1.0'}, {...c,extra:true},
@@ -48,13 +67,35 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
   it('binds the actual detail container, adjacent metadata and every independent response identity',async()=>{
     const c=wire.public[2].corrected;
     const display={license_label:c.license_label,provenance:c.provenance,correction_id:c.correction_id,correction_digest:c.correction_digest};
-    const listing={id:c.listing_id,publication_id:c.publication_id,listing_version_id:c.listing_version_id,approval_id:c.approval_id,approved_presentation:c,license:c.license_label,license_display:display};
+    const listing={id:c.listing_id,publication_id:c.publication_id,listing_version_id:c.listing_version_id,approval_id:c.approval_id,
+      approved_presentation:{...c,future_metadata:true},license:c.license_label,license_display:{...display,future_metadata:true}};
+    expect(readLicenseDisplay(listing.license_display)).toEqual(display);
     await expect(verifyCurrentListing(listing)).resolves.toBeUndefined();
     for(const key of ['id','publication_id','listing_version_id','approval_id'])await expect(verifyCurrentListing({...listing,[key]:'ffffffff-ffff-ffff-ffff-ffffffffffff'})).rejects.toThrow();
-    await expect(verifyCurrentListing({...listing,license_display:{...display,correction_digest:'a'.repeat(64)}})).rejects.toThrow();
-    await expect(verifyCurrentListing({...listing,license:'ai.market Standard Data Licence v1.0'})).rejects.toThrow();
+    for (const key of Object.keys(display)) {
+      const missing: Record<string, unknown> = {...listing.license_display};
+      delete missing[key];
+      expect(() => readLicenseDisplay(missing)).toThrow('Current licence display could not be verified');
+      expect(() => readLicenseDisplay({...listing.license_display, [key]: 'invalid'})).toThrow('Current licence display could not be verified');
+    }
+    await expect(verifyCurrentListing({...listing,license_display:{...listing.license_display,correction_digest:'a'.repeat(64)}})).rejects.toThrow('Inconsistent current licence display');
+    await expect(verifyCurrentListing({...listing,license:'ai.market Standard Data Licence v1.0'})).rejects.toThrow('Inconsistent current licence label');
     await expect(verifyCurrentListing({...listing,approved_presentation:wire.public[2].original})).rejects.toThrow();
     expect(c.presentation_kind).toBe(CORRECTION_KIND);
+  });
+  it('still checks required HTML, version, hash and display fields with additive fields', async () => {
+    for (const presentation of [wire.public[0].original, wire.public[0].corrected]) {
+      for (const [key, invalid] of Object.entries({presentation_version: 'seller-listing-review-v5',
+        rendered_html: presentation.rendered_html + 'tampered', render_hash: 'a'.repeat(64),
+        approved_display_html: 42, presentation_display_version: 'unknown'})) {
+        await expect(verifyPublicPresentation({...presentation, [key]: invalid, future_metadata: true})).rejects.toThrow();
+      }
+      for (const key of ['presentation_version', 'rendered_html', 'render_hash']) {
+        const missing: Record<string, unknown> = {...presentation, future_metadata: true};
+        delete missing[key];
+        await expect(verifyPublicPresentation(missing)).rejects.toThrow();
+      }
+    }
   });
 });
 
