@@ -1,24 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-const session = vi.hoisted(() => ({
-  token: 'test-token' as string | null,
-  user: { role: 'seller', status: 'active' },
-  isAuthenticated: true,
-  hydrated: true,
-  isLoading: false,
-}));
-vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => session } }));
-
 const revision = 'a'.repeat(40);
 const workspace = '/dashboard/seller-workspace';
 const fetchMock = vi.fn<typeof fetch>();
+const getCrashToken = vi.fn<() => string | null>();
 
 beforeEach(() => {
   vi.resetModules();
-  Object.assign(session, { token: 'test-token', isAuthenticated: true, hydrated: true, isLoading: false });
-  session.user.role = 'seller';
-  session.user.status = 'active';
+  getCrashToken.mockReset().mockReturnValue('test-token');
   vi.stubEnv('FRONTEND_BUILD_REVISION', revision);
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
   vi.stubGlobal('fetch', fetchMock.mockReset().mockResolvedValue(new Response(null, { status: 204 })));
@@ -36,22 +26,17 @@ it('sends only v1 fields and canonical classifications in a single isolated POST
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
   window.history.replaceState(null, '', `${workspace}?value=query-fixture#fragment-fixture`);
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Synthetic Chrome/123.0 Edg/124.0 extra-fixture');
-  const error = new Error('Minified React error #185; visit https://react.dev/errors/185?args[]=message-fixture');
-  error.stack = 'at WorkspaceOverview (/private/never-read.tsx:1:1)';
-  await reportSellerWorkspaceCrash('data', error, [
-    '    at WorkspaceData (/synthetic/file-name.csv:1:1)',
-    '    at WorkspacePanelSuffix (/ignore.tsx:1:1)',
-    '    at Prefix.WorkspacePanel (/ignore.tsx:1:1)',
-    'SavedWorkspaceData@https://example.invalid/private/path.js:2:1',
-    '    at WorkspaceData (/duplicate.tsx:1:1)',
-    '    at ObjectBrowser (/ignore.tsx:1:1)',
-    '    at SavedLicenseStep (/ignore.tsx:1:1)',
-    '    at SellerLicenseSelection (/ignore.tsx:1:1)',
-    '    at SavedListingEditor (/ignore.tsx:1:1)',
-    '    at SellerListingEditor (/ignore.tsx:1:1)',
-    '    at GuidedListingFlow (/ignore.tsx:1:1)',
-    '    at SellerWorkspacePage (/over-cap.tsx:1:1)',
-  ].join('\n'));
+  const error = Object.assign(
+    new Error('Minified React error #185; visit https://react.dev/errors/185?args[]=message-fixture'),
+    { draft_uuid: '11111111-2222-4333-8444-555555555555' },
+  );
+  error.stack = [
+    'Error: synthetic private detail',
+    '    at a (https://ai.market/_next/static/chunks/71-fe5c0a.js:1:2984)',
+    '    at UnknownFrame (https://example.invalid/private/path.js:2:1)',
+    '    at WorkspaceOverview (/private/never-read.tsx:1:1)',
+  ].join('\n');
+  await reportSellerWorkspaceCrash('WorkspaceData', error, getCrashToken);
 
   expect(fetchMock).toHaveBeenCalledOnce();
   const [target, request] = fetchMock.mock.calls[0];
@@ -63,12 +48,19 @@ it('sends only v1 fields and canonical classifications in a single isolated POST
   });
   expect(JSON.parse(request!.body as string)).toEqual({
     schema_version: 1, route: 'seller_workspace', step: 'data', error_name: 'Error',
-    error_code: 'react_minified', react_code: 185, component_frames: [
-      'WorkspaceData', 'SavedWorkspaceData', 'ObjectBrowser', 'SavedLicenseStep',
-      'SellerLicenseSelection', 'SavedListingEditor', 'SellerListingEditor', 'GuidedListingFlow',
-    ], build_revision: revision, browser_family: 'Edge', browser_major: 124,
+    error_code: 'react_minified', react_code: 185, component_frames: ['WorkspacePanel', 'WorkspaceData'], build_revision: revision, browser_family: 'Edge', browser_major: 124,
   });
   expect(new TextEncoder().encode(request!.body as string).length).toBeLessThan(4096);
+});
+
+it('keeps untrusted frames out of root events without inspecting the stack', async () => {
+  const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
+  const readStack = vi.fn(() => '    at UnknownFrame (https://ai.market/_next/static/chunks/71-fe5c0a.js:1:2984)');
+  const error = Object.defineProperty(new Error('synthetic'), 'stack', { get: readStack });
+  await reportSellerWorkspaceCrash('root', error, getCrashToken);
+  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string).component_frames).toEqual([]);
+  expect(readStack).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -81,7 +73,7 @@ it.each([
 ])('reduces thrown values to closed fields (%#)', async (error, errorName, errorCode) => {
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Synthetic Chrome/1000.0');
-  await reportSellerWorkspaceCrash('root', error);
+  await reportSellerWorkspaceCrash('root', error, getCrashToken);
   expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({
     schema_version: 1, route: 'seller_workspace', step: 'root', error_name: errorName,
     error_code: errorCode, react_code: null, component_frames: [], build_revision: revision,
@@ -93,28 +85,17 @@ it.each(['/', '/support/mailbox-account', '/confirm/synthetic', '/checkout/h/syn
   `${workspace}/`, `${workspace}/synthetic`, '/dashboard/%73eller-workspace'])('is silent on %s', async path => {
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
   window.history.replaceState(null, '', path);
-  await reportSellerWorkspaceCrash('listing', new Error());
+  await reportSellerWorkspaceCrash('SellerListingEditor', new Error(), getCrashToken);
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it('requires an active in-memory seller, an exact revision and the first-party API configuration', async () => {
+it('requires active seller proof, an exact revision and the first-party API configuration', async () => {
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
-  const report = () => reportSellerWorkspaceCrash('data', new Error());
-  session.hydrated = false;
+  const report = () => reportSellerWorkspaceCrash('SavedWorkspaceData', new Error(), getCrashToken);
+  await reportSellerWorkspaceCrash('root', new Error(), null);
+  getCrashToken.mockReturnValue(null);
   await report();
-  session.hydrated = true;
-  session.isAuthenticated = false;
-  await report();
-  session.isAuthenticated = true;
-  session.token = null;
-  await report();
-  session.token = 'test-token';
-  session.user.role = 'buyer';
-  await report();
-  session.user.role = 'seller';
-  session.user.status = 'suspended';
-  await report();
-  session.user.status = 'active';
+  getCrashToken.mockReturnValue('test-token');
   vi.stubEnv('FRONTEND_BUILD_REVISION', `${revision}\n`);
   await report();
   vi.stubEnv('FRONTEND_BUILD_REVISION', revision.toUpperCase());
@@ -125,15 +106,15 @@ it('requires an active in-memory seller, an exact revision and the first-party A
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it('drops an event when the session owner, token or browser route changes before dispatch', async () => {
+it('drops an event when proof, token or browser route changes before dispatch', async () => {
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
-  const { advanceAuthSessionOwner: advance } = await import('@/lib/auth-session-owner');
-  const report = () => reportSellerWorkspaceCrash('root', new Error());
-  const ownerChanged = report();
-  advance(false);
-  await ownerChanged;
+  const report = () => reportSellerWorkspaceCrash('root', new Error(), getCrashToken);
+  const proofChanged = report();
+  getCrashToken.mockReturnValue(null);
+  await proofChanged;
+  getCrashToken.mockReturnValue('test-token');
   const tokenChanged = report();
-  session.token = 'replacement-token';
+  getCrashToken.mockReturnValue('replacement-token');
   await tokenChanged;
   const routeChanged = report();
   window.history.replaceState(null, '', '/support/mailbox-account');
@@ -145,9 +126,9 @@ it.each([401, 429, 500])('discards HTTP %s without retry, refresh, auth changes 
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
   const log = vi.spyOn(console, 'error');
   fetchMock.mockResolvedValueOnce(new Response(null, { status }));
-  await reportSellerWorkspaceCrash('license', new Error());
+  await reportSellerWorkspaceCrash('SavedLicenseStep', new Error(), getCrashToken);
   expect(fetchMock).toHaveBeenCalledOnce();
-  expect(session.token).toBe('test-token');
+  expect(getCrashToken).toHaveBeenCalledTimes(2);
   expect(window.location.pathname).toBe(workspace);
   expect(log).not.toHaveBeenCalled();
 });
@@ -162,7 +143,8 @@ it('isolates synchronous throws, rejections and hanging fetches within the share
   }));
 
   const error = new Error();
-  const reports = (['data', 'license', 'listing', 'root'] as const).map(step => reportSellerWorkspaceCrash(step, error));
+  const reports = (['WorkspaceData', 'SavedLicenseStep', 'SavedListingEditor', 'root'] as const)
+    .map(panel => reportSellerWorkspaceCrash(panel, error, getCrashToken));
   await Promise.resolve();
   expect(fetchMock).toHaveBeenCalledTimes(3);
   const hanging = fetchMock.mock.calls[2][1]!.signal;
@@ -171,6 +153,6 @@ it('isolates synchronous throws, rejections and hanging fetches within the share
   await Promise.all(reports);
   expect(hanging?.aborted).toBe(true);
   expect(vi.getTimerCount()).toBe(0);
-  await reportSellerWorkspaceCrash('root', error);
+  await reportSellerWorkspaceCrash('root', error, getCrashToken);
   expect(fetchMock).toHaveBeenCalledTimes(3);
 });

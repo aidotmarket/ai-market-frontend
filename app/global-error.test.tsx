@@ -3,22 +3,25 @@ import { StrictMode } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import GlobalError from './global-error';
+import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
 
-const { usePathname, state } = vi.hoisted(() => ({
+const { usePathname, readAuth, hydrate } = vi.hoisted(() => ({
   usePathname: vi.fn<() => string | null>(),
-  state: {
-    token: 'test-token' as string | null, isAuthenticated: true, hydrated: true, isLoading: false,
+  hydrate: vi.fn(),
+  readAuth: vi.fn(() => ({
+    token: 'test-token', isAuthenticated: true, hydrated: true, isLoading: false,
     user: { role: 'seller', status: 'active' },
-  },
+  })),
 }));
 vi.mock('next/navigation', () => ({ usePathname }));
-vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => state } }));
+vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ ...readAuth(), hydrate }) } }));
 
 const workspace = '/dashboard/seller-workspace';
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
-  state.token = 'test-token';
+  readAuth.mockClear();
+  hydrate.mockClear();
   vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
   vi.stubGlobal('fetch', fetchMock.mockReset().mockResolvedValue(new Response(null, { status: 204 })));
@@ -30,11 +33,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('reports one root event per mounted fallback, even under StrictMode and prop changes', async () => {
+it('reports once under StrictMode and prop changes when the fallback has seller proof', async () => {
   window.history.replaceState(null, '', workspace);
   usePathname.mockReturnValue(workspace);
   const container = document.implementation.createHTMLDocument();
-  const fallback = (error: Error) => <StrictMode><GlobalError error={error} /></StrictMode>;
+  const getCrashToken = () => 'test-token';
+  const fallback = (error: Error) => (
+    <StrictMode>
+      <SellerWorkspaceCrashAccess.Provider value={getCrashToken}>
+        <GlobalError error={error} />
+      </SellerWorkspaceCrashAccess.Provider>
+    </StrictMode>
+  );
   const { rerender } = render(fallback(new Error('synthetic root failure')), { container });
   expect(container.querySelector('h1')?.textContent).toBe('Something went wrong in Seller Workspace');
   expect(container.querySelector('button')?.textContent).toBe('Reload page');
@@ -56,21 +66,41 @@ it.each([
   window.history.replaceState(null, '', browserPath);
   usePathname.mockReturnValue(routerPath);
   const container = document.implementation.createHTMLDocument();
-  render(<GlobalError error={new Error('synthetic root failure')} />, { container });
+  render(
+    <SellerWorkspaceCrashAccess.Provider value={() => 'test-token'}>
+      <GlobalError error={new Error('synthetic root failure')} />
+    </SellerWorkspaceCrashAccess.Provider>,
+    { container },
+  );
   expect(container.querySelector('h2')?.textContent).toContain('Application error');
   expect(container.querySelector('button')).toBeNull();
   await Promise.resolve();
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it('does not report a pre-auth root failure after a session appears', async () => {
+it('keeps the root fallback usable and silent outside the capability provider even with a signed-in seller', async () => {
   window.history.replaceState(null, '', workspace);
   usePathname.mockReturnValue(workspace);
-  state.token = null;
   const container = document.implementation.createHTMLDocument();
-  const { rerender } = render(<GlobalError error={new Error()} />, { container });
-  state.token = 'test-token';
-  rerender(<GlobalError error={new Error()} />);
+  render(<GlobalError error={new Error()} />, { container });
+  await Promise.resolve();
+  expect(container.querySelector('h1')?.textContent).toBe('Something went wrong in Seller Workspace');
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(readAuth).not.toHaveBeenCalled();
+  expect(hydrate).not.toHaveBeenCalled();
+});
+
+it('does not report an unproven root failure after proof appears', async () => {
+  window.history.replaceState(null, '', workspace);
+  usePathname.mockReturnValue(workspace);
+  const container = document.implementation.createHTMLDocument();
+  const fallback = (token: string | null) => (
+    <SellerWorkspaceCrashAccess.Provider value={token ? () => token : null}>
+      <GlobalError error={new Error()} />
+    </SellerWorkspaceCrashAccess.Provider>
+  );
+  const { rerender } = render(fallback(null), { container });
+  rerender(fallback('test-token'));
   await Promise.resolve();
   expect(fetchMock).not.toHaveBeenCalled();
 });

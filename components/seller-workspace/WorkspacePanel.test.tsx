@@ -4,13 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceOverview, type WorkspaceView } from './WorkspaceOverview';
 import { WorkspacePanel } from './WorkspacePanel';
-
-vi.mock('@/store/auth', () => ({
-  useAuthStore: { getState: () => ({
-    token: 'test-token', isAuthenticated: true, hydrated: true, isLoading: false,
-    user: { role: 'seller', status: 'active' },
-  }) },
-}));
+import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -122,17 +116,23 @@ it('reports all three boundary identities, including an error in a hidden panel,
   vi.stubGlobal('fetch', fetchMock);
   window.history.replaceState(null, '', '/dashboard/seller-workspace');
 
-  function WorkspaceData({ broken }: { broken: boolean }) {
-    if (broken) throw new TypeError('synthetic is not a function');
+  // Simulate a renamed component and a production-shaped JavaScript stack.
+  function a({ broken }: { broken: boolean }) {
+    if (broken) {
+      const error = new TypeError('synthetic is not a function');
+      error.stack = '    at a (https://ai.market/_next/static/chunks/app/dashboard/seller-workspace/page-012abc.js:1:360)';
+      throw error;
+    }
     return <p>Data panel</p>;
   }
+  const MinifiedPanel = a;
 
   const panels = (view: 'data' | 'license' | 'listing', broken: boolean) => (
-    <>
-      <WorkspacePanel active={view === 'data'} showReloadOnError crashStep="data"><WorkspaceData broken={broken} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'license'} showReloadOnError crashStep="license"><WorkspaceData broken={broken} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'listing'} showReloadOnError crashStep="listing"><WorkspaceData broken={broken} /></WorkspacePanel>
-    </>
+    <SellerWorkspaceCrashAccess.Provider value={() => 'test-token'}>
+      <WorkspacePanel active={view === 'data'} showReloadOnError crashPanel="SavedWorkspaceData"><MinifiedPanel broken={broken} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'license'} showReloadOnError crashPanel="SavedLicenseStep"><MinifiedPanel broken={broken} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'} showReloadOnError crashPanel="SavedListingEditor"><MinifiedPanel broken={broken} /></WorkspacePanel>
+    </SellerWorkspaceCrashAccess.Provider>
   );
 
   const onCaughtError = vi.fn();
@@ -143,9 +143,9 @@ it('reports all three boundary identities, including an error in a hidden panel,
   await Promise.resolve();
 
   expect(fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string))).toEqual(
-    ['data', 'license', 'listing'].map(step => expect.objectContaining({
+    Object.entries({ data: 'SavedWorkspaceData', license: 'SavedLicenseStep', listing: 'SavedListingEditor' }).map(([step, panel]) => expect.objectContaining({
       step, error_name: 'TypeError', error_code: 'not_callable',
-      component_frames: expect.arrayContaining(['WorkspacePanel', 'WorkspaceData']),
+      component_frames: ['WorkspacePanel', panel],
     })),
   );
   rerender(panels('data', true));

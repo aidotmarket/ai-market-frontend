@@ -1,7 +1,17 @@
-import { authSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
-import { useAuthStore } from '@/store/auth';
+import { createContext } from 'react';
 
-export type WorkspacePanelCrashStep = 'data' | 'license' | 'listing';
+const PANEL_STEPS = {
+  WorkspaceData: 'data',
+  SavedWorkspaceData: 'data',
+  SavedLicenseStep: 'license',
+  SellerListingEditor: 'listing',
+  SavedListingEditor: 'listing',
+} as const;
+export type WorkspaceCrashPanel = keyof typeof PANEL_STEPS;
+
+// Provided by the dashboard's existing capability read. The global fallback
+// normally renders outside that tree and receives no session proof.
+export const SellerWorkspaceCrashAccess = createContext<(() => string | null) | null>(null);
 
 const WORKSPACE_PATH = '/dashboard/seller-workspace';
 const API_ORIGIN = 'https://api.ai.market';
@@ -14,20 +24,10 @@ const ERROR_PATTERNS = [
   ['TypeError', 'not_callable', /^[^\r\n]+ is not a function\b/],
   ['ReferenceError', 'not_defined', /^(?:Can't find variable: |[^\r\n]+ is not defined\b)/],
 ] as const;
-const COMPONENT_FRAMES = [
-  'WorkspacePanel', 'WorkspaceOverview', 'WorkspaceData', 'ObjectBrowser', 'SavedWorkspaceData',
-  'SavedLicenseStep', 'SellerLicenseSelection', 'SavedListingEditor', 'SellerListingEditor',
-  'GuidedListingFlow', 'SellerWorkspacePage',
-] as const;
 let reportsStarted = 0;
 
 export function isSellerWorkspacePath(pathname: string | null): boolean {
   return pathname === WORKSPACE_PATH && typeof window !== 'undefined' && window.location.pathname === WORKSPACE_PATH;
-}
-
-function sellerAccessToken() {
-  const { token, user, isAuthenticated, hydrated, isLoading } = useAuthStore.getState();
-  return hydrated && !isLoading && isAuthenticated && user?.role === 'seller' && user.status === 'active' ? token : null;
 }
 
 function classifyError(error: unknown) {
@@ -45,18 +45,6 @@ function classifyError(error: unknown) {
   return { error_name, error_code, react_code };
 }
 
-function componentFrames(stack?: string | null) {
-  const frames: (typeof COMPONENT_FRAMES)[number][] = [];
-  for (const line of stack?.slice(0, 16_384).split('\n') ?? []) {
-    const name = /^\s*at ([A-Za-z]+)(?= \(|$)/.exec(line)?.[1]
-      ?? /^([A-Za-z]+)@/.exec(line)?.[1];
-    const frame = COMPONENT_FRAMES.find(allowed => allowed === name);
-    if (frame && !frames.includes(frame)) frames.push(frame);
-    if (frames.length === 8) break;
-  }
-  return frames;
-}
-
 function browserDetails() {
   const agent = window.navigator.userAgent.slice(0, 512);
   const browsers = [
@@ -72,7 +60,11 @@ function browserDetails() {
   return { browser_family: 'Other', browser_major: null };
 }
 
-export async function reportSellerWorkspaceCrash(step: WorkspacePanelCrashStep | 'root', error: unknown, stack?: string | null): Promise<void> {
+export async function reportSellerWorkspaceCrash(
+  panel: WorkspaceCrashPanel | 'root',
+  error: unknown,
+  getActiveSellerToken: (() => string | null) | null,
+): Promise<void> {
   try {
     const build_revision = process.env.FRONTEND_BUILD_REVISION;
     const apiOrigin = process.env.NEXT_PUBLIC_API_URL;
@@ -80,23 +72,25 @@ export async function reportSellerWorkspaceCrash(step: WorkspacePanelCrashStep |
       || (apiOrigin !== API_ORIGIN && apiOrigin !== `${API_ORIGIN}/`)
       || build_revision?.length !== 40 || !/^[a-f0-9]{40}$/.test(build_revision)) return;
 
-    const owner = authSessionOwner();
-    const token = sellerAccessToken();
+    const token = getActiveSellerToken?.();
     if (!token) return;
 
+    if (panel !== 'root' && !Object.hasOwn(PANEL_STEPS, panel)) return;
     const body = JSON.stringify({
       schema_version: 1,
       route: 'seller_workspace',
-      step,
+      step: panel === 'root' ? 'root' : PANEL_STEPS[panel],
       ...classifyError(error),
-      component_frames: componentFrames(stack),
+      // The legacy v1 field groups by the configured catching panel.
+      // It conveys no throwing frame or runtime stack location.
+      component_frames: panel === 'root' ? [] : ['WorkspacePanel', panel],
       build_revision,
       ...browserDetails(),
     });
 
     // Let the fallback commit and recheck route and session before dispatch.
     await Promise.resolve();
-    if (!isSellerWorkspacePath(WORKSPACE_PATH) || !isAuthSessionOwner(owner) || sellerAccessToken() !== token
+    if (!isSellerWorkspacePath(WORKSPACE_PATH) || getActiveSellerToken?.() !== token
       || reportsStarted >= PAGE_REPORT_LIMIT) return;
 
     reportsStarted++;
