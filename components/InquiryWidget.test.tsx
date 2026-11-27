@@ -249,6 +249,40 @@ describe('InquiryWidget', () => {
     expect(mocks.createInquiry).not.toHaveBeenCalled();
   });
 
+  it('keeps the question for the seller when sign-in completes while allAI finds no answer', async () => {
+    const firstRead = deferred<ReadableStreamReadResult<Uint8Array>>();
+    let reads = 0;
+    const reader = {
+      read: vi.fn(() => {
+        reads += 1;
+        return reads === 1 ? firstRead.promise : Promise.resolve({ done: true, value: undefined });
+      }),
+      cancel: vi.fn(),
+      releaseLock: vi.fn(),
+    };
+    fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+      .mockResolvedValueOnce({ status: 200, ok: true, body: { getReader: () => reader }, json: vi.fn() } as unknown as Response);
+    mocks.createInquiry.mockReturnValue(deferred<ConversationDetail>().promise);
+    const view = renderWidget();
+    typeQuestion('What are the join keys?');
+    await waitFor(() => expect(reader.read).toHaveBeenCalled());
+
+    mocks.auth.isAuthenticated = true;
+    view.rerender(<InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />);
+    await act(async () => {
+      firstRead.resolve({
+        done: false,
+        value: new TextEncoder().encode(`data: ${JSON.stringify({ text: 'Safe failure', type: 'safe_failure', outcome: 'no_matches' })}\n\n`),
+      });
+    });
+
+    expect(await screen.findByText('allAI couldn’t find a reliable answer in the public listing information.')).toBeTruthy();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('What are the join keys?');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to seller' }));
+    expect(mocks.createInquiry).toHaveBeenCalledTimes(1);
+    expect(mocks.createInquiry).toHaveBeenCalledWith('listing-123', 'What are the join keys?', true);
+  });
+
   it('targets the question heading so the guidance and sign-in link precede the input', () => {
     render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
     renderWidget();

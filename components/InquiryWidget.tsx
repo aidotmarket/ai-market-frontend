@@ -119,6 +119,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
   const [anonymousMessages, setAnonymousMessages] = useState<AnonymousInquiryMessage[]>([]);
   const [anonymousError, setAnonymousError] = useState<'error' | 'timeout' | null>(null);
   const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
+  // allAI had no qualifying answer: keep the question so it can go to the seller.
+  const [anonymousFallback, setAnonymousFallback] = useState(false);
   const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
   const [anonymousWaitElapsed, setAnonymousWaitElapsed] = useState(false);
   const [anonymousSubmissionInProgress, setAnonymousSubmissionInProgress] = useState(false);
@@ -204,6 +206,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
 
     setSubmissionError(null);
     setAnonymousError(null);
+    setAnonymousFallback(false);
 
     if (!isAuthenticated) {
       const trimmedQuestion = question.trim();
@@ -351,7 +354,12 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
         }
 
         if (mountedRef.current) {
-          setQuestion('');
+          if (receivedFallback) {
+            setQuestion(trimmedQuestion);
+            setAnonymousFallback(true);
+          } else {
+            setQuestion('');
+          }
           setAnonymousAnswerReturned(true);
         }
       } catch (error) {
@@ -361,7 +369,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
           && !(error instanceof Error && error.name === 'AbortError')
         ) {
           if (receivedFallback) {
-            setQuestion('');
+            setQuestion(trimmedQuestion);
+            setAnonymousFallback(true);
             setAnonymousAnswerReturned(true);
           } else {
             setAnonymousError('error');
@@ -475,7 +484,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
 
   const escalatedStatus = conversation?.status === 'escalated' || conversation?.status === 'awaiting_seller';
   const showAnonymousWaitNotice = anonymousSubmissionInProgress && anonymousWaitElapsed;
-  const showSellerButton = isAuthenticated && (hasSellerDraft || submissionError === QUESTION_SEND_FAILED || !!anonymousError);
+  const showSellerButton = isAuthenticated
+    && (hasSellerDraft || submissionError === QUESTION_SEND_FAILED || !!anonymousError || anonymousFallback);
   const publicInformationLinks = (schemaHref || documentationHref || sampleHref) && (
     <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
       {schemaHref && <a href={schemaHref} className="underline">{recovery.schema}</a>}
