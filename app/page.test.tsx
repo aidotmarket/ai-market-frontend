@@ -247,7 +247,12 @@ describe('homepage hero and descriptions', () => {
     const hero = within(screen.getByRole('heading', { level: 1 }).closest('section')!);
 
     expect(hero.getByText('Data marketplace for businesses')).toBeTruthy();
-    expect(hero.getByText(`${summary} Buyers can search for data or post a request. AI agents can help search and draft requests.`)).toBeTruthy();
+    expect(hero.getByRole('heading', { level: 1, name: "Where AI finds the data it's missing." })).toBeTruthy();
+    expect(hero.getByText('List your data once from your own storage. Listings are built for AI search to read, so buyers find you. Buyers can search, or post a request and let sellers come to them.')).toBeTruthy();
+    expect(hero.getByText('Free to list; 5% only when it sells.')).toBeTruthy();
+    expect(hero.getByText('Your listings are published in formats AI agents and AI search can read, so buyers can find you.')).toBeTruthy();
+    expect(hero.getByText('Found in AI search.')).toBeTruthy();
+    expect(hero.getByText("Listings are open to AI search and agents. A buyer's agent can find data and start a purchase; the buyer confirms and pays in the browser.")).toBeTruthy();
 
     const structuredData = container.querySelector('script[type="application/ld+json"]')!;
     expect(JSON.parse(structuredData.textContent!)).toEqual([
