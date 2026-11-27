@@ -31,13 +31,24 @@ export function supportedVersion(value: unknown): value is PresentationVersion {
 }
 const baseFields = ['presentation_version', 'rendered_html', 'render_hash'];
 const optionalFields = ['sample_files', 'approved_display_html', 'presentation_display_version'];
+const licenseDisplayFields = ['correction_id', 'correction_digest', 'provenance', 'license_label'];
 export const correctionFields = ['presentation_kind', 'listing_id', 'publication_id', 'listing_version_id', 'approval_id',
-  'original_render_hash', 'original_admitted_render_hash', 'correction_id', 'correction_digest', 'provenance', 'license_label'];
+  'original_render_hash', 'original_admitted_render_hash', ...licenseDisplayFields];
 // Public envelopes require binding IDs, but those IDs also occur in ordinary
 // saved reviews and signing bindings. Only correction-specific data is refused
 // at the original-evidence boundary.
-const correctionMarkers = ['presentation_kind', 'provenance', 'license_label', 'original_render_hash', 'original_admitted_render_hash',
-  'correction_id', 'correction_digest', 'license_display', 'public_presentation', 'approved_presentation'];
+const correctionMarkers = ['presentation_kind', 'original_render_hash', 'original_admitted_render_hash',
+  ...licenseDisplayFields, 'license_display', 'public_presentation', 'approved_presentation'];
+const originalPresentationFields = [...baseFields, ...optionalFields];
+const correctedPresentationFields = [...originalPresentationFields, ...correctionFields];
+const reservedFields = new Set([...correctedPresentationFields, ...correctionMarkers]);
+
+function hasMisplacedField(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  for (const key of reservedFields) {
+    if (key in value && !allowed.includes(key)) return true;
+  }
+  return false;
+}
 export function refusePlatformCorrection(value: unknown): void {
   if (!record(value) || correctionMarkers.some(key => key in value)) throw new Error('Original signing evidence required');
 }
@@ -47,7 +58,7 @@ export function refuseCorrectionFields(value: unknown): void {
 }
 export function readLicenseDisplay(value: unknown): LicenseDisplay | null {
   if (value == null) return null;
-  if (!record(value) || value.license_label !== CURRENT_LICENSE_LABEL ||
+  if (!record(value) || hasMisplacedField(value, licenseDisplayFields) || value.license_label !== CURRENT_LICENSE_LABEL ||
       value.provenance !== 'platform_license_correction' || typeof value.correction_id !== 'string' || !UUID.test(value.correction_id) ||
       typeof value.correction_digest !== 'string' || !HASH.test(value.correction_digest))
     throw new Error('Current licence display could not be verified');
@@ -82,9 +93,9 @@ export async function verifyPresentation(value: unknown, identity?: Presentation
   return value as unknown as PublicPresentation;
 }
 export async function verifyPublicPresentation(value: unknown, identity?: PresentationIdentity): Promise<PublicPresentation> {
-  if (!record(value) || (value.presentation_kind !== CORRECTION_KIND && correctionMarkers.some(key => key in value)))
-    throw new Error(presentationError);
-  const fields = [...baseFields, ...optionalFields, ...correctionFields];
+  if (!record(value)) throw new Error(presentationError);
+  const fields = value.presentation_kind === CORRECTION_KIND ? correctedPresentationFields : originalPresentationFields;
+  if (hasMisplacedField(value, fields)) throw new Error(presentationError);
   const projected = Object.fromEntries(fields.filter(key => key in value).map(key => [key, value[key]]));
   return verifyPresentation(projected, identity);
 }

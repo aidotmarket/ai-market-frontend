@@ -98,10 +98,11 @@ it('attributes VZ publish metadata neutrally while retaining its value and selle
   expect(html).not.toContain('from AIM Data');
 });
 
-it('shows the exact platform correction with existing attribution without mutating evidence', () => {
+it('shows the platform correction with additive metadata and preserves the original evidence', () => {
   const original = structuredClone(fixture.at_a_glance) as ListingSummary;
   const before = JSON.stringify(original);
-  const html = renderToStaticMarkup(<AtAGlance summary={original} licenseDisplay={fixture.license_display as LicenseDisplay} />);
+  const display = {...fixture.license_display, future_metadata: {enabled: true}} as LicenseDisplay;
+  const html = renderToStaticMarkup(<AtAGlance summary={original} licenseDisplay={display} />);
   expect(html).toContain('ai.market Standard Data Licence v1.1');
   expect(html.split(CORRECTION_NOTICE_BUYER)).toHaveLength(2);
   expect(html).not.toContain('provided by the seller');
@@ -116,7 +117,7 @@ it.each([
   {...fixture.license_display, license_label: 'ai.market Standard Data Licence v1.0'},
   {...fixture.license_display, correction_digest: 'invalid'},
   {...fixture.license_display, correction_id: 'invalid'},
-  {...fixture.license_display, unexpected: 'unreviewed'},
+  {...fixture.license_display, license_display: fixture.license_display, future_metadata: {enabled: true}},
 ])('retains original licence and attribution for absent or unsupported display %#', licenseDisplay => {
   const original = fixture.at_a_glance as ListingSummary;
   const html = renderToStaticMarkup(<AtAGlance summary={original} licenseDisplay={licenseDisplay as LicenseDisplay} />);

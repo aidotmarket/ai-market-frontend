@@ -33,10 +33,38 @@ describe('actual backend19ff184 original and corrected presentation readers',()=
     await expect(verifyCurrentListing({id: fixture.corrected.listing_id,
       approved_presentation: {...fixture.original, future_metadata: true}})).resolves.toBeUndefined();
   });
-  it('rejects correction markers in original public evidence even with additive fields', async () => {
-    const original = {...wire.public[0].original, future_metadata: true};
+  it('rejects correction and envelope fields in original public evidence with additive fields', async () => {
+    const {original, corrected} = wire.public[0];
+    const approved = {...original, future_metadata: true};
     for (const key of [...correctionFields, 'license_display', 'public_presentation', 'approved_presentation']) {
-      await expect(verifyPublicPresentation({...original, [key]: null})).rejects.toThrow();
+      await expect(verifyCurrentListing({id: corrected.listing_id, approved_presentation: {...approved, [key]: null}}))
+        .rejects.toThrow('The approved listing presentation could not be verified');
+    }
+  });
+  it.each(['license_display', 'public_presentation', 'approved_presentation'])(
+    'rejects a nested %s inside a corrected public presentation with additive fields', async key => {
+      const {corrected, license_display} = wire.public[2];
+      const listing = {id: corrected.listing_id, license_display,
+        approved_presentation: {...corrected, future_metadata: {enabled: true}}};
+      await expect(verifyCurrentListing(listing)).resolves.toBeUndefined();
+      await expect(verifyCurrentListing({...listing,
+        approved_presentation: {...listing.approved_presentation, [key]: null}}))
+        .rejects.toThrow('The approved listing presentation could not be verified');
+    },
+  );
+  it('accepts future metadata in a standalone licence display and rejects misplaced known fields', async () => {
+    const {corrected, license_display} = wire.public[2];
+    const display = {...license_display, future_metadata: {enabled: true}};
+    const listing = {id: corrected.listing_id, license: corrected.license_label, license_display: display};
+    await expect(verifyCurrentListing(listing)).resolves.toBeUndefined();
+    const misplaced = {
+      ...Object.fromEntries(Object.entries(corrected).filter(([key]) => !(key in license_display))),
+      sample_files: null, approved_display_html: null, presentation_display_version: null,
+      license_display: null, public_presentation: null, approved_presentation: null,
+    };
+    for (const [key, value] of Object.entries(misplaced)) {
+      await expect(verifyCurrentListing({...listing, license_display: {...display, [key]: value}}))
+        .rejects.toThrow('Current licence display could not be verified');
     }
   });
   it('requires every correction field and refuses unknown, null, partial, excess and malformed variants',async()=>{
