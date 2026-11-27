@@ -52,6 +52,59 @@ function request(id: string) {
 }
 
 describe('homepage listing grid', () => {
+  function listing(slug: string, displayName: string | null, title: string) {
+    return {
+      ...browseResponse.items[0],
+      id: slug,
+      slug,
+      title,
+      publisher: displayName === null ? null : { display_name: displayName },
+    };
+  }
+
+  async function featuredCardLinks(items: ReturnType<typeof listing>[]) {
+    fetchPublicListings.mockResolvedValueOnce({ ...browseResponse, items });
+    fetchFeaturedFeed.mockResolvedValueOnce(null);
+    fetchDataRequests.mockResolvedValueOnce({ items: [] });
+    const { default: LandingPage } = await import('./page');
+    render(await LandingPage());
+
+    const featured = screen.getByRole('heading', { name: 'Live on the marketplace' }).closest('section')!;
+    return within(featured).getAllByRole('heading', { level: 3 }).map(
+      (heading) => heading.closest('a')?.getAttribute('href'),
+    );
+  }
+
+  it('keeps the newest card for each publisher and title pair in response order', async () => {
+    const newest = { ...listing('newest', 'Publisher A', 'Sales'), published_at: '2026-11-26T00:00:00Z' };
+    const items = [
+      newest,
+      listing('other-publisher', 'Publisher B', 'Sales'),
+      { ...newest, id: 'older', slug: 'older', published_at: '2026-11-19T00:00:00Z' },
+      { ...listing('other-title', 'Publisher A', 'Returns'), published_at: '2026-11-18T00:00:00Z' },
+    ];
+
+    expect(await featuredCardLinks(items)).toEqual([
+      '/listings/newest', '/listings/other-publisher', '/listings/other-title',
+    ]);
+  });
+
+  it.each([
+    { publisher: null, title: 'Sales' },
+    { publisher: '', title: 'Sales' },
+    { publisher: ' ', title: 'Sales' },
+    { publisher: 'Publisher A', title: '' },
+    { publisher: 'Publisher A', title: ' ' },
+  ])('keeps both cards when the pair is incomplete (%j)', async ({ publisher, title }) => {
+    expect(await featuredCardLinks([listing('first', publisher, title), listing('second', publisher, title)]))
+      .toEqual(['/listings/first', '/listings/second']);
+  });
+
+  it('keeps distinct pairs that would collide when joined with a delimiter', async () => {
+    expect(await featuredCardLinks([listing('first', 'A:B', 'C'), listing('second', 'A', 'B:C')]))
+      .toEqual(['/listings/first', '/listings/second']);
+  });
+
   it('requests newest data listings and displays a public source reference', async () => {
     const listing = {
       ...browseResponse.items[0], slug: 'synthetic-reference', title: 'Synthetic public source dataset',
