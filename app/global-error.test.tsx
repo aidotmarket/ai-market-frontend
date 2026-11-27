@@ -1,27 +1,89 @@
 // @vitest-environment jsdom
 import { StrictMode } from 'react';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import DashboardLayout from './dashboard/layout';
 import GlobalError from './global-error';
-import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
+import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
+import { clearRootSellerCrashAccess } from '@/lib/seller-workspace-crash-access';
+import { useAuthStore } from '@/store/auth';
 
-const { usePathname, readAuth, hydrate } = vi.hoisted(() => ({
-  usePathname: vi.fn<() => string | null>(),
-  hydrate: vi.fn(),
-  readAuth: vi.fn(() => ({
-    token: 'test-token', isAuthenticated: true, hydrated: true, isLoading: false,
-    user: { role: 'seller', status: 'active' },
-  })),
+const { getCapabilities, logout, push } = vi.hoisted(() => ({
+  getCapabilities: vi.fn(),
+  logout: vi.fn(async () => {}),
+  push: vi.fn(),
 }));
-vi.mock('next/navigation', () => ({ usePathname }));
-vi.mock('@/store/auth', () => ({ useAuthStore: { getState: () => ({ ...readAuth(), hydrate }) } }));
+vi.mock('next/navigation', async importOriginal => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ push }),
+}));
+vi.mock('@/api/capabilities', () => ({ getCapabilities }));
+vi.mock('@/api/auth', () => ({ logout }));
+vi.mock('@/api/sellerGateways', () => ({ listSellerGateways: async () => [] }));
+vi.mock('@/api/sellerWorkspace', () => ({
+  getSellerWorkspaceCapabilities: async () => null,
+  isAWSConnectionAvailable: () => false,
+}));
+vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({ default: () => null }));
 
 const workspace = '/dashboard/seller-workspace';
+const privateRoute = '/support/mailbox-account';
 const fetchMock = vi.fn<typeof fetch>();
+const hydrate = vi.fn();
+
+function signIn(role: 'buyer' | 'seller' = 'buyer', id = 'synthetic-user') {
+  useAuthStore.setState({
+    user: { id, role, status: 'active' } as NonNullable<ReturnType<typeof useAuthStore.getState>['user']>,
+    token: 'synthetic-token', isAuthenticated: true, hydrated: true, isLoading: false, pendingTwoFactor: null,
+  });
+}
+
+function capability(status: string) {
+  return { seller: { persisted_status: status, effective_status: status } };
+}
+
+async function observeActiveSeller() {
+  signIn();
+  const layout = (pathname: string) => (
+    <PathnameContext.Provider value={pathname}>
+      <DashboardLayout><p>Workspace ready</p></DashboardLayout>
+    </PathnameContext.Provider>
+  );
+  const dashboard = render(layout(workspace));
+  await screen.findByText('Workspace ready');
+  return {
+    ...dashboard,
+    navigate: (pathname: string) => {
+      window.history.replaceState(null, '', pathname);
+      dashboard.rerender(layout(pathname));
+    },
+  };
+}
+
+function renderFallback(pathname: string | null = workspace) {
+  const container = document.implementation.createHTMLDocument();
+  function fallback(error: Error) {
+    return (
+      <StrictMode>
+        <PathnameContext.Provider value={pathname}>
+          <GlobalError error={error} />
+        </PathnameContext.Provider>
+      </StrictMode>
+    );
+  }
+  const view = render(fallback(new Error('synthetic root failure')), { container });
+  return {
+    ...view, container,
+    changeError: () => view.rerender(fallback(new Error('synthetic prop update'))),
+  };
+}
 
 beforeEach(() => {
-  readAuth.mockClear();
-  hydrate.mockClear();
+  window.history.replaceState(null, '', workspace);
+  useAuthStore.setState({ user: null, token: null, isAuthenticated: false, hydrated: false,
+    isLoading: false, pendingTwoFactor: null, hydrate: hydrate.mockClear() });
+  getCapabilities.mockReset().mockResolvedValue(capability('active'));
   vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
   vi.stubGlobal('fetch', fetchMock.mockReset().mockResolvedValue(new Response(null, { status: 204 })));
@@ -29,78 +91,107 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  clearRootSellerCrashAccess();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
-it('reports once under StrictMode and prop changes when the fallback has seller proof', async () => {
-  window.history.replaceState(null, '', workspace);
-  usePathname.mockReturnValue(workspace);
-  const container = document.implementation.createHTMLDocument();
-  const getCrashToken = () => 'test-token';
-  const fallback = (error: Error) => (
-    <StrictMode>
-      <SellerWorkspaceCrashAccess.Provider value={getCrashToken}>
-        <GlobalError error={error} />
-      </SellerWorkspaceCrashAccess.Provider>
-    </StrictMode>
-  );
-  const { rerender } = render(fallback(new Error('synthetic root failure')), { container });
-  expect(container.querySelector('h1')?.textContent).toBe('Something went wrong in Seller Workspace');
-  expect(container.querySelector('button')?.textContent).toBe('Reload page');
-  rerender(fallback(new Error('synthetic prop update')));
+it('reports once after the established dashboard observation outlives its provider', async () => {
+  const dashboard = await observeActiveSeller();
+  dashboard.unmount();
+  const fallback = renderFallback();
+  expect(fallback.container.querySelector('h1')?.textContent).toBe('Something went wrong in Seller Workspace');
+  expect(fallback.container.querySelector('button')?.textContent).toBe('Reload page');
+  fallback.changeError();
   await Promise.resolve();
   expect(fetchMock).toHaveBeenCalledOnce();
-  expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toMatchObject({
-    route: 'seller_workspace', step: 'root', error_name: 'Error', error_code: 'unknown', component_frames: [],
+  const [target, request] = fetchMock.mock.calls[0];
+  expect(target).toBe('https://api.ai.market/api/v1/seller-workspace/client-crash');
+  expect(request?.headers).toMatchObject({ Authorization: 'Bearer synthetic-token' });
+  expect(JSON.parse(request!.body as string)).toEqual({
+    schema_version: 1, route: 'seller_workspace', step: 'root', error_name: 'Error',
+    error_code: 'unknown', react_code: null, component_frames: [], build_revision: 'a'.repeat(40),
+    browser_family: expect.any(String), browser_major: null,
   });
+  expect(getCapabilities).toHaveBeenCalledOnce();
+  expect(hydrate).not.toHaveBeenCalled();
 });
 
 it.each([
-  ['/support/mailbox-account', '/support/mailbox-account'],
+  [privateRoute, privateRoute],
   ['/confirm/synthetic', workspace],
   ['/dashboard/orders', '/dashboard/orders'],
   [workspace, '/dashboard/orders'],
   [workspace, null],
-])('uses ordinary Next error presentation without reporting from %s with router path %s', async (browserPath, routerPath) => {
+])('discards the established proof on %s with router path %s', async (browserPath, routerPath) => {
+  (await observeActiveSeller()).unmount();
   window.history.replaceState(null, '', browserPath);
-  usePathname.mockReturnValue(routerPath);
-  const container = document.implementation.createHTMLDocument();
-  render(
-    <SellerWorkspaceCrashAccess.Provider value={() => 'test-token'}>
-      <GlobalError error={new Error('synthetic root failure')} />
-    </SellerWorkspaceCrashAccess.Provider>,
-    { container },
-  );
-  expect(container.querySelector('h2')?.textContent).toContain('Application error');
-  expect(container.querySelector('button')).toBeNull();
+  const fallback = renderFallback(routerPath);
+  expect(fallback.container.querySelector('h2')?.textContent).toContain('Application error');
+  expect(fallback.container.querySelector('button')).toBeNull();
+  fallback.unmount();
+  window.history.replaceState(null, '', workspace);
+  renderFallback();
   await Promise.resolve();
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it('keeps the root fallback usable and silent outside the capability provider even with a signed-in seller', async () => {
-  window.history.replaceState(null, '', workspace);
-  usePathname.mockReturnValue(workspace);
-  const container = document.implementation.createHTMLDocument();
-  render(<GlobalError error={new Error()} />, { container });
+it.each(['logout', 'account', 'generation', 'token', 'pre-auth', 'capability'] as const)(
+  'stays silent when %s invalidates an established observation after dashboard teardown', async change => {
+    (await observeActiveSeller()).unmount();
+    if (change === 'logout') await useAuthStore.getState().logout();
+    if (change === 'account') signIn('buyer', 'other-synthetic-user');
+    if (change === 'generation') advanceAuthSessionOwner(false);
+    if (change === 'token') useAuthStore.setState({ token: null });
+    if (change === 'pre-auth') useAuthStore.setState({ pendingTwoFactor: { preAuthToken: 'synthetic-challenge', expiresAt: 0 } });
+    if (change === 'capability') window.dispatchEvent(new Event('capabilities:changed'));
+    signIn();
+    const fallback = renderFallback();
+    expect(fallback.container.querySelector('button')?.textContent).toBe('Reload page');
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getCapabilities).toHaveBeenCalledOnce();
+    expect(hydrate).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['pending', 'provisioning', 'suspended'] as const)(
+  'stays silent during capability revalidation (%s)', async status => {
+    const dashboard = await observeActiveSeller();
+    if (status === 'pending') getCapabilities.mockReturnValueOnce(new Promise(() => {}));
+    else getCapabilities.mockResolvedValueOnce(capability(status));
+    await act(async () => { window.dispatchEvent(new Event('capabilities:changed')); });
+    dashboard.unmount();
+    renderFallback();
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getCapabilities).toHaveBeenCalledTimes(2);
+  },
+);
+
+it('does not reattach a revoked observation when the same dashboard returns to Workspace', async () => {
+  const dashboard = await observeActiveSeller();
+  act(() => {
+    useAuthStore.setState({ token: null });
+    useAuthStore.setState({ token: 'synthetic-token' });
+  });
+  dashboard.navigate('/dashboard/orders');
+  dashboard.navigate(workspace);
+  dashboard.unmount();
+  renderFallback();
   await Promise.resolve();
-  expect(container.querySelector('h1')?.textContent).toBe('Something went wrong in Seller Workspace');
   expect(fetchMock).not.toHaveBeenCalled();
-  expect(readAuth).not.toHaveBeenCalled();
+  expect(getCapabilities).toHaveBeenCalledOnce();
+});
+
+it('never starts a read for a raw seller role or reports an old fallback when proof appears', async () => {
+  signIn('seller');
+  const fallback = renderFallback();
+  expect(fallback.container.querySelector('button')?.textContent).toBe('Reload page');
+  expect(getCapabilities).not.toHaveBeenCalled();
+  await observeActiveSeller();
+  fallback.changeError();
+  await Promise.resolve();
+  expect(fetchMock).not.toHaveBeenCalled();
   expect(hydrate).not.toHaveBeenCalled();
-});
-
-it('does not report an unproven root failure after proof appears', async () => {
-  window.history.replaceState(null, '', workspace);
-  usePathname.mockReturnValue(workspace);
-  const container = document.implementation.createHTMLDocument();
-  const fallback = (token: string | null) => (
-    <SellerWorkspaceCrashAccess.Provider value={token ? () => token : null}>
-      <GlobalError error={new Error()} />
-    </SellerWorkspaceCrashAccess.Provider>
-  );
-  const { rerender } = render(fallback(null), { container });
-  rerender(fallback('test-token'));
-  await Promise.resolve();
-  expect(fetchMock).not.toHaveBeenCalled();
 });

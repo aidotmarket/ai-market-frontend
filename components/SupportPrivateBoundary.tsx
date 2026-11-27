@@ -1,5 +1,7 @@
 "use client";
+import { useLayoutEffect } from 'react';
 import {useHandoffBoundary} from '@/lib/vectoraizHandoff';
+import { discardRootSellerCrashAccessOutside } from '@/lib/seller-workspace-crash-access';
 import { usePathname } from 'next/navigation';
 import { PendingProfileChanges } from '@/components/PendingProfileChanges';
 import { Providers } from '@/components/Providers';
@@ -13,6 +15,7 @@ import AllAIPanel from '@/components/allai/AllAIPanel';
 export function SupportPrivateBoundary({ children }: { children: React.ReactNode }) {
   useHandoffBoundary();
   const path = usePathname();
+  useLayoutEffect(() => { discardRootSellerCrashAccessOutside(path); }, [path]);
   const route = path?.replace(/\/$/, '');
   if (path === null || route === '/support/mailbox-account') return <>{children}</>;
   const dockOnDesktop = route === '/support' || route === '/pricing' || route === '/sell-data';

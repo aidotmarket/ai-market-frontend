@@ -9,8 +9,7 @@ const PANEL_STEPS = {
 } as const;
 export type WorkspaceCrashPanel = keyof typeof PANEL_STEPS;
 
-// Provided by the dashboard's existing capability read. The global fallback
-// normally renders outside that tree and receives no session proof.
+// Panels receive the dashboard's current capability proof in their own tree.
 export const SellerWorkspaceCrashAccess = createContext<(() => string | null) | null>(null);
 
 const WORKSPACE_PATH = '/dashboard/seller-workspace';

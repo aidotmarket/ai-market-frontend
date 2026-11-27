@@ -1,23 +1,24 @@
 'use client';
 
-import { useContext, useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import DefaultGlobalError from 'next/dist/client/components/builtin/global-error';
-import { isSellerWorkspacePath, reportSellerWorkspaceCrash, SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
+import { isSellerWorkspacePath, reportSellerWorkspaceCrash } from '@/lib/seller-workspace-crash';
+import { getRootSellerCrashAccess } from '@/lib/seller-workspace-crash-access';
 
 export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
   const pathname = usePathname();
   const workspace = isSellerWorkspacePath(pathname);
-  const getCrashToken = useContext(SellerWorkspaceCrashAccess);
   const handled = useRef(false);
 
   useLayoutEffect(() => {
+    const getCrashToken = getRootSellerCrashAccess(pathname);
     if (handled.current) return;
     handled.current = true;
-    if (getCrashToken && workspace && isSellerWorkspacePath(pathname)) {
+    if (getCrashToken && workspace) {
       void reportSellerWorkspaceCrash('root', error, getCrashToken);
     }
-  }, [error, getCrashToken, pathname, workspace]);
+  }, [error, pathname, workspace]);
 
   if (!workspace) return <DefaultGlobalError error={error} />;
 
