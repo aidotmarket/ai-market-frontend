@@ -26,6 +26,7 @@ const feeCards = [
     audience: 'Buyers',
     headline: <VersionedTermsCopy legacy="Pay the listing price plus transaction costs." terms12={CARD_BUYER_HEADLINE} />,
     details: [
+      'Listing prices are one-time payments.',
       'Buyers do not pay the 5% marketplace commission on top of the listing price.',
       <VersionedTermsCopy legacy="Buyers pay the applicable payment-provider costs, including Stripe, stablecoin, or escrow fees." terms12={CARD_BUYER_DETAIL} />,
       'Applicable sales tax, VAT, or similar tax is added where required.',
