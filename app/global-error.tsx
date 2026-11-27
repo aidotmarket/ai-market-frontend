@@ -12,11 +12,11 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
   const handled = useRef(false);
 
   useLayoutEffect(() => {
-    const getCrashToken = getRootSellerCrashAccess(pathname);
+    const getCrashProof = getRootSellerCrashAccess(pathname);
     if (handled.current) return;
     handled.current = true;
-    if (getCrashToken && workspace) {
-      void reportSellerWorkspaceCrash('root', error, getCrashToken);
+    if (getCrashProof && workspace) {
+      void reportSellerWorkspaceCrash('root', error, getCrashProof);
     }
   }, [error, pathname, workspace]);
 

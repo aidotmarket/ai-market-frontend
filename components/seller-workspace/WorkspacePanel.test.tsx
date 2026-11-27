@@ -128,7 +128,7 @@ it('reports all three boundary identities, including an error in a hidden panel,
   const MinifiedPanel = a;
 
   const panels = (view: 'data' | 'license' | 'listing', broken: boolean) => (
-    <SellerWorkspaceCrashAccess.Provider value={() => 'test-token'}>
+    <SellerWorkspaceCrashAccess.Provider value={() => ({ token: 'test-token' })}>
       <WorkspacePanel active={view === 'data'} showReloadOnError crashPanel="SavedWorkspaceData"><MinifiedPanel broken={broken} /></WorkspacePanel>
       <WorkspacePanel active={view === 'license'} showReloadOnError crashPanel="SavedLicenseStep"><MinifiedPanel broken={broken} /></WorkspacePanel>
       <WorkspacePanel active={view === 'listing'} showReloadOnError crashPanel="SavedListingEditor"><MinifiedPanel broken={broken} /></WorkspacePanel>

@@ -8,9 +8,10 @@ const PANEL_STEPS = {
   SavedListingEditor: 'listing',
 } as const;
 export type WorkspaceCrashPanel = keyof typeof PANEL_STEPS;
+export type SellerWorkspaceCrashProof = () => { token: string; draft?: { uuid: string } } | null;
 
 // Panels receive the dashboard's current capability proof in their own tree.
-export const SellerWorkspaceCrashAccess = createContext<(() => string | null) | null>(null);
+export const SellerWorkspaceCrashAccess = createContext<SellerWorkspaceCrashProof | null>(null);
 
 const WORKSPACE_PATH = '/dashboard/seller-workspace';
 const API_ORIGIN = 'https://api.ai.market';
@@ -24,6 +25,11 @@ const ERROR_PATTERNS = [
   ['ReferenceError', 'not_defined', /^(?:Can't find variable: |[^\r\n]+ is not defined\b)/],
 ] as const;
 let reportsStarted = 0;
+
+export function isCanonicalDraftUuid(value: unknown): value is string {
+  return typeof value === 'string' && value.length === 36 &&
+    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
+}
 
 export function isSellerWorkspacePath(pathname: string | null): boolean {
   return pathname === WORKSPACE_PATH && typeof window !== 'undefined' && window.location.pathname === WORKSPACE_PATH;
@@ -62,7 +68,7 @@ function browserDetails() {
 export async function reportSellerWorkspaceCrash(
   panel: WorkspaceCrashPanel | 'root',
   error: unknown,
-  getActiveSellerToken: (() => string | null) | null,
+  getProof: SellerWorkspaceCrashProof | null,
 ): Promise<void> {
   try {
     const build_revision = process.env.FRONTEND_BUILD_REVISION;
@@ -71,11 +77,11 @@ export async function reportSellerWorkspaceCrash(
       || (apiOrigin !== API_ORIGIN && apiOrigin !== `${API_ORIGIN}/`)
       || build_revision?.length !== 40 || !/^[a-f0-9]{40}$/.test(build_revision)) return;
 
-    const token = getActiveSellerToken?.();
-    if (!token) return;
+    const proof = getProof?.();
+    if (!proof?.token) return;
 
     if (panel !== 'root' && !Object.hasOwn(PANEL_STEPS, panel)) return;
-    const body = JSON.stringify({
+    const fields = {
       schema_version: 1,
       route: 'seller_workspace',
       step: panel === 'root' ? 'root' : PANEL_STEPS[panel],
@@ -85,12 +91,16 @@ export async function reportSellerWorkspaceCrash(
       component_frames: panel === 'root' ? [] : ['WorkspacePanel', panel],
       build_revision,
       ...browserDetails(),
-    });
+    };
 
     // Let the fallback commit and recheck route and session before dispatch.
     await Promise.resolve();
-    if (!isSellerWorkspacePath(WORKSPACE_PATH) || getActiveSellerToken?.() !== token
-      || reportsStarted >= PAGE_REPORT_LIMIT) return;
+    if (!isSellerWorkspacePath(WORKSPACE_PATH) || reportsStarted >= PAGE_REPORT_LIMIT) return;
+    const current = getProof?.();
+    if (current?.token !== proof.token) return;
+    // A pointer proven only before or only after the fallback commit is omitted.
+    const draftUuid = proof.draft === current.draft ? proof.draft?.uuid : undefined;
+    const body = JSON.stringify({ ...fields, ...(isCanonicalDraftUuid(draftUuid) ? { draft_uuid: draftUuid } : {}) });
 
     reportsStarted++;
     const controller = new AbortController();
@@ -98,7 +108,7 @@ export async function reportSellerWorkspaceCrash(
     try {
       await fetch(CRASH_ENDPOINT, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${proof.token}`, 'Content-Type': 'application/json' },
         body,
         credentials: 'omit',
         referrerPolicy: 'no-referrer',

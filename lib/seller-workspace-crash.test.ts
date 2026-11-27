@@ -3,12 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const revision = 'a'.repeat(40);
 const workspace = '/dashboard/seller-workspace';
+const draftUuid = '11111111-aaaa-4333-8444-555555555555';
 const fetchMock = vi.fn<typeof fetch>();
-const getCrashToken = vi.fn<() => string | null>();
+const getCrashToken = vi.fn<import('./seller-workspace-crash').SellerWorkspaceCrashProof>();
 
 beforeEach(() => {
   vi.resetModules();
-  getCrashToken.mockReset().mockReturnValue('test-token');
+  getCrashToken.mockReset().mockReturnValue({ token: 'test-token' });
   vi.stubEnv('FRONTEND_BUILD_REVISION', revision);
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
   vi.stubGlobal('fetch', fetchMock.mockReset().mockResolvedValue(new Response(null, { status: 204 })));
@@ -95,7 +96,7 @@ it('requires active seller proof, an exact revision and the first-party API conf
   await reportSellerWorkspaceCrash('root', new Error(), null);
   getCrashToken.mockReturnValue(null);
   await report();
-  getCrashToken.mockReturnValue('test-token');
+  getCrashToken.mockReturnValue({ token: 'test-token' });
   vi.stubEnv('FRONTEND_BUILD_REVISION', `${revision}\n`);
   await report();
   vi.stubEnv('FRONTEND_BUILD_REVISION', revision.toUpperCase());
@@ -112,15 +113,37 @@ it('drops an event when proof, token or browser route changes before dispatch', 
   const proofChanged = report();
   getCrashToken.mockReturnValue(null);
   await proofChanged;
-  getCrashToken.mockReturnValue('test-token');
+  getCrashToken.mockReturnValue({ token: 'test-token' });
   const tokenChanged = report();
-  getCrashToken.mockReturnValue('replacement-token');
+  getCrashToken.mockReturnValue({ token: 'replacement-token' });
   await tokenChanged;
   const routeChanged = report();
   window.history.replaceState(null, '', '/support/mailbox-account');
   await routeChanged;
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+it.each([null, { uuid: draftUuid }, { uuid: '99999999-aaaa-4333-8444-555555555555' }])(
+  'omits a draft observation that changes before dispatch (%#)', async draft => {
+    const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
+    getCrashToken.mockReturnValue({ token: 'test-token', draft: { uuid: draftUuid } });
+    const report = reportSellerWorkspaceCrash('SavedListingEditor', new Error(), getCrashToken);
+    getCrashToken.mockReturnValue({ token: 'test-token', draft: draft ?? undefined });
+    await report;
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).not.toHaveProperty('draft_uuid');
+  },
+);
+
+it.each([draftUuid.toUpperCase(), `${draftUuid}\n`, draftUuid.replaceAll('-', ''), `{${draftUuid}}`])(
+  'omits a noncanonical UUID (%#)', async uuid => {
+    const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');
+    getCrashToken.mockReturnValue({ token: 'test-token', draft: { uuid } });
+    await reportSellerWorkspaceCrash('root', new Error(), getCrashToken);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).not.toHaveProperty('draft_uuid');
+  },
+);
 
 it.each([401, 429, 500])('discards HTTP %s without retry, refresh, auth changes or logging', async status => {
   const { reportSellerWorkspaceCrash } = await import('./seller-workspace-crash');

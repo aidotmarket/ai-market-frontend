@@ -27,13 +27,13 @@ export function WorkspacePanel({ active, children, showReloadOnError = false, cr
   showReloadOnError?: boolean;
   crashPanel?: WorkspaceCrashPanel;
 }) {
-  const getCrashToken = useContext(SellerWorkspaceCrashAccess);
+  const getCrashProof = useContext(SellerWorkspaceCrashAccess);
   const [visited, setVisited] = useState(active);
   if (active && !visited) setVisited(true);
   const content = showReloadOnError ? (
     <ErrorBoundary fallback={<PanelReloadFallback />} logErrors={false}
       onError={crashPanel ? (error) => {
-        void reportSellerWorkspaceCrash(crashPanel, error, getCrashToken);
+        void reportSellerWorkspaceCrash(crashPanel, error, getCrashProof);
       } : undefined}>
       {children}
     </ErrorBoundary>

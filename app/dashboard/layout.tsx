@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
-import { clearRootSellerCrashAccess, getCurrentSellerSessionToken, observeRootSellerCrashAccess } from '@/lib/seller-workspace-crash-access';
+import { clearRootSellerCrashAccess, getSellerWorkspaceCrashProof, observeRootSellerCrashAccess } from '@/lib/seller-workspace-crash-access';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
   getSellerWorkspaceCapabilities,
@@ -111,8 +111,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isSellerActive = capabilitiesResolved && current.sellerStatus === 'active';
   // Navigation may keep a ready view during revalidation to preserve edits.
   // Reporting requires proof from the current request and authenticated session.
-  const getCrashToken = pathname === '/dashboard/seller-workspace' && isSellerActive
-    ? () => request.current === current.version ? getCurrentSellerSessionToken(current.session) : null
+  const getCrashProof = pathname === '/dashboard/seller-workspace' && isSellerActive
+    ? () => request.current === current.version ? getSellerWorkspaceCrashProof(current.session) : null
     : null;
   const crashSession = isSellerActive ? current.session : null;
   const crashVersion = isSellerActive ? current.version : null;
@@ -268,7 +268,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-6xl mx-auto">
-            <SellerWorkspaceCrashAccess.Provider value={getCrashToken}>
+            <SellerWorkspaceCrashAccess.Provider value={getCrashProof}>
               {children}
             </SellerWorkspaceCrashAccess.Provider>
           </div>
