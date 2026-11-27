@@ -515,15 +515,15 @@ it('shows readable unpublish readiness guidance with a seller setup link', async
   expect(screen.getByRole('link', { name: 'Finish seller setup' }).getAttribute('href')).toBe('/dashboard');
 });
 
-it('dashboard_unpublish_string_detail', async () => {
+it('tells the seller to wait until active orders are resolved before changing the listing', async () => {
   expect(await rejectListingAction({ detail: 'This listing has active orders.' }))
-    .toBe(LISTING_ACTION_FALLBACK);
+    .toBe('This listing has active orders. Wait until those orders are resolved before changing the listing.');
   expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
 });
 
 it.each([{}, [], null, '', '  ', 42, '<img src=x onerror=alert(1)>', '{"code":"unknown"}', '[object Object]'])
-('dashboard_unpublish_malformed_detail_uses_fallback: %j', async detail => {
-  expect(await rejectListingAction({ detail })).toBe(LISTING_ACTION_FALLBACK);
+('uses fixed refusal copy for unpublish conflicts with malformed detail: %j', async detail => {
+  expect(await rejectListingAction({ detail })).toBe("This listing can't be updated. Contact support if you need help.");
   expect(screen.queryByRole('link', { name: LISTING_ACTION_WORKSPACE })).toBeNull();
 });
 

@@ -3,6 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EditListingPage from './page';
+import { ToastProvider, useToast } from '@/components/Toast';
+import { ACTION_AUTH_REFRESH } from '@/lib/action-auth-error';
 import { LISTING_ACTION_FALLBACK } from '@/lib/listing-action-error';
 
 const routerPush = vi.hoisted(() => vi.fn());
@@ -29,8 +31,9 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/api/listings', () => listingsApi);
-vi.mock('@/components/Toast', () => ({
-  useToast: () => ({ toast }),
+vi.mock('@/components/Toast', async importOriginal => ({
+  ...await importOriginal<typeof import('@/components/Toast')>(),
+  useToast: vi.fn(() => ({ toast })),
 }));
 vi.mock('@/components/listings/SellerShareControls', () => ({
   default: () => <div data-testid="seller-share-controls" />,
@@ -61,6 +64,7 @@ describe('EditListingPage', () => {
 
   afterEach(() => {
     cleanup();
+    vi.mocked(useToast).mockReset();
     vi.clearAllMocks();
   });
 
@@ -74,6 +78,29 @@ describe('EditListingPage', () => {
     await waitFor(()=>expect(toast).toHaveBeenCalledWith('You already have a listing draft in progress. Open Seller Workspace to finish it before starting another.','error'));
     expect(listingsApi.updateListing).toHaveBeenCalledOnce();
     expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('Amended description');
+  });
+
+  it.each([
+    [422, [{ loc: ['body', 'description'], msg: 'Synthetic description validation diagnostic', type: 'value_error' }],
+      'Check the listing details and try again.'],
+    [401, 'Synthetic authentication diagnostic', ACTION_AUTH_REFRESH],
+  ])('shows fixed Save Draft guidance for HTTP %i and keeps the edit available', async (status, detail, message) => {
+    const { useToast: useActualToast } = await vi.importActual<typeof import('@/components/Toast')>('@/components/Toast');
+    vi.mocked(useToast).mockImplementation(useActualToast);
+    listingsApi.getListing.mockResolvedValue(baseListing);
+    listingsApi.updateListing.mockRejectedValueOnce({ response: { status, data: { detail } } });
+    render(<ToastProvider><EditListingPage /></ToastProvider>);
+
+    const description = await screen.findByLabelText<HTMLTextAreaElement>('Description');
+    fireEvent.change(description, { target: { value: 'Amended description' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    expect(within(await screen.findByRole('alert')).getByText(message)).toBeTruthy();
+    expect(description.value).toBe('Amended description');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save Draft' }).disabled).toBe(false);
+    expect(listingsApi.updateListing).toHaveBeenCalledExactlyOnceWith(
+      'listing-1', expect.objectContaining({ description: 'Amended description' }),
+    );
   });
 
   it.each(['Unpublish', 'Publish', 'Save Draft'])('maps %s readiness failures to a readable toast and setup link', async action => {
