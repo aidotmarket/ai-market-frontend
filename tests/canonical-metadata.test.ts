@@ -42,6 +42,13 @@ const publicPages = [
 ] as const;
 
 describe('route canonical metadata', () => {
+  it('uses the homepage hero title as the root default', () => {
+    expect(root.title).toEqual({
+      default: "ai.market - Where AI finds the data it's missing",
+      template: '%s | ai.market',
+    });
+  });
+
   it('does not inherit a homepage canonical on a child without alternates', () => {
     expect(canonical({ title: 'Child route' })).toBeUndefined();
     expect(root.metadataBase?.href).toBe('https://ai.market/');

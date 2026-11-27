@@ -280,14 +280,17 @@ describe('homepage hero and descriptions', () => {
     expect(container.textContent).not.toMatch(/non-custodial B2B (?:data )?marketplace/i);
   });
 
-  it('uses a consistent, cloud-first description for search and social', async () => {
+  it('uses the homepage hero messaging for search and social metadata', async () => {
     const { metadata } = await import('./page');
-    const description = `${summary} Sellers can list from their own AWS S3 or Cloudflare R2 bucket, or host files on their own servers with the AIM Data Gateway. Buyers can search for data or post a request.`;
+    const title = "ai.market — Where AI finds the data it's missing";
+    const description = 'List your data once from your own storage. Listings are built for AI search to read, so buyers find you. Free to list; 5% only when it sells.';
 
     expect(metadata.description).toBe(description);
     expect(metadata.openGraph?.description).toBe(description);
     expect(metadata.twitter?.description).toBe(description);
-    expect(metadata.title).toEqual({ absolute: 'ai.market — Sell data without giving it away' });
+    expect(metadata.title).toEqual({ absolute: title });
+    expect(metadata.openGraph?.title).toBe(title);
+    expect(metadata.twitter?.title).toBe(title);
     expect(metadata.alternates?.canonical).toBe('/');
   });
 

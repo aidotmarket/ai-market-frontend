@@ -22,14 +22,14 @@ import type { DataRequestListItem } from '@/types';
 
 const marketplaceSummary =
   'Businesses buy and sell data on ai.market. Sellers keep their data in storage they control. Buyers download purchased files directly from the seller.';
-const homepageDescription = `${marketplaceSummary} Sellers can list from their own AWS S3 or Cloudflare R2 bucket, or host files on their own servers with the AIM Data Gateway. Buyers can search for data or post a request.`;
+const homepageDescription = 'List your data once from your own storage. Listings are built for AI search to read, so buyers find you. Free to list; 5% only when it sells.';
 
 export const metadata: Metadata = {
   alternates: { canonical: '/' },
-  title: { absolute: 'ai.market — Sell data without giving it away' },
+  title: { absolute: "ai.market — Where AI finds the data it's missing" },
   description: homepageDescription,
   openGraph: {
-    title: 'ai.market — Sell data without giving it away',
+    title: "ai.market — Where AI finds the data it's missing",
     description: homepageDescription,
     url: 'https://ai.market',
     siteName: 'ai.market',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ai.market — Sell data without giving it away',
+    title: "ai.market — Where AI finds the data it's missing",
     description: homepageDescription,
     images: ['/og/home.png'],
   },
