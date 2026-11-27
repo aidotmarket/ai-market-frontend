@@ -1,7 +1,7 @@
 'use client';
 
 import { customerRefusal, INQUIRY_REFUSALS, INQUIRY_UNAVAILABLE, customerActionError } from '@/lib/customerMessages';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import { authSessionIdentity, useAuthStore } from '@/store/auth';
 import { useToast } from '@/components/Toast';
@@ -172,6 +172,24 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
       anonymousAbortRef.current = null;
     };
   }, [clearAnonymousAttemptTimers]);
+
+  // When a signed-in account leaves (sign-out or A -> B), retire any pending
+  // anonymous attempt so its deadline or stream end cannot restore the earlier
+  // question for the next account. Anonymous -> first sign-in keeps the handoff.
+  const previousVisitOwnerRef = useRef(renderedVisit.owner);
+  useLayoutEffect(() => {
+    const previousOwner = previousVisitOwnerRef.current;
+    previousVisitOwnerRef.current = renderedVisit.owner;
+    if (previousOwner === null || previousOwner === renderedVisit.owner) return;
+    anonymousAttemptRef.current += 1;
+    clearAnonymousAttemptTimers();
+    anonymousAbortRef.current?.value.abort();
+    anonymousAbortRef.current = null;
+    setAnonymousSubmissionInProgress(false);
+    setAnonymousWaitElapsed(false);
+    setAnonymousFallback(false);
+    setSubmitting(false);
+  }, [renderedVisit, clearAnonymousAttemptTimers]);
 
   const preserveAnonymousDraft = useCallback(() => {
     const draft = question.trim() ? question : anonymousSubmittedQuestionRef.current;

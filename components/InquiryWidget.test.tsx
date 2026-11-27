@@ -322,6 +322,50 @@ describe('InquiryWidget', () => {
     }
   });
 
+  it('does not hand an earlier question to a different account after the deadline', async () => {
+    vi.useFakeTimers();
+    const originalUser = mocks.auth.user;
+    const originalToken = mocks.auth.token;
+    try {
+      let reads = 0;
+      const reader = {
+        read: vi.fn(() => {
+          reads += 1;
+          return reads === 1
+            ? Promise.resolve({
+              done: false,
+              value: new TextEncoder().encode(`data: ${JSON.stringify({ text: 'Safe failure', type: 'safe_failure', outcome: 'no_matches' })}\n\n`),
+            })
+            : new Promise<ReadableStreamReadResult<Uint8Array>>(() => {});
+        }),
+        cancel: vi.fn(),
+        releaseLock: vi.fn(),
+      };
+      fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
+        .mockResolvedValueOnce({ status: 200, ok: true, body: { getReader: () => reader }, json: vi.fn() } as unknown as Response);
+      const view = renderWidget();
+      typeQuestion('What are the join keys?');
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(reads).toBeGreaterThanOrEqual(2);
+
+      const rerender = () => view.rerender(<InquiryWidget listingId="listing-123" listingSlug="weather-observations" listingTitle="Weather Observations" />);
+      mocks.auth.isAuthenticated = true;
+      rerender();
+      mocks.auth.user = { id: 'second-account' };
+      mocks.auth.token = 'synthetic-second';
+      rerender();
+      await act(async () => { await vi.advanceTimersByTimeAsync(45_000); });
+
+      expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+      expect(screen.queryByRole('button', { name: 'Send to seller' })).toBeNull();
+      expect(mocks.createInquiry).not.toHaveBeenCalled();
+    } finally {
+      mocks.auth.user = originalUser;
+      mocks.auth.token = originalToken;
+      vi.useRealTimers();
+    }
+  });
+
   it('targets the question heading so the guidance and sign-in link precede the input', () => {
     render(<ListingPurchaseAdvisory price={10} scanFindings={null} />);
     renderWidget();
