@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const owner = user?.id;
   const request = useRef(0);
+  const dashboardMount = useRef({});
   const [snapshot, setSnapshot] = useState<CapabilitySnapshot | null>(null);
 
   const refreshCapabilities = useCallback(async () => {
@@ -116,11 +117,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const getCrashProof = pathname === '/dashboard/seller-workspace' && isSellerActive
     ? () => request.current === current.version ? getSellerWorkspaceCrashProof(current.session) : null
     : null;
-  const crashSession = isSellerActive ? current.session : null;
   const crashVersion = isSellerActive ? current.version : null;
-  useLayoutEffect(() => {
-    observeRootSellerCrashAccess(pathname, crashVersion === request.current ? crashSession : null);
-  }, [crashSession, crashVersion, pathname]);
   const sellerWorkspaceAvailable = current?.workspace === true;
   const gatewaysAvailable = current?.gateways === true;
   // The licence-record endpoint authorizes the recorded buyer and seller.
@@ -151,6 +148,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ownerAdmission?.generation === ownerGeneration ? ownerAdmission.result : undefined;
   const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
   const routeReady = authenticated && (allowsSignedInUsers || isSeller || ownerAccess === 'allowed');
+  const visitSession = routeReady ? current?.session ?? null : null;
+  useLayoutEffect(() => {
+    observeRootSellerCrashAccess(pathname, dashboardMount.current, visitSession, crashVersion === request.current);
+  }, [crashVersion, pathname, visitSession]);
 
   useEffect(() => {
     if (isLoading || !hydrated) return;

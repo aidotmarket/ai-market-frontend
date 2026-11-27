@@ -32,9 +32,13 @@ function getCurrentSellerSessionToken(session: SellerSession): string | null {
     !auth.pendingTwoFactor ? auth.token : null;
 }
 
-type WorkspaceVisit = { pendingSourceReads: number };
-type CrashObservation = {
+type WorkspaceVisit = {
   pathname: string;
+  dashboardMount: object;
+  session: SellerSession;
+  pendingSourceReads: number;
+};
+type CrashObservation = {
   session: SellerSession;
   visit: WorkspaceVisit;
   getProof: SellerWorkspaceCrashProof;
@@ -63,7 +67,7 @@ export function discardRootSellerCrashAccessOutside(pathname: string | null) {
 export function getSellerWorkspaceCrashProof(session: SellerSession) {
   const token = getCurrentSellerSessionToken(session);
   if (!token) return null;
-  const draft = rootAccess?.session === session && rootAccess.visit.pendingSourceReads === 0 && isSellerWorkspacePath(rootAccess.pathname)
+  const draft = rootAccess?.session === session && rootAccess.visit.pendingSourceReads === 0 && isSellerWorkspacePath(rootAccess.visit.pathname)
     ? rootAccess.draft : undefined;
   return { token, draft };
 }
@@ -96,11 +100,10 @@ export function checkSellerWorkspaceCrashDraft() {
 }
 
 export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | null) {
-  const access = rootAccess;
-  if (!access?.getProof()) return;
+  const visit = workspaceVisit;
+  if (!visit || !isSellerWorkspacePath(visit.pathname) || !getCurrentSellerSessionToken(visit.session)) return;
   // An outstanding source read can contradict a later draft read in this visit,
-  // including when the dashboard replaces its capability snapshot in between.
-  const { visit } = access;
+  // even when it starts while capability revalidation has retired crash proof.
   visit.pendingSourceReads++;
   return (response?: { current_draft_id: unknown }) => {
     visit.pendingSourceReads--;
@@ -115,22 +118,25 @@ export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | n
   };
 }
 
-// The dashboard publishes its completed active capability observation here.
-// Next replaces that tree on a root crash, so disposal is tied to the proof.
-export function observeRootSellerCrashAccess(pathname: string | null, session: SellerSession | null) {
-  if (pathname === null || !isSellerWorkspacePath(pathname)) {
+// Keep the mounted visit through capability refresh. Next replaces the tree on
+// a root crash, so the latest observation also survives that teardown.
+export function observeRootSellerCrashAccess(
+  pathname: string | null, dashboardMount: object, session: SellerSession | null, active: boolean,
+) {
+  if (pathname === null || !isSellerWorkspacePath(pathname) || !session || !getCurrentSellerSessionToken(session)) {
     clearRootSellerCrashAccess();
     return;
   }
   retireRootSellerCrashAccess();
-  if (!session || !getCurrentSellerSessionToken(session)) return;
+  const visit = workspaceVisit?.dashboardMount === dashboardMount
+    ? workspaceVisit : { pathname, dashboardMount, session, pendingSourceReads: 0 };
+  workspaceVisit = visit;
+  if (!active) return;
 
-  const visit = workspaceVisit ?? { pendingSourceReads: 0 };
   const observation: CrashObservation = {
-    pathname, session, visit, draftRevision: 0,
+    session, visit, draftRevision: 0,
     getProof: () => rootAccess === observation && isSellerWorkspacePath(pathname) ? getSellerWorkspaceCrashProof(session) : null,
   };
-  workspaceVisit = visit;
   rootAccess = observation;
   window.addEventListener('capabilities:changed', retireRootSellerCrashAccess);
 }

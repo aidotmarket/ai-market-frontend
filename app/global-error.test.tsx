@@ -347,21 +347,157 @@ it('withholds a new draft proof while a same-visit source read from the prior ca
   expect(sourceGet).toHaveBeenCalledOnce();
 });
 
-it.each(['route exit', 'account replacement'] as const)('discards a pending source observation across %s', async change => {
+const sourceReadTimings = (['before', 'during', 'after'] as const).flatMap(start =>
+  (['draft first', 'source first'] as const).flatMap(order =>
+    (['conflicting', 'matching'] as const).map(pointer => ({ start, order, pointer })),
+  ),
+);
+
+it.each(sourceReadTimings)(
+  'tracks a $pointer source read starting $start capability replacement with $order completion',
+  async ({ start, order, pointer }) => {
+    const refresh = deferred<ReturnType<typeof capability>>();
+    const draft = deferred<unknown>();
+    const source = deferred<unknown>();
+    await observeActiveSeller(true, <CrashPanelProbe label="after the source read" />);
+    await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+    const mounted = screen.getByText('Workspace ready');
+    sourceGet.mockReturnValueOnce(source.promise);
+    const sourceId = pointer === 'matching' ? draftUuid : replacementUuid;
+    const startSource = () => start === 'during' ? readListingSource() : readListingSource(draftUuid);
+    let sourceRead = start === 'before' ? startSource() : undefined;
+
+    getCapabilities.mockReturnValueOnce(refresh.promise);
+    act(() => window.dispatchEvent(new Event('capabilities:changed')));
+    expect(getRootSellerCrashAccess(workspace)).toBeNull();
+    if (start === 'during') sourceRead = startSource();
+    await act(async () => { refresh.resolve(capability('active')); });
+    expect(screen.getByText('Workspace ready')).toBe(mounted);
+    expect(getRootSellerCrashAccess(workspace)?.()?.token).toBe('synthetic-token');
+    if (start === 'after') sourceRead = startSource();
+
+    readListingDraft.mockReturnValueOnce(draft.promise);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+    const finishDraft = () => act(async () => { draft.resolve({ draft_id: draftUuid, version: 1, content: {} }); });
+    const finishSource = async () => {
+      source.resolve({ data: { source: null, current_draft_id: sourceId } });
+      await sourceRead;
+    };
+    const finish = order === 'draft first' ? [finishDraft, finishSource] : [finishSource, finishDraft];
+    await finish[0]();
+    const intermediateDraft = getRootSellerCrashAccess(workspace)?.()?.draft;
+    await finish[1]();
+
+    await crashBoth('after the source read');
+    const reports = fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string));
+    const expectedDraft = pointer === 'matching' && order === 'draft first' ? draftUuid : undefined;
+    expect(reports.map(report => [report.step, report.draft_uuid])).toEqual([
+      ['data', expectedDraft], ['root', expectedDraft],
+    ]);
+    if (!expectedDraft) for (const report of reports) expect(report).not.toHaveProperty('draft_uuid');
+    expect(intermediateDraft).toBeUndefined();
+
+    readListingDraft.mockResolvedValueOnce({ draft_id: sourceId, version: 1, content: {} });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+    renderFallback();
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(fetchMock.mock.calls[2][1]!.body as string)).toMatchObject({ step: 'root', draft_uuid: sourceId });
+    expect(getCapabilities).toHaveBeenCalledTimes(2);
+    expect(getWorkspaceCapabilities).toHaveBeenCalledTimes(2);
+    expect(listGateways).toHaveBeenCalledTimes(2);
+    expect(readListingDraft).toHaveBeenCalledTimes(3);
+    expect(sourceGet).toHaveBeenCalledExactlyOnceWith('/seller-workspace/listing-source',
+      start === 'during' ? undefined : { params: { draft_id: draftUuid } });
+    expect(hydrate).not.toHaveBeenCalled();
+  },
+);
+
+it('gates both fallbacks on active capability and omits the UUID while a source read started during refresh is pending', async () => {
+  const refresh = deferred<ReturnType<typeof capability>>();
+  const source = deferred<unknown>();
+  await observeActiveSeller(true, <><CrashPanelProbe label="during refresh" /><CrashPanelProbe label="during source read" /></>);
+  await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+  getCapabilities.mockReturnValueOnce(refresh.promise);
+  act(() => window.dispatchEvent(new Event('capabilities:changed')));
+  sourceGet.mockReturnValueOnce(source.promise);
+  const sourceRead = readListingSource();
+  await crashBoth('during refresh');
+  expect(fetchMock).not.toHaveBeenCalled();
+
+  await act(async () => { refresh.resolve(capability('active')); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+  await crashBoth('during source read');
+  const reports = fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string));
+  expect(reports.map(report => [report.step, report.draft_uuid])).toEqual([['data', undefined], ['root', undefined]]);
+  for (const report of reports) expect(report).not.toHaveProperty('draft_uuid');
+
+  source.resolve({ data: { source: null, current_draft_id: draftUuid } });
+  await sourceRead;
+  expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
+  expect(getCapabilities).toHaveBeenCalledTimes(2);
+  expect(readListingDraft).toHaveBeenCalledTimes(2);
+  expect(sourceGet).toHaveBeenCalledOnce();
+});
+
+it('lets a later current-draft read establish proof after a source read finishes during capability refresh', async () => {
+  const refresh = deferred<ReturnType<typeof capability>>();
+  await observeActiveSeller(true, <CrashPanelProbe label="after refresh" />);
+  await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+  getCapabilities.mockReturnValueOnce(refresh.promise);
+  act(() => window.dispatchEvent(new Event('capabilities:changed')));
+  sourceGet.mockResolvedValueOnce({ data: { source: null, current_draft_id: replacementUuid } });
+  await readListingSource();
+  expect(getRootSellerCrashAccess(workspace)).toBeNull();
+
+  await act(async () => { refresh.resolve(capability('active')); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+  await crashBoth('after refresh');
+  expect(fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string))).toEqual([
+    expect.objectContaining({ step: 'data', draft_uuid: draftUuid }),
+    expect.objectContaining({ step: 'root', draft_uuid: draftUuid }),
+  ]);
+  expect(getCapabilities).toHaveBeenCalledTimes(2);
+  expect(readListingDraft).toHaveBeenCalledTimes(2);
+  expect(sourceGet).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ['route exit', 'before refresh'],
+  ['account replacement', 'before refresh'],
+  ['route exit', 'during refresh'],
+  ['account replacement', 'during refresh'],
+  ['credential gap', 'during refresh'],
+  ['dashboard replacement', 'during refresh'],
+] as const)('discards a pending source observation across %s after it starts %s', async (change, start) => {
+  const refresh = deferred<ReturnType<typeof capability>>();
   const source = deferred<unknown>();
   sourceGet.mockReturnValueOnce(source.promise);
   const dashboard = await observeActiveSeller(true, <CrashPanelProbe label="new visit" />);
   await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
-  const sourceRead = readListingSource();
+  let sourceRead = start === 'before refresh' ? readListingSource() : undefined;
+  getCapabilities.mockReturnValueOnce(refresh.promise);
+  act(() => window.dispatchEvent(new Event('capabilities:changed')));
+  sourceRead ??= readListingSource();
   if (change === 'route exit') {
     dashboard.navigate(sibling);
     dashboard.navigate(workspace);
-  } else {
+  } else if (change === 'account replacement') {
     await act(async () => {
       advanceAuthSessionOwner(false);
       signIn('seller', 'replacement-owner');
     });
+  } else if (change === 'credential gap') {
+    act(() => {
+      useAuthStore.setState({ token: null });
+      useAuthStore.setState({ token: 'synthetic-token' });
+    });
+    await act(async () => { window.dispatchEvent(new Event('capabilities:changed')); });
+  } else {
+    dashboard.unmount();
+    await observeActiveSeller(true, <CrashPanelProbe label="new visit" />);
   }
+  await act(async () => { refresh.resolve(capability('active')); });
   await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Read draft again' }).disabled).toBe(false));
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
   expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
@@ -373,11 +509,11 @@ it.each(['route exit', 'account replacement'] as const)('discards a pending sour
     expect.objectContaining({ step: 'data', draft_uuid: draftUuid }),
     expect.objectContaining({ step: 'root', draft_uuid: draftUuid }),
   ]);
-  const capabilityReads = change === 'route exit' ? 1 : 2;
+  const capabilityReads = change === 'route exit' ? 2 : 3;
   expect(getCapabilities).toHaveBeenCalledTimes(capabilityReads);
-  expect(getWorkspaceCapabilities).toHaveBeenCalledTimes(capabilityReads);
-  expect(listGateways).toHaveBeenCalledTimes(capabilityReads);
-  expect(readListingDraft).toHaveBeenCalledTimes(change === 'route exit' ? 2 : 3);
+  expect(getWorkspaceCapabilities).toHaveBeenCalledTimes(2);
+  expect(listGateways).toHaveBeenCalledTimes(2);
+  expect(readListingDraft).toHaveBeenCalledTimes(change === 'route exit' || change === 'credential gap' ? 2 : 3);
   expect(sourceGet).toHaveBeenCalledOnce();
 });
 
