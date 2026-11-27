@@ -95,6 +95,9 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
     }
   }), []);
 
+  // allAI had no qualifying answer: keep the question so it can go to the seller.
+  const [anonymousFallback, setAnonymousFallback] = useState(false);
+
   if (renderedVisit !== visit) {
     setRenderedVisit(visit);
     setConversation(null);
@@ -110,6 +113,7 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
     if (renderedVisit.owner !== null) {
       setQuestion('');
       setHasSellerDraft(false);
+      setAnonymousFallback(false);
     }
     if (creating.current) setSubmitting(false);
     creating.current = false;
@@ -119,8 +123,6 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
   const [anonymousMessages, setAnonymousMessages] = useState<AnonymousInquiryMessage[]>([]);
   const [anonymousError, setAnonymousError] = useState<'error' | 'timeout' | null>(null);
   const [anonymousAnswerReturned, setAnonymousAnswerReturned] = useState(false);
-  // allAI had no qualifying answer: keep the question so it can go to the seller.
-  const [anonymousFallback, setAnonymousFallback] = useState(false);
   const [anonymousAnswerStarted, setAnonymousAnswerStarted] = useState(false);
   const [anonymousWaitElapsed, setAnonymousWaitElapsed] = useState(false);
   const [anonymousSubmissionInProgress, setAnonymousSubmissionInProgress] = useState(false);
@@ -249,7 +251,8 @@ function ListingInquiryWidget({ listingId, listingSlug, listingTitle, schemaHref
           anonymousAbortRef.current = null;
         }
         if (receivedFallback) {
-          setQuestion('');
+          setQuestion(trimmedQuestion);
+          setAnonymousFallback(true);
           setAnonymousAnswerReturned(true);
         } else {
           setAnonymousMessages((prev) => prev.filter(
