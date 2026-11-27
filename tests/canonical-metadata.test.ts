@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import type { Metadata } from 'next';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -40,6 +41,20 @@ const publicPages = [
   ['/verified', () => import('../app/verified/page')],
   ['/blog', () => import('../app/blog/page')],
 ] as const;
+
+it('serves every homepage Open Graph image from public/', async () => {
+  const { metadata } = await import('../app/page');
+  const images = metadata.openGraph?.images;
+  const entries = Array.isArray(images) ? images : images ? [images] : [];
+  expect(entries.length).toBeGreaterThan(0);
+
+  for (const image of entries) {
+    const source = typeof image === 'string' || image instanceof URL ? image : image.url;
+    const url = new URL(source, root.metadataBase ?? undefined);
+    const file = new URL(`../public${url.pathname}`, import.meta.url);
+    expect(statSync(file, { throwIfNoEntry: false })?.isFile(), url.pathname).toBe(true);
+  }
+});
 
 describe('route canonical metadata', () => {
   it('uses the homepage hero title as the root default', () => {
