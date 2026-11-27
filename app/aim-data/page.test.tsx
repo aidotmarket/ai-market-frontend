@@ -3,11 +3,15 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/store/auth', () => ({ useAuthStore: () => ({ isAuthenticated: false }) }));
+const auth = vi.hoisted(() => ({ isAuthenticated: false }));
+vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
 
 import AimDataPage, { metadata } from './page';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  auth.isAuthenticated = false;
+});
 
 describe('AimDataPage', () => {
   it('puts the free-account requirement before the gateway registration link', () => {
@@ -17,6 +21,33 @@ describe('AimDataPage', () => {
     const signup = within(setup).getByRole('link', { name: 'Create a free account' });
     expect(signup.getAttribute('href')).toBe('/register?redirect=%2Fdashboard%2Fgateways');
     expect(signup.previousElementSibling?.textContent).toContain('Start with a free ai.market account.');
+  });
+
+  it('shows signed-out visitors what to prepare and where to pair after signing in', () => {
+    render(<AimDataPage />);
+    const setup = screen.getByRole('heading', { name: 'Set up your gateway' }).closest('section')!;
+    expect(setup.id).toBe('gateway-setup');
+    const guide = within(setup);
+    expect(guide.getByRole('heading', { name: 'Before you create an account' })).toBeTruthy();
+    expect(guide.getByText(/Linux host with Docker and Docker Compose/)).toBeTruthy();
+    expect(guide.getByText(/read-only.*persistent writable state volume/)).toBeTruthy();
+    const networkLink = guide.getByRole('link', { name: 'network requirements' });
+    const networkSection = screen.getByRole('heading', { name: 'Network requirements' }).closest('section');
+    expect(networkLink.getAttribute('href')).toBe(`#${networkSection?.id}`);
+
+    const steps = within(guide.getByRole('list')).getAllByRole('listitem');
+    expect(steps).toHaveLength(3);
+    expect(steps[0].textContent).toMatch(/Create a free ai\.market account or sign in/);
+    expect(steps[1].textContent).toMatch(/seller dashboard.*Gateways.*Add a gateway/);
+    expect(steps[2].textContent).toMatch(/one-time pairing code.*generated Docker Compose snippet/);
+  });
+
+  it('takes signed-in visitors directly to Gateways in the seller dashboard', () => {
+    auth.isAuthenticated = true;
+    render(<AimDataPage />);
+    const link = screen.getByRole('link', { name: 'Set up a gateway' });
+    expect(link.getAttribute('href')).toBe('/dashboard/gateways');
+    expect(screen.queryByRole('link', { name: 'Create a free account' })).toBeNull();
   });
 
   it('explains the gateway boundary and restores product structured data', () => {
