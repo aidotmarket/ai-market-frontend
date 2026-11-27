@@ -34,12 +34,31 @@ function deferred<T>() {
 }
 const optionalOptions = { timeout: 10_000, signal: expect.any(AbortSignal) };
 describe('seller listing verification entry', () => {
+  it.each(['published', 'unlisted'] as const)('uses the same owner overview for a %s listing', async status => {
+    const title = `Synthetic dataset ${'longUnbrokenTitle'.repeat(20)}`;
+    vi.mocked(getSellerListing).mockResolvedValue({
+      id: 'listing', title, status, price: 0, updated_at: '2026-09-01T12:00:00Z',
+      raw_metadata: { object_count: 1234, file_size_bytes: 2_500_000 },
+      at_a_glance: { profile: 'aim-listing-enrichment-profile-v2', license: {
+        value: 'Example licence', provenance: 'seller_entered', authority: 'seller_entered',
+        source_reference: 'Listing.license', source_revision: 'example',
+      } },
+    });
+    await page();
+    expect(await screen.findByRole('heading', { name: title })).toBeTruthy();
+    for (const value of ['1,234', '2.5 MB', '$0.00', 'Example licence', 'Sep 1, 2026']) {
+      expect(screen.getByText(value, { exact: true })).toBeTruthy();
+    }
+    expect(screen.getByRole('link', { name: 'Edit listing' }).getAttribute('href')).toBe('/dashboard/listings/listing/edit');
+  });
+
   it.each(['unlisted', 'hidden', 'withdrawn', 'held', 'suspended'])('retains the authenticated owner view for %s listings', async status => {
     vi.mocked(getSellerListing).mockResolvedValue({ id: 'listing', title: 'My retained listing', status } as Awaited<ReturnType<typeof getSellerListing>>);
     await page();
     expect(await screen.findByRole('heading', { name: 'My retained listing' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Edit listing' }).getAttribute('href')).toBe('/dashboard/listings/listing/edit');
-    expect(screen.getByText('Your private owner view remains available when this listing is not public.')).toBeTruthy();
+    expect(screen.getByText(status === 'hidden' || status === 'unlisted' ? 'Not public' : status[0].toUpperCase() + status.slice(1))).toBeTruthy();
+    expect(screen.getByText('Count unavailable')).toBeTruthy();
     expect(getListingOwnership).toHaveBeenCalledWith('listing');
     expect(getSellerListing).toHaveBeenCalledWith('listing');
     expect(screen.queryByRole('heading', { name: 'Check verification availability' })).toBeNull();

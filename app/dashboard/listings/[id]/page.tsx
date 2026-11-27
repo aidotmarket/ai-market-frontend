@@ -8,10 +8,66 @@ import { getGatewayListingSource } from '@/api/sellerGateways';
 import { getAwsVerifierStatus, getCloudflareVerifierStatus } from '@/api/dataVerificationGateway';
 import { useAuthStore } from '@/store/auth';
 import GatewayVerificationFlow from '@/components/listings/GatewayVerificationFlow';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
+import { formatDate, formatPrice } from '@/lib/format';
+import { formatBytes } from '@/lib/formatBytes';
+import { readLicenseDisplay } from '@/lib/publicPresentation';
+import { listingStatus } from '../listing-status';
 
 type OwnedListing = Awaited<ReturnType<typeof getSellerListing>>;
 type VerifierStatus = { state: 'loading' | 'unavailable'; connectionId?: never } | { state: 'ready'; connectionId: string | null };
 const OPTIONAL_STATUS_TIMEOUT_MS = 10_000;
+
+const nextSteps: Record<string, string> = {
+  draft: 'Finish your draft in the editor.',
+  unlisted: 'Open the editor to publish this listing.',
+};
+
+function ListingOverview({ listing, id }: { listing: OwnedListing; id: string }) {
+  const status = listingStatus(listing.status);
+  const nextStep = Object.hasOwn(nextSteps, listing.status) ? nextSteps[listing.status] : 'Open the editor to review your listing.';
+  const summary = listing.at_a_glance;
+  const count = listing.raw_metadata?.object_count;
+  const summarySize = summary?.size_bytes;
+  const size = listing.raw_metadata?.file_size_bytes ?? (summarySize?.provenance !== 'absent' ? summarySize?.value : null);
+  const summaryLicence = summary?.license;
+  const licence = readLicenseDisplay(listing.license_display)?.license_label ??
+    (summaryLicence?.provenance !== 'absent' ? summaryLicence?.value : null);
+  const updated = listing.updated_at;
+
+  return (
+    <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="owner-listing-title">
+      <div>
+        <h1 id="owner-listing-title" className="text-2xl font-semibold text-gray-900 [overflow-wrap:anywhere]">{listing.title || 'Listing title unavailable'}</h1>
+        <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-xs font-semibold [overflow-wrap:anywhere] ${status.style}`}>{status.label}</span>
+        <p className="mt-2 text-sm text-gray-700">{nextStep}</p>
+      </div>
+      <dl className="grid gap-4 border-t border-gray-100 pt-4 text-sm [overflow-wrap:anywhere] sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <dt className="font-semibold text-gray-900">Files</dt>
+          <dd className="mt-1 text-gray-700">{typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count.toLocaleString('en-US') : 'Count unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Total size</dt>
+          <dd className="mt-1 text-gray-700">{typeof size === 'number' && Number.isFinite(size) && size >= 0 ? formatBytes(size) : 'Size unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Price</dt>
+          <dd className="mt-1 text-gray-700">{typeof listing.price === 'number' && Number.isFinite(listing.price) ? formatPrice(listing.price) : 'Price unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Licence</dt>
+          <dd className="mt-1 text-gray-700">{typeof licence === 'string' && licence.trim() ? licence : 'Licence unavailable'}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-gray-900">Last updated</dt>
+          <dd className="mt-1 text-gray-700">{typeof updated === 'string' && Number.isFinite(Date.parse(updated)) ? formatDate(updated) : 'Update date unavailable'}</dd>
+        </div>
+      </dl>
+      <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className={primaryButtonClass}>Edit listing</Link>
+    </section>
+  );
+}
 
 export default function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -89,13 +145,11 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   if (!isAuthenticated || !user) return <p><Link href="/login" className="underline">Sign in</Link> to manage your listing.</p>;
   if (state === 'loading' || loadOwner?.id !== id || loadOwner.userId !== userId) return <p>Loading your listing…</p>;
   if (state === 'unavailable') return <p>We could not find a listing you can manage here. Open Your listings to choose another listing. <Link href="/dashboard/listings" className="underline">Your listings</Link></p>;
-  if (state === 'error') return <><p>We could not load your listing just now. Try again, or contact support if it keeps happening.</p><button onClick={() => setRetry(value => value + 1)}>Try again</button></>;
+  if (state === 'error' || !listing) return <><p>We could not load your listing just now. Try again, or contact support if it keeps happening.</p><button className={secondaryButtonClass} onClick={() => setRetry(value => value + 1)}>Try again</button></>;
   return <div className="space-y-6">
-    <Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link>
-    <h1 className="text-2xl font-semibold">{listing?.title}</h1>
-    <p className="text-sm text-gray-600">Your private owner view remains available when this listing is not public.</p>
-    <Link href={`/dashboard/listings/${encodeURIComponent(id)}/edit`} className="text-indigo-700 underline">Edit listing</Link>
-    {listing?.status === 'published' && <>
+    <p><Link href="/dashboard/listings" className="text-indigo-700 underline">Back to listings</Link></p>
+    <ListingOverview listing={listing} id={id} />
+    {listing.status === 'published' && <>
       {sourceState === 'loading' && <p role="status">Loading verification availability…</p>}
       {sourceState === 'unavailable' && <div><p role="status">We could not check whether this listing can be verified. Try again, or contact support if it keeps happening.</p><button className="min-h-11 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
       {sourceState === 'gateway' && <GatewayVerificationFlow key={`${user.id}:${id}`} listingId={id} sellerId={user.id} />}

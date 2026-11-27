@@ -39,13 +39,13 @@ it.each([
   api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 0, listings: [] } });
   api.unpublishListing.mockRejectedValue({ response: { status: 409, data: { detail } } });
   render(<ToastProvider><ListingsPage /></ToastProvider>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Unpublish' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Unlist' }));
   const toast = await screen.findByRole('alert');
   expect(toast.textContent).toContain(expected);
   expect(toast.textContent).not.toMatch(/[{}]|capability_required|persisted_status|missing_steps|readiness_gap|private backend details/);
   expect(screen.getByText('Seller dataset')).toBeTruthy();
   expect(api.getMyListings).toHaveBeenCalledOnce();
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Unpublish' }).hasAttribute('disabled')).toBe(false));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Unlist' }).hasAttribute('disabled')).toBe(false));
   if (detail.error === 'capability_required') {
     expect(screen.getByRole('link', { name: 'Finish seller setup' }).getAttribute('href')).toBe('/dashboard');
   }

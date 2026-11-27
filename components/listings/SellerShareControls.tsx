@@ -8,6 +8,7 @@ import {
   type ListingShareResponse,
 } from '@/api/share';
 import ShareKitModal from './ShareKitModal';
+import { primaryButtonClass } from '@/components/ui/button-styles';
 
 interface SellerShareControlsProps {
   listingId: string;
@@ -163,11 +164,12 @@ export default function SellerShareControls({
   }
 
   return (
-    <div className={compact ? 'text-left' : 'rounded-lg border border-gray-200 bg-white p-4'}>
+    <div className={compact ? (open ? 'min-w-0 basis-full text-left' : 'min-w-0 text-left') : 'rounded-lg border border-gray-200 bg-white p-4'}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]"
+        aria-expanded={open}
+        className={compact ? `min-h-11 w-auto! ${primaryButtonClass}` : 'rounded-md border border-[#3F51B5] px-3 py-1.5 text-xs font-medium text-[#3F51B5] hover:bg-[#E8EAF6]'}
       >
         {open ? 'Hide share' : 'Share'}
       </button>
@@ -188,7 +190,7 @@ export default function SellerShareControls({
 
           {share && (
             <>
-              <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+              <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
                 <div>
                   <img
                     src={share.card_url}

@@ -14,26 +14,22 @@ import { useServedTermsVersion } from '@/components/legal/VersionedTermsCopy';
 import { formatMarketplaceCategoryName } from '@/lib/marketplaceCategories';
 import { formatPrice, formatDate } from '@/lib/format';
 import { formatListingActionError } from '@/lib/listing-action-error';
+import { dangerSecondaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
+import type { SellerListingItem } from '@/types';
+import { heldStatus, listingStatus, sellerTermsHref } from './listing-status';
 
-const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  enhanced: 'bg-purple-100 text-purple-800',
-  published: 'bg-green-100 text-green-800',
-  unlisted: 'bg-orange-100 text-orange-800',
-  pending_review: 'bg-yellow-100 text-yellow-800',
-  suspended: 'bg-red-100 text-red-800',
-  archived: 'bg-gray-100 text-gray-600',
-};
+type ListingRow = SellerListingItem & { structured_metadata?: unknown };
+type PayoutsStatus = 'unknown' | 'enabled' | 'disabled';
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'Draft',
-  enhanced: 'Enhanced',
-  published: 'Published',
-  unlisted: 'Unlisted',
-  pending_review: 'Pending review',
-  suspended: 'Suspended',
-  archived: 'Archived',
-};
+function listingReadiness(listing: ListingRow, pendingTerms: boolean, payoutsStatus: PayoutsStatus) {
+  if (listing.status !== 'published') return null;
+  if (isPublicReference(listing.structured_metadata)) {
+    return { reason: 'Public source reference — no checkout.' };
+  }
+  if (pendingTerms) return { reason: 'Seller Terms need to be accepted.', href: sellerTermsHref, fix: 'Fix seller Terms' };
+  if (payoutsStatus === 'disabled') return { reason: 'Payout setup is incomplete.', href: '/dashboard', fix: 'Fix payout setup' };
+  return null;
+}
 
 function isPublicReference(metadata: unknown): boolean {
   return metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
@@ -41,6 +37,8 @@ function isPublicReference(metadata: unknown): boolean {
 }
 
 const PAGE_SIZE = 20;
+const rowButtonClass = `min-h-11 w-auto! ${secondaryButtonClass}`;
+const rowDangerButtonClass = `min-h-11 w-auto! ${dangerSecondaryButtonClass}`;
 
 export default function ListingsPage() {
   const { user, hydrated, isAuthenticated, isLoading } = useAuthStore();
@@ -54,15 +52,15 @@ export default function ListingsPage() {
 
 function OwnerListings({ userId }: { userId: string }) {
   const termsVersion = useServedTermsVersion();
-  const [listings, setListings] = useState<any[]>([]);
-  const [pendingTermsCount, setPendingTermsCount] = useState(0);
+  const [listings, setListings] = useState<ListingRow[]>([]);
+  const [pendingTerms, setPendingTerms] = useState({ count: 0, ids: new Set<string>() });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [workspaceHref, setWorkspaceHref] = useState<string | undefined>();
   const [setupHref, setSetupHref] = useState<string | undefined>();
-  const [payoutsStatus, setPayoutsStatus] = useState<'unknown' | 'enabled' | 'disabled'>('unknown');
+  const [payoutsStatus, setPayoutsStatus] = useState<PayoutsStatus>('unknown');
   const router = useRouter();
   const { toast } = useToast();
   const { ensureTermsAccepted, TermsGatePrompt, checkingTerms } = useTermsGate('seller');
@@ -101,12 +99,13 @@ function OwnerListings({ userId }: { userId: string }) {
     } else {
       setError(customerLoadError("listings"));
     }
-    setPayoutsStatus(
-      connectRes.status === 'fulfilled'
-        ? connectRes.value.data?.payouts_enabled ? 'enabled' : 'disabled'
-        : 'unknown'
-    );
-    setPendingTermsCount(pendingRes.status === 'fulfilled' ? pendingRes.value.data.count : 0);
+    const payoutsEnabled = connectRes.status === 'fulfilled' ? connectRes.value.data?.payouts_enabled : undefined;
+    setPayoutsStatus(payoutsEnabled === true ? 'enabled' : payoutsEnabled === false ? 'disabled' : 'unknown');
+    const terms = pendingRes.status === 'fulfilled' ? pendingRes.value.data : null;
+    setPendingTerms({
+      count: terms?.count ?? 0,
+      ids: new Set(terms?.listings?.map(listing => listing.id)),
+    });
     busy.current = false;
     setLoading(false);
   }, [isCurrent]);
@@ -166,6 +165,11 @@ function OwnerListings({ userId }: { userId: string }) {
     });
   };
 
+  const termsCoveredOnPage = loading || error ? 0 : listings.filter(listing =>
+    listingReadiness(listing, pendingTerms.ids.has(listing.id), payoutsStatus)?.href === sellerTermsHref
+  ).length;
+  const remainingPendingTerms = pendingTerms.count - termsCoveredOnPage;
+
   return (
     <div className="space-y-6">
       <TermsGatePrompt />
@@ -175,19 +179,19 @@ function OwnerListings({ userId }: { userId: string }) {
       {workspaceHref && <p role="status" className="text-sm text-gray-700">
         <Link href={workspaceHref} className="font-semibold text-indigo-700 underline">Manage this listing in Seller Workspace.</Link>
       </p>}
-      {pendingTermsCount > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-        <p className="font-semibold">{pendingTermsCount} inherited {pendingTermsCount === 1 ? 'listing is' : 'listings are'} not yet available to buy.</p>
+      {remainingPendingTerms > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        <p className="font-semibold">{remainingPendingTerms} inherited {remainingPendingTerms === 1 ? 'listing needs' : 'listings need'} seller Terms.</p>
         <p className="mt-1">Review and accept Terms {termsVersion || '1.1'} to make eligible listings available for purchase.</p>
-        <Link href="/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings" className="mt-2 inline-block font-semibold underline">Review and accept Terms {termsVersion || '1.1'}</Link>
+        <Link href={sellerTermsHref} className="mt-2 inline-block font-semibold underline">Review and accept Terms {termsVersion || '1.1'}</Link>
       </div>}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Your listings</h1>
       </div>
 
-      <nav aria-label="Listing pages" className="flex items-center justify-between gap-4">
-        <button className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" onClick={() => changePage(offset - PAGE_SIZE)} disabled={loading || !!actionLoading || offset === 0}>Previous</button>
+      <nav aria-label="Listing pages" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-700">
+        <button className={rowButtonClass} onClick={() => changePage(offset - PAGE_SIZE)} disabled={loading || !!actionLoading || offset === 0}>Previous</button>
         <p>Page {offset / PAGE_SIZE + 1}{!loading && !error && listings.length > 0 ? ` · Showing ${offset + 1}–${offset + listings.length}` : ''}</p>
-        <button className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" onClick={() => changePage(offset + PAGE_SIZE)} disabled={loading || !!actionLoading || !!error || !hasNext}>Next</button>
+        <button className={rowButtonClass} onClick={() => changePage(offset + PAGE_SIZE)} disabled={loading || !!actionLoading || !!error || !hasNext}>Next</button>
       </nav>
       {loading ? <p role="status">Loading listings...</p> : error ? (
         <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-6">
@@ -205,114 +209,88 @@ function OwnerListings({ userId }: { userId: string }) {
           <p className="mt-2 text-sm text-gray-500"><Link href="/dashboard/seller-workspace" className="inline-flex min-h-11 items-center px-3 text-indigo-700 underline">Connect cloud storage</Link> <Link href="/dashboard/gateways" className="inline-flex min-h-11 items-center px-3 text-indigo-700 underline">Use your own server (gateway)</Link></p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Title
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Category
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Price
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Created
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {listings.map((listing) => (
-                <tr key={listing.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <Link href={`/dashboard/listings/${encodeURIComponent(listing.id)}`} className="text-sm font-medium text-indigo-700 hover:underline">{listing.title}</Link>
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[listing.status] || 'bg-gray-100 text-gray-800'}`}>
-                      {STATUS_LABELS[listing.status] || listing.status}
-                    </span>
-                    {listing.status === 'published' && (isPublicReference(listing.structured_metadata) ? (
-                      <p className="mt-2 max-w-xs whitespace-normal text-xs leading-5 text-gray-500">
-                        Public source reference — no checkout.
+        <ul className="space-y-3">
+          {listings.map((listing) => {
+            const href = `/dashboard/listings/${encodeURIComponent(listing.id)}`;
+            const readiness = listingReadiness(listing, pendingTerms.ids.has(listing.id), payoutsStatus);
+            const status = readiness?.href ? heldStatus : listingStatus(listing.status);
+            return (
+              <li key={listing.id} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+                  <div className="min-w-0 flex-[2_1_20rem]">
+                    <h2 className="text-base font-semibold [overflow-wrap:anywhere]">
+                      <Link href={href} className="text-indigo-700 hover:underline">{listing.title}</Link>
+                    </h2>
+                    <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-600 [overflow-wrap:anywhere]">
+                      <div><dt className="sr-only">Category</dt><dd>{formatMarketplaceCategoryName(listing.category || 'other')}</dd></div>
+                      <div><dt className="sr-only">Price</dt><dd>{formatPrice(listing.price)}</dd></div>
+                      <div><dt className="sr-only">Created</dt><dd>{formatDate(listing.created_at)}</dd></div>
+                    </dl>
+                  </div>
+                  <div className="min-w-0 flex-[1_1_15rem] text-sm [overflow-wrap:anywhere]">
+                    <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${status.style}`}>{status.label}</span>
+                    {readiness && (
+                      <p className="mt-1.5 text-gray-700">
+                        {readiness.reason}{readiness.href && <> <Link href={readiness.href} className="font-semibold text-indigo-700 underline">{readiness.fix}</Link></>}
                       </p>
-                    ) : payoutsStatus === 'disabled' && (
-                      <p className="mt-2 max-w-xs whitespace-normal text-xs leading-5 text-amber-700">
-                        Published &mdash; not yet purchasable. Finish payout setup to enable sales.
-                      </p>
-                    ))}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {formatMarketplaceCategoryName(listing.category || 'other')}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {formatPrice(listing.price)}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {formatDate(listing.created_at)}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-start gap-2">
+                  {listing.status === 'published' && <SellerShareControls listingId={listing.id} compact />}
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(listing.id)}
+                    disabled={checkingTerms || !!actionLoading}
+                    className={rowButtonClass}
+                  >
+                    Edit
+                  </button>
+                  {listing.status === 'unlisted' && <Link href={`${href}/edit`} className={rowButtonClass}>Publish</Link>}
+                  {listing.status === 'published' && (
+                    <button
+                      type="button"
+                      onClick={() => handleMutation(listing.id, 'unpublish')}
+                      disabled={!!actionLoading}
+                      className={rowButtonClass}
+                    >
+                      Unlist
+                    </button>
+                  )}
+                  {deleteConfirm === listing.id ? (
+                    <div role="group" aria-label="Delete this listing? This cannot be undone." className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="text-sm text-red-700">This can&apos;t be undone.</span>
                       <button
-                        onClick={() => handleEdit(listing.id)}
-                        disabled={checkingTerms || !!actionLoading}
-                        className="min-h-11 px-2 text-xs font-medium text-gray-600 hover:text-gray-800 disabled:opacity-50"
+                        type="button"
+                        onClick={() => handleMutation(listing.id, 'delete')}
+                        disabled={!!actionLoading}
+                        className={rowDangerButtonClass}
                       >
-                        Edit
+                        Delete listing
                       </button>
-                      {listing.status === 'unlisted' && <Link href={`/dashboard/listings/${encodeURIComponent(listing.id)}/edit`} className="min-h-11 inline-flex items-center px-2 text-xs font-medium text-yellow-700 underline">Publish</Link>}
-                      {listing.status === 'published' && (
-                        <button
-                          onClick={() => handleMutation(listing.id, 'unpublish')}
-                          disabled={!!actionLoading}
-                          className="min-h-11 px-2 text-xs font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50"
-                        >
-                          Unpublish
-                        </button>
-                      )}
-                      {listing.status === 'published' && (
-                        <SellerShareControls listingId={listing.id} compact />
-                      )}
-                      {deleteConfirm === listing.id ? (
-                        <span role="group" aria-label="Delete this listing? This cannot be undone." className="flex items-center gap-1">
-                          <span className="text-xs text-red-700">This can't be undone.</span>
-                          <button
-                            onClick={() => handleMutation(listing.id, 'delete')}
-                            disabled={!!actionLoading}
-                            className="min-h-11 px-2 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
-                          >
-                            Delete listing
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(null)}
-                            className="min-h-11 px-2 text-xs font-medium text-gray-500 hover:text-gray-700"
-                          >
-                            Cancel
-                          </button>
-                        </span>
-                      ) : (
-                        <button
-                          disabled={!!actionLoading}
-                          onClick={() => setDeleteConfirm(listing.id)}
-                          className="min-h-11 px-2 text-xs font-medium text-red-600 hover:text-red-800"
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(null)}
+                        className={rowButtonClass}
+                      >
+                        Cancel
+                      </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!!actionLoading}
+                      onClick={() => setDeleteConfirm(listing.id)}
+                      className={rowDangerButtonClass}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

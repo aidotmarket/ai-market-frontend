@@ -8,7 +8,14 @@ import type { ListingAuthorityReferences } from './listingAuthority';
 import type { FulfillmentType, ListingListItem, ListingDetail, ListingVersion, SearchResponse, SellerListingItem } from '@/types';
 import type { TableFormat } from '@/components/gateways/fileMetadata';
 
-export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title' | 'status'> & ListingAuthorityReferences;
+export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title'> & ListingAuthorityReferences & {
+  status: SellerListingItem['status'] | 'hidden' | 'withdrawn' | 'held';
+  price?: number | null;
+  updated_at?: ListingDetail['updated_at'];
+  license_display?: ListingDetail['license_display'];
+  at_a_glance?: ListingDetail['at_a_glance'];
+  raw_metadata?: { object_count?: number | null; file_size_bytes?: number | null } | null;
+};
 export type ListingWithAuthority = ListingDetail & ListingAuthorityReferences;
 
 export interface ListingAccessWindowResponse { listing_id: string; access_window_days: number }
