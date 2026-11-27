@@ -384,6 +384,7 @@ describe('InquiryWidget', () => {
     fetchMock.mockResolvedValueOnce(response(200, { session_id: 'anon-session' }))
       .mockResolvedValueOnce(completedSseResponse([
         'Sales &#38; Transactions &#40;10k&#41;',
+        'Synthetic Retail Sales &#38; Transactions &#40;10k &#43; 730k rows&#41;',
         'CC BY 4&#46;0',
         '&#91;x&#93;&#40;https://evil.example&#41;',
         '&#33;&#91;i&#93;&#40;https://evil.example/p.png&#41;',
@@ -394,6 +395,7 @@ describe('InquiryWidget', () => {
     typeQuestion(question);
 
     expect(await screen.findByText('Sales & Transactions (10k)')).toBeTruthy();
+    expect(screen.getByText('Synthetic Retail Sales & Transactions (10k + 730k rows)')).toBeTruthy();
     expect(screen.getByText('CC BY 4.0')).toBeTruthy();
     expect(screen.getByText('[x](https://evil.example)')).toBeTruthy();
     expect(screen.getByText('![i](https://evil.example/p.png)')).toBeTruthy();
