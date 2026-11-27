@@ -11,11 +11,15 @@ export function captureSellerCrashSession(owner: string, token: string): SellerS
   // A capability request and its reusable snapshot can outlive a Workspace visit.
   if (!trackingCredentials) {
     useAuthStore.subscribe((next, previous) => {
-      if (next.user?.id !== previous.user?.id || next.token !== previous.token ||
+      const admissionChanged = next.user?.id !== previous.user?.id ||
         next.isAuthenticated !== previous.isAuthenticated || next.hydrated !== previous.hydrated ||
-        next.isLoading !== previous.isLoading || next.pendingTwoFactor !== previous.pendingTwoFactor) {
+        next.isLoading !== previous.isLoading || next.pendingTwoFactor !== previous.pendingTwoFactor;
+      if (admissionChanged || next.token !== previous.token) {
         credentialRevision++;
         invalidateSellerCrashSession();
+        if (workspaceVisit && (admissionChanged || !next.token || !previous.token)) {
+          workspaceVisit.authorizationRevision++;
+        }
       }
     });
     subscribeAuthSessionOwner(invalidateSellerCrashSession);
@@ -36,6 +40,7 @@ type WorkspaceVisit = {
   pathname: string;
   owner: string;
   generation: number;
+  authorizationRevision: number;
   sourceReads?: SourceReadEpoch;
 };
 type SourceReadEpoch = {
@@ -77,7 +82,7 @@ export function discardRootSellerCrashAccessOutside(pathname: string | null) {
 export function mountSellerWorkspaceCrashVisit(pathname: string, owner: string | null, generation: number) {
   clearRootSellerCrashAccess();
   if (!owner || !isSellerWorkspacePath(pathname)) return;
-  const visit: WorkspaceVisit = { pathname, owner, generation };
+  const visit: WorkspaceVisit = { pathname, owner, generation, authorizationRevision: 0 };
   workspaceVisit = visit;
   return () => {
     // End read admission at teardown. Next's root fallback still needs the last observation.
@@ -133,22 +138,35 @@ export function checkSellerWorkspaceCrashDraft() {
 }
 
 export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | null) {
-  const sourceReads = currentSourceReadEpoch();
-  if (!sourceReads) return;
-  // An outstanding source read can contradict a later draft read in this visit,
-  // even when it starts while capability revalidation has retired crash proof.
-  sourceReads.pending++;
-  return (response?: { current_draft_id: unknown }) => {
-    if (workspaceVisit?.sourceReads !== sourceReads || !isSellerWorkspacePath(workspaceVisit.pathname)) return;
-    sourceReads.pending--;
-    const active = rootAccess;
-    if (!response || active?.sourceReads !== sourceReads || !active.getProof()) return;
-    const current = response.current_draft_id;
-    if (!active.draft || current !== active.draft.uuid || (expectedDraftId && current !== expectedDraftId)) {
-      // A source read cannot prove a pointer. When it finishes before any
-      // draft is proven, retire overlapping current-draft reads as well.
-      clearSellerWorkspaceCrashDraft();
-    }
+  const visit = workspaceVisit;
+  if (!visit || !currentSourceReadEpoch()) return;
+  const { authorizationRevision } = visit;
+  let dispatched: SourceReadEpoch | undefined;
+  return {
+    dispatch(usesCurrentCredential: boolean) {
+      if (workspaceVisit !== visit || visit.authorizationRevision !== authorizationRevision ||
+        !isSellerWorkspacePath(visit.pathname)) return;
+      const epoch = usesCurrentCredential ? currentSourceReadEpoch() : undefined;
+      if (dispatched === epoch) return;
+      // The final response belongs to the latest dispatch. A replay can move
+      // the pending read to a new credential only within uninterrupted admission.
+      if (dispatched) dispatched.pending--;
+      if (epoch) epoch.pending++;
+      dispatched = epoch;
+    },
+    finish(response?: { current_draft_id: unknown }) {
+      if (!dispatched || workspaceVisit !== visit || visit.sourceReads !== dispatched ||
+        !isSellerWorkspacePath(visit.pathname)) return;
+      dispatched.pending--;
+      const active = rootAccess;
+      if (!response || active?.sourceReads !== dispatched || !active.getProof()) return;
+      const current = response.current_draft_id;
+      if (!active.draft || current !== active.draft.uuid || (expectedDraftId && current !== expectedDraftId)) {
+        // A source read cannot prove a pointer. When it finishes before any
+        // draft is proven, retire overlapping current-draft reads as well.
+        clearSellerWorkspaceCrashDraft();
+      }
+    },
   };
 }
 

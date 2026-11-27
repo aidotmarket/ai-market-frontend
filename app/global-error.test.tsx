@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { StrictMode, useState, type ReactNode } from 'react';
-import { AxiosError } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
@@ -15,6 +15,9 @@ let useSellerListingDraft: typeof import('@/components/seller-workspace/SellerLi
 let WorkspacePanel: typeof import('@/components/seller-workspace/WorkspacePanel').WorkspacePanel;
 let readListingSource: typeof import('@/api/sellerListingSource').readListingSource;
 let useAuthStore: typeof import('@/store/auth').useAuthStore;
+let api: typeof import('@/api/client').api;
+let refreshAccessToken: typeof import('@/api/client').refreshAccessToken;
+const defaultRefreshAdapter = axios.defaults.adapter;
 
 const { getCapabilities, getWorkspaceCapabilities, listGateways, logout, push, readListingDraft, sourceGet } = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
@@ -32,7 +35,6 @@ vi.mock('next/navigation', async importOriginal => ({
 vi.mock('@/api/capabilities', () => ({ getCapabilities }));
 vi.mock('@/api/auth', () => ({ logout }));
 vi.mock('@/api/sellerListingDraft', () => ({ readListingDraft }));
-vi.mock('@/api/client', () => ({ api: { get: sourceGet } }));
 vi.mock('@/api/connector-seller-settings', () => ({ nativeWrite: vi.fn() }));
 vi.mock('@/api/sellerGateways', () => ({ listSellerGateways: listGateways }));
 vi.mock('@/api/sellerWorkspace', () => ({
@@ -140,6 +142,55 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function syntheticResponse(config: InternalAxiosRequestConfig, status: number, data: unknown) {
+  const response = { config, status, statusText: String(status), headers: {}, data };
+  if (!config.validateStatus?.(status)) {
+    throw new AxiosError(`Synthetic ${status}`, AxiosError.ERR_BAD_REQUEST, config, undefined, response);
+  }
+  return response;
+}
+
+function useSourceWire() {
+  const sends: Array<{
+    bearer: 'old' | 'replacement' | 'unexpected';
+    finish: (status: number, draftId?: string) => void;
+  }> = [];
+  api.defaults.adapter = async config => {
+    expect(config.method).toBe('get');
+    expect(config.url).toBe('/seller-workspace/listing-source');
+    const { promise, resolve } = deferred<{ status: number; draftId: string }>();
+    const authorization = config.headers.get('Authorization');
+    const bearer = authorization === `Bearer ${rotatedToken}` ? 'replacement'
+      : authorization === 'Bearer synthetic-token' ? 'old' : 'unexpected';
+    sends.push({ bearer, finish: (status, draftId = replacementUuid) => resolve({ status, draftId }) });
+    const { status, draftId } = await promise;
+    return syntheticResponse(config, status, { source: null, current_draft_id: draftId });
+  };
+  return sends;
+}
+
+function deferWireRefresh() {
+  const refresh = deferred<number>();
+  const transport = vi.fn(async (config: InternalAxiosRequestConfig) => {
+    expect(config.method).toBe('post');
+    expect(config.url).toMatch(/\/api\/v1\/auth\/refresh$/);
+    return syntheticResponse(config, await refresh.promise, { access_token: rotatedToken });
+  });
+  axios.defaults.adapter = transport;
+  return { complete: (status = 200) => refresh.resolve(status), transport };
+}
+
+function readDraftAgain() {
+  return act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+}
+
+function expectCrashReports(...drafts: (string | undefined)[]) {
+  const reports = fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string));
+  expect(reports.map(report => [report.step, report.draft_uuid, Object.hasOwn(report, 'draft_uuid')])).toEqual(
+    drafts.map((draft, index) => [index === 0 ? 'data' : 'root', draft, draft !== undefined]),
+  );
+}
+
 beforeEach(async () => {
   // Each case represents a fresh page with its own three-report budget.
   vi.resetModules();
@@ -150,6 +201,7 @@ beforeEach(async () => {
   ({ SellerListingDraftProvider, useSellerListingDraft } = await import('@/components/seller-workspace/SellerListingDraftStore'));
   ({ WorkspacePanel } = await import('@/components/seller-workspace/WorkspacePanel'));
   ({ readListingSource } = await import('@/api/sellerListingSource'));
+  ({ api, refreshAccessToken } = await import('@/api/client'));
   ({ useAuthStore } = await import('@/store/auth'));
   window.history.replaceState(null, '', workspace);
   useAuthStore.setState({ user: null, token: null, isAuthenticated: false, hydrated: false,
@@ -159,6 +211,10 @@ beforeEach(async () => {
   listGateways.mockClear();
   readListingDraft.mockReset().mockResolvedValue({ draft_id: draftUuid, version: 1, content: { title: 'synthetic private title' } });
   sourceGet.mockReset();
+  api.defaults.adapter = async config => {
+    const { data } = await sourceGet(config.url, config.params ? { params: config.params } : undefined);
+    return syntheticResponse(config, 200, data);
+  };
   vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
   vi.stubGlobal('fetch', fetchMock.mockReset().mockResolvedValue(new Response(null, { status: 204 })));
@@ -167,6 +223,7 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   clearRootSellerCrashAccess();
+  axios.defaults.adapter = defaultRefreshAdapter;
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -540,41 +597,210 @@ it.each([
   expect(hydrate).not.toHaveBeenCalled();
 });
 
-it.each(['late success', '401 replay'] as const)('ignores a pre-rotation source read with %s after a new draft is proven', async outcome => {
-  const { api } = await vi.importActual<typeof import('@/api/client')>('@/api/client');
-  const first = deferred<void>();
-  const headers: unknown[] = [];
-  api.defaults.adapter = async config => {
-    headers.push(config.headers.Authorization);
-    const response = { config, status: 200, statusText: 'OK', headers: {},
-      data: { source: null, current_draft_id: replacementUuid } };
-    if (headers.length === 1) {
-      await first.promise;
-      if (outcome === '401 replay') throw new AxiosError('Synthetic 401', AxiosError.ERR_BAD_REQUEST, config, undefined,
-        { ...response, status: 401, statusText: 'Unauthorized' });
-    }
-    return response;
-  };
-  sourceGet.mockImplementation((path, config) => api.get(path, config));
+it('ignores a late success actually dispatched on the old bearer after a new draft is proven', async () => {
+  const sends = useSourceWire();
   await observeActiveSeller(true, <CrashPanelProbe label="replacement bearer" />);
   await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
   const oldSource = readListingSource();
-  expect(headers).toEqual(['Bearer synthetic-token']);
+  expect(sends.map(send => send.bearer)).toEqual(['old']);
   await act(async () => { useAuthStore.setState({ token: rotatedToken }); });
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read draft again' })); });
+  await readDraftAgain();
   expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
-  first.resolve();
+  sends[0].finish(200);
   await expect(oldSource).resolves.toEqual({ source: null, current_draft_id: replacementUuid });
-  expect(headers).toEqual(outcome === '401 replay' ? ['Bearer synthetic-token', `Bearer ${rotatedToken}`] : ['Bearer synthetic-token']);
   await crashBoth('replacement bearer');
-  expect(fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string))).toEqual([
-    expect.objectContaining({ step: 'data', draft_uuid: draftUuid }),
-    expect.objectContaining({ step: 'root', draft_uuid: draftUuid }),
-  ]);
-  expect(sourceGet).toHaveBeenCalledOnce();
+  expectCrashReports(draftUuid, draftUuid);
+  expect(sends.map(send => send.bearer)).toEqual(['old']);
   expect(getCapabilities).toHaveBeenCalledTimes(2);
   expect(readListingDraft).toHaveBeenCalledTimes(2);
 });
+
+const replacementWireCases = (['401 replay', 'deferred first send'] as const).flatMap(dispatch =>
+  (['draft first', 'source first'] as const).flatMap(order =>
+    (['panel', 'root'] as const).map(freshFallback => ({ dispatch, order, freshFallback })),
+  ),
+);
+
+it.each(replacementWireCases)(
+  'tracks replacement-bearer $dispatch with $order completion and later proof in the $freshFallback fallback',
+  async ({ dispatch, order, freshFallback }) => {
+    const sends = useSourceWire();
+    const refresh = deferWireRefresh();
+    const active = deferred<ReturnType<typeof capability>>();
+    const draft = deferred<unknown>();
+    const sourceGetCalls = vi.spyOn(api, 'get');
+    await observeActiveSeller(true, <>
+      <CrashPanelProbe label="no fresh capability" /><CrashPanelProbe label="withheld" /><CrashPanelProbe label="proven" />
+    </>);
+    await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+    getCapabilities.mockReturnValueOnce(active.promise);
+
+    let source: ReturnType<typeof readListingSource>;
+    let flight: Promise<string>;
+    if (dispatch === '401 replay') {
+      source = readListingSource(draftUuid);
+      expect(sends.map(send => send.bearer)).toEqual(['old']);
+      flight = refreshAccessToken();
+    } else {
+      flight = refreshAccessToken();
+      source = readListingSource(draftUuid);
+      expect(sends).toHaveLength(0);
+    }
+    await act(async () => { refresh.complete(); await flight; });
+    await crashBoth('no fresh capability');
+    expectCrashReports();
+    await act(async () => { active.resolve(capability('active')); });
+    readListingDraft.mockReturnValueOnce(draft.promise);
+    await readDraftAgain();
+    const finishDraft = () => act(async () => { draft.resolve({ draft_id: draftUuid, version: 1, content: {} }); });
+
+    // In the draft-first replay case, A has already been accepted when the old 401 arrives.
+    if (dispatch === '401 replay') {
+      if (order === 'draft first') {
+        await finishDraft();
+        expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
+      }
+      sends[0].finish(401);
+    }
+    const expectedSends = dispatch === '401 replay' ? ['old', 'replacement'] : ['replacement'];
+    await waitFor(() => expect(sends.map(send => send.bearer)).toEqual(expectedSends));
+    const finishSource = async () => {
+      sends.at(-1)!.finish(200);
+      await expect(source).resolves.toEqual({ source: null, current_draft_id: replacementUuid });
+    };
+    if (order === 'source first') {
+      await finishSource();
+      await finishDraft();
+    } else if (dispatch === 'deferred first send') await finishDraft();
+
+    await crashBoth('withheld');
+    expectCrashReports(undefined, undefined);
+    if (order === 'draft first') await finishSource();
+    expect(getRootSellerCrashAccess(workspace)?.()?.draft).toBeUndefined();
+
+    readListingDraft.mockResolvedValueOnce({ draft_id: replacementUuid, version: 1, content: {} });
+    await readDraftAgain();
+    if (freshFallback === 'root') renderFallback();
+    else await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Crash proven' })); });
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(fetchMock.mock.calls[2][1]!.body as string)).toMatchObject({
+      step: freshFallback === 'root' ? 'root' : 'data', draft_uuid: replacementUuid,
+    });
+    for (const [, request] of fetchMock.mock.calls) {
+      expect(request?.headers).toMatchObject({ Authorization: `Bearer ${rotatedToken}` });
+    }
+    expect(sends.map(send => send.bearer)).toEqual(expectedSends);
+    expect(sourceGetCalls).toHaveBeenCalledOnce();
+    expect(refresh.transport).toHaveBeenCalledOnce();
+    expect(getCapabilities).toHaveBeenCalledTimes(2);
+    expect(getWorkspaceCapabilities).toHaveBeenCalledTimes(2);
+    expect(listGateways).toHaveBeenCalledTimes(2);
+    expect(readListingDraft).toHaveBeenCalledTimes(3);
+    expect(hydrate).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['second 401', 'server error', 'abort after dispatch'] as const)(
+  'releases a replacement-bearer source observation on %s', async outcome => {
+    const sends = useSourceWire();
+    const refresh = deferWireRefresh();
+    const active = deferred<ReturnType<typeof capability>>();
+    const controller = new AbortController();
+    api.interceptors.request.use(config => ({ ...config, signal: controller.signal }), undefined, { synchronous: true });
+    await observeActiveSeller(true, <><CrashPanelProbe label="pending capability" /><CrashPanelProbe label="after failure" /></>);
+    await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+    getCapabilities.mockReturnValueOnce(active.promise);
+    const result = readListingSource().catch((error: unknown) => error);
+    sends[0].finish(401);
+    await waitFor(() => expect(refresh.transport).toHaveBeenCalledOnce());
+    await act(async () => { refresh.complete(); });
+    await waitFor(() => expect(sends.map(send => send.bearer)).toEqual(['old', 'replacement']));
+    await crashBoth('pending capability');
+    expectCrashReports();
+    await act(async () => { active.resolve(capability('active')); });
+    await readDraftAgain();
+    expect(getRootSellerCrashAccess(workspace)?.()?.draft).toBeUndefined();
+    if (outcome === 'abort after dispatch') {
+      controller.abort();
+      sends[1].finish(200);
+      expect(axios.isCancel(await result)).toBe(true);
+    } else {
+      const status = outcome === 'second 401' ? 401 : 500;
+      sends[1].finish(status);
+      expect(await result).toMatchObject({ response: { status } });
+    }
+    await crashBoth('after failure');
+    expectCrashReports(draftUuid, draftUuid);
+    expect(sends.map(send => send.bearer)).toEqual(['old', 'replacement']);
+    expect(refresh.transport).toHaveBeenCalledOnce();
+    expect(readListingDraft).toHaveBeenCalledTimes(2);
+  },
+);
+
+it.each(['abort while deferred', 'refresh error'] as const)('keeps a queued source off the wire on %s', async outcome => {
+  const sends = useSourceWire();
+  const refresh = deferWireRefresh();
+  const controller = new AbortController();
+  api.interceptors.request.use(config => ({ ...config, signal: controller.signal }), undefined, { synchronous: true });
+  await observeActiveSeller(true, <CrashPanelProbe label="before dispatch" />);
+  await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+  const flight = refreshAccessToken().catch((error: unknown) => error);
+  const result = readListingSource().catch((error: unknown) => error);
+  expect(sends).toHaveLength(0);
+  expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
+  if (outcome === 'abort while deferred') {
+    controller.abort();
+    await act(async () => { refresh.complete(); await flight; });
+    expect(axios.isCancel(await result)).toBe(true);
+    await readDraftAgain();
+  } else {
+    refresh.complete(500);
+    expect(await result).toMatchObject({ response: { status: 500 } });
+    expect(await result).toBe(await flight);
+  }
+  await crashBoth('before dispatch');
+  expectCrashReports(draftUuid, draftUuid);
+  expect(sends).toHaveLength(0);
+  expect(refresh.transport).toHaveBeenCalledOnce();
+});
+
+it.each(['route exit', 'account replacement', 'clear and restore'] as const)(
+  'does not reattach an old source read after %s before 401 replay', async change => {
+    const sends = useSourceWire();
+    const dashboard = await observeActiveSeller(true, <CrashPanelProbe label="new admission" />);
+    await waitFor(() => expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid));
+    const result = readListingSource().catch((error: unknown) => error);
+    expect(sends.map(send => send.bearer)).toEqual(['old']);
+    if (change === 'route exit') {
+      dashboard.navigate(sibling);
+      dashboard.navigate(workspace);
+    } else if (change === 'account replacement') {
+      await act(async () => { advanceAuthSessionOwner(false); signIn('seller', 'replacement-owner'); });
+    } else {
+      act(() => {
+        useAuthStore.setState({ token: null });
+        useAuthStore.setState({ token: 'synthetic-token' });
+      });
+    }
+    await act(async () => { useAuthStore.setState({ token: rotatedToken }); });
+    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Read draft again' }).disabled).toBe(false));
+    await readDraftAgain();
+    expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
+    sends[0].finish(401);
+    if (change === 'account replacement') {
+      expect(await result).toMatchObject({ response: { status: 401 } });
+      expect(sends.map(send => send.bearer)).toEqual(['old']);
+    } else {
+      await waitFor(() => expect(sends.map(send => send.bearer)).toEqual(['old', 'replacement']));
+      expect(getRootSellerCrashAccess(workspace)?.()?.draft?.uuid).toBe(draftUuid);
+      sends[1].finish(200);
+      expect(await result).toMatchObject({ current_draft_id: replacementUuid });
+    }
+    await crashBoth('new admission');
+    expectCrashReports(draftUuid, draftUuid);
+  },
+);
 
 it('ends passive source observation on dashboard teardown while retaining the last root proof', async () => {
   const dashboard = await observeActiveSeller(true);

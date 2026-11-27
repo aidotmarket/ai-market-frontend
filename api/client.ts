@@ -1,6 +1,6 @@
 'use client';
 
-import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+import axios, { type AxiosAdapter, type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, advanceAuthSessionOwner, assertAuthSessionOwner, isAuthSessionOwner } from '@/lib/auth-session-owner';
 import { sessionCsrf } from '@/lib/session-csrf';
@@ -64,6 +64,25 @@ export function reserveRecoveryRefresh(assertCurrent: () => void) {
 }
 
 export type OwnedRequest = InternalAxiosRequestConfig & { _authOwner?: number; _authToken?: string | null; _retry?: boolean };
+
+export function observeListingSourceDispatch(observe: (usesCurrentCredential: boolean) => void): AxiosAdapter {
+  const adapter = api.defaults.adapter;
+  return (request: OwnedRequest) => {
+    const send = axios.getAdapter(adapter);
+    // The in-process adapter survives Axios replay. Session admission unwraps
+    // its refresh wait and rebinds credentials before invoking this adapter.
+    if (request.method === 'get' && request.url === '/seller-workspace/listing-source') {
+      try {
+        const { _authOwner, _authToken } = request;
+        observe(!!_authToken && _authOwner !== undefined && isAuthSessionOwner(_authOwner) &&
+          _authToken === useAuthStore.getState().token && request.headers.get('Authorization') === `Bearer ${_authToken}`);
+      } catch {
+        // Crash reporting must not interfere with an ordinary source read.
+      }
+    }
+    return send(request);
+  };
+}
 
 const DEFAULT_REFRESH_RETRY_SECONDS = 60;
 const MAX_REFRESH_RETRY_SECONDS = 60;

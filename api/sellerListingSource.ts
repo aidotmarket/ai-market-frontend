@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, observeListingSourceDispatch } from './client';
 import {nativeWrite} from './connector-seller-settings';
 import { beginSellerWorkspaceCrashSourceRead, clearSellerWorkspaceCrashDraft } from '@/lib/seller-workspace-crash-access';
 export interface SourceContent {
@@ -9,14 +9,16 @@ export interface SourceRead { version: number; content: SourceContent; connectio
 export interface SourceResponse { source: SourceRead | null; current_draft_id: string | null }
 export interface SourceSaveResponse extends SourceResponse { source: SourceRead }
 export async function readListingSource(draft_id?: string | null): Promise<SourceResponse> {
-  const finishSourceRead = beginSellerWorkspaceCrashSourceRead(draft_id);
+  const observation = beginSellerWorkspaceCrashSourceRead(draft_id);
+  const params = draft_id ? { params: { draft_id } } : undefined;
+  const config = observation ? { ...params, adapter: observeListingSourceDispatch(observation.dispatch) } : params;
   let response: SourceResponse | undefined;
   try {
-    const { data } = await api.get<SourceResponse>('/seller-workspace/listing-source', draft_id ? {params:{draft_id}} : undefined);
+    const { data } = await api.get<SourceResponse>('/seller-workspace/listing-source', config);
     response = data;
     return data;
   } finally {
-    finishSourceRead?.(response);
+    observation?.finish(response);
   }
 }
 export async function saveListingSource(content: SourceContent, expected_version: number, request_id: string, expected_current_draft_id: string | null, draft_id?: string | null): Promise<SourceSaveResponse> {
