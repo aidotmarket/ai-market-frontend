@@ -61,12 +61,14 @@ function RenderedMessages() {
 
 function renderProvider(storedSessionId = 'stale-session', showMessages = false) {
   sessionStorage.setItem(SESSION_KEY, storedSessionId);
-  return render(
+  const provider = () => (
     <AllAIProvider>
       <Probe />
       {showMessages && <RenderedMessages />}
     </AllAIProvider>
   );
+  const view = render(provider());
+  return { ...view, rerenderProvider: () => view.rerender(provider()) };
 }
 
 function response(status: number, data: unknown = {}) {
@@ -1123,6 +1125,194 @@ describe('signed-out gateway help', () => {
         .toEqual(path === '/aim-data' ? [guideUrl] : []);
     }
   );
+});
+
+describe('static Pricing recovery', () => {
+  const adviceCopy = {
+    en: 'General guidance for forecasting seasonal demand. Look for historical weather data, holiday or local event calendars, and weekly sales data or public retail sales indices. Listing prices are one-time payments. Check the individual listing for its displayed price and terms.',
+    es: 'Orientación general para prever la demanda estacional. Busca datos históricos del tiempo, calendarios de festivos o eventos locales y datos de ventas semanales o índices públicos de ventas minoristas. Los precios de los anuncios se abonan en un único pago. Consulta el precio indicado y las condiciones en la ficha de cada anuncio.',
+    'zh-Hans': '预测季节性需求的一般建议。可以查找历史天气数据、节假日或本地活动日历，以及每周销售数据或公开的零售销售指数。商品标价为一次性付款。请在具体商品页面查看所显示的价格和条款。',
+  };
+  const question = 'What data could help me forecast seasonal demand?';
+  const recoveryOutcomes = ['answer_unverified', 'retrieval_unavailable'] as const;
+
+  async function mountRecovery(page: string, reply: Response | Promise<Response>, signedIn = false) {
+    mocks.pathname = page;
+    if (signedIn) {
+      mocks.auth.user = { role: 'buyer' };
+      mocks.auth.token = 'signed-in-token';
+    }
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === STATUS_URL) return response(200, {
+        available: true, supported_locales: [...ANONYMOUS_ALLAI_LOCALES], cache_seconds: 5,
+      });
+      if (url === `${SESSION_URL}/stale-session`) return response(200, { messages: [] });
+      if (url === MESSAGE_URL) return reply;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const view = renderProvider('stale-session', true);
+    if (context().anonymousSurfaceActive) {
+      await waitFor(() => expect(context().anonymousAvailable).toBe(true));
+    }
+    return view;
+  }
+
+  it.each(recoveryOutcomes.flatMap(outcome =>
+    ANONYMOUS_ALLAI_LOCALES.map(locale => ({ outcome, locale }))
+  ))('renders $locale advice on signed-out Pricing after $outcome until a token arrives', async ({ outcome, locale }) => {
+    const view = await mountRecovery('/pricing', sseEvents({ type: 'safe_failure', outcome, text: 'Older server copy.' }));
+    act(() => context().setLocale(locale));
+    await send(outcome === 'answer_unverified' ? question : 'Hello');
+
+    const resources = anonymousAllAIResources(locale);
+    const safeCopy = screen.getByText(resources.safeOutcomes[outcome]);
+    expect(safeCopy.closest('[data-safe-outcome]')?.getAttribute('data-safe-outcome')).toBe(outcome);
+    expect(screen.queryByText('Older server copy.')).toBeNull();
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.searchListings }).getAttribute('href')).toBe('/find-data');
+    expect(screen.getByText(resources.accountRequired)).toBeTruthy();
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href'))
+      .toBe('/register?redirect=%2Frequests%2Fnew');
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
+    expect(messagePayload(messageCalls()[0]).context).toEqual({ page: '/pricing' });
+    expect(context().messages.at(-1)?.content).toBe('Older server copy.');
+    expect(safeCopy.closest('[data-safe-outcome]')?.contains(screen.getByText(adviceCopy[locale]))).toBe(true);
+
+    mocks.auth.token = 'signed-in-token';
+    view.rerenderProvider();
+
+    expect(mocks.auth.user).toBeNull();
+    expect(screen.queryByText(adviceCopy[locale])).toBeNull();
+    expect(screen.getByText(resources.safeOutcomes[outcome]).closest('[data-safe-outcome]')?.getAttribute('data-safe-outcome'))
+      .toBe(outcome);
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.searchListings }).getAttribute('href')).toBe('/find-data');
+    expect(screen.getByText(resources.accountRequired)).toBeTruthy();
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href'))
+      .toBe('/register?redirect=%2Frequests%2Fnew');
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
+  });
+
+  it.each(recoveryOutcomes.flatMap(outcome => [
+    { page: '/pricing', signedIn: true },
+    ...['/', '/find-data', '/search', '/listings/example-listing', '/aim-data', '/support', '/pricing/details']
+      .map(page => ({ page, signedIn: false })),
+  ].map(surface => ({ ...surface, outcome }))))(
+    'omits advice on $page (signed in: $signedIn) after $outcome', async ({ page, signedIn, outcome }) => {
+      await mountRecovery(page, sseEvents({ type: 'safe_failure', outcome }), signedIn);
+      act(() => context().setLocale('en'));
+      await send(question);
+
+      const resources = anonymousAllAIResources('en');
+      expect(screen.getByText(resources.safeOutcomes[outcome])).toBeTruthy();
+      expect(screen.queryByText(adviceCopy.en)).toBeNull();
+      expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href'))
+        .toBe(signedIn ? '/requests/new' : '/register?redirect=%2Frequests%2Fnew');
+    }
+  );
+
+  it.each([
+    { page: '/find-data', signedIn: false, outcome: 'answer_unverified' },
+    { page: '/pricing', signedIn: true, outcome: 'retrieval_unavailable' },
+  ] as const)('omits advice after moving from $page (signed in: $signedIn) to signed-out Pricing', async ({
+    page, signedIn, outcome,
+  }) => {
+    const view = await mountRecovery(page, sseEvents({ type: 'safe_failure', outcome }), signedIn);
+    act(() => context().setLocale('en'));
+    await send(question);
+
+    const expectedCopy = anonymousAllAIResources('en').safeOutcomes[outcome];
+    expect(screen.getByText(expectedCopy)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    const failureId = context().messages.at(-1)?.id;
+    const calls = fetchMock.mock.calls.length;
+    mocks.pathname = '/pricing';
+    mocks.auth.user = null;
+    mocks.auth.token = null;
+    view.rerenderProvider();
+
+    expect(context().page).toBe('/pricing');
+    expect(context().isSignedIn).toBe(false);
+    expect(context().messages.at(-1)).toMatchObject({ id: failureId, safeOutcome: outcome });
+    expect(screen.getByText(expectedCopy)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it('omits advice when navigation into Pricing precedes a non-Pricing failure', async () => {
+    const reply = deferred<Response>();
+    const view = await mountRecovery('/pricing/details', reply.promise);
+    act(() => context().setLocale('en'));
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage(question); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+
+    mocks.pathname = '/pricing';
+    view.rerenderProvider();
+    await act(async () => {
+      reply.resolve(sseEvents({ type: 'safe_failure', outcome: 'answer_unverified' }));
+      await sending;
+    });
+
+    expect(messagePayload(messageCalls()[0]).context).toEqual({ page: '/pricing/details' });
+    expect(context().page).toBe('/pricing');
+    expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes.answer_unverified)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
+  });
+
+  it('retains Pricing eligibility across a pending response and checks live route and auth', async () => {
+    const reply = deferred<Response>();
+    const view = await mountRecovery('/pricing', reply.promise);
+    act(() => context().setLocale('en'));
+    let sending!: Promise<void>;
+    act(() => { sending = context().sendMessage(question); });
+    await waitFor(() => expect(messageCalls()).toHaveLength(1));
+
+    mocks.pathname = '/pricing/details';
+    view.rerenderProvider();
+    await act(async () => {
+      reply.resolve(sseEvents({ type: 'safe_failure', outcome: 'retrieval_unavailable' }));
+      await sending;
+    });
+    expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes.retrieval_unavailable)).toBeTruthy();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+
+    mocks.pathname = '/pricing';
+    view.rerenderProvider();
+    expect(screen.getByText(adviceCopy.en)).toBeTruthy();
+
+    mocks.auth.user = { role: 'buyer' };
+    mocks.auth.token = 'signed-in-token';
+    view.rerenderProvider();
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
+    expect(sessionStorage.getItem(SESSION_KEY)).toBe('stale-session');
+  });
+
+  it.each(['no_matches', 'surface_disabled', 'rate_limited', 'message_too_long', 'unsupported_language'] as const)(
+    'omits advice on signed-out Pricing after %s', async (outcome) => {
+      await mountRecovery('/pricing', sseEvents({ type: 'safe_failure', outcome }));
+      act(() => context().setLocale('en'));
+      await send(question);
+
+      expect(screen.getByText(anonymousAllAIResources('en').safeOutcomes[outcome])).toBeTruthy();
+      expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    }
+  );
+
+  it('preserves a trusted answer on signed-out Pricing', async () => {
+    const revision = 'f'.repeat(64);
+    await mountRecovery('/pricing', sseEvents({
+      type: 'answer', text: 'Verified answer.', source_revision_set: revision,
+    }));
+    act(() => context().setLocale('en'));
+    await send(question);
+
+    expect(screen.getByText('Verified answer.').closest('[data-fact-revision-set]')
+      ?.getAttribute('data-fact-revision-set')).toBe(revision);
+    expect(screen.queryByText(adviceCopy.en)).toBeNull();
+    expect(screen.queryAllByRole('link')).toEqual([]);
+  });
 });
 
 describe('mounted anonymous next-step navigation', () => {

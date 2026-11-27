@@ -51,6 +51,7 @@ export interface Message {
   historical?: boolean;
   factRevisionSet?: string;
   safeOutcome?: AnonymousSafeOutcome;
+  pricingRecoveryEligible?: boolean;
   nextStep?: AnonymousNextStep;
 }
 
@@ -484,6 +485,7 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
 
       const listingMatch = pathname.match(/^\/listings\/([^/]+)/);
       const signedOutGatewayHelp = !user && (contextPath === '/aim-data' || contextPath === '/support');
+      const sentFromSignedOutPricing = !user && !token && pathname === '/pricing';
 
       try {
         const sessionId = await ensureSession();
@@ -615,6 +617,8 @@ export function AllAIProvider({ children }: { children: ReactNode }) {
                         ...m,
                         content: !signedOutGatewayHelp && !fallbackDestinations && typeof evt.text === 'string' && evt.text ? evt.text : fallback,
                         safeOutcome: outcome,
+                        pricingRecoveryEligible: sentFromSignedOutPricing &&
+                          (outcome === 'answer_unverified' || outcome === 'retrieval_unavailable'),
                         fallbackDestinations,
                         showAimDataSetupGuide,
                         listingFailure: undefined,
