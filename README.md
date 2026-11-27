@@ -73,6 +73,45 @@ refusal, or transport uncertainty is reported separately from verification;
 an ambiguous POST is never retried automatically. Live provider and release
 verification remain owner work.
 
+## PR Rule check
+
+When a PR adds an executable refusal, block, gate, fence, mandatory approval or
+proof, or a fail-closed path, explain the harm, the restriction and when it
+applies, the cost and who bears it, and why a narrower approach fell short.
+The PR template includes the prompts. Prose, bullets, and subheadings work.
+Editing the PR description reruns the check. Ordinary changes can leave the
+commented template as-is.
+
+The check compares changed TypeScript and JavaScript runtime files with the
+PR's merge base. It reports direct guarded HTTP refusals (401, 403, 423 or 428),
+named permission errors, and native controls disabled by a negated
+authorization, approval or proof predicate. It also recognizes direct denials
+in a catch block after a named verification call. For a confirmed addition,
+CI fails when it finds no visible Rule check answer text. Reviewers assess
+whether the explanation answers all four questions and cover restrictions
+outside these patterns.
+
+Possible rewrites and ambiguous outcomes such as policy-dependent early returns
+or named fail-closed callbacks are advisory. After matching exact guards and
+moves, each removed guard can make one addition with a similar outcome
+advisory. Tests, fixtures, docs, and descriptive UI copy are outside automatic
+enforcement. The check compares syntax and can miss indirect predicates,
+reachability changes, compound conditions, alternate status codes, or rules
+expressed in other languages or configuration.
+
+1. **Harm.** Koskadeux MCP #619 introduced an undocumented restriction that
+   invalidated otherwise approved verdicts and interrupted review work.
+2. **Mechanism.** A PR-scoped check flags confirmed additions in the diff and
+   asks the author to explain them for human review.
+3. **Cost.** The workflow runs a short job. Affected authors write a brief
+   explanation, and one independent reviewer assesses it.
+4. **Narrower approach.** A template alone depends on someone noticing every
+   change, and review missed #619. Ordinary changes and existing restrictions
+   are exempt, and low-certainty detections are advisory.
+
+Run the checker fixtures with `node --test scripts/ci/pr-rule-check.fixtures.mjs`
+after installing the repository dependencies.
+
 ## Operating guides
 
 - [Marketplace frontend](https://github.com/aidotmarket/runbooks/blob/main/ai-market-frontend.md): deployment, routes and customer issue diagnosis.
