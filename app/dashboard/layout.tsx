@@ -7,7 +7,8 @@ import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
 import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
 import {
-  captureSellerCrashSession, getSellerWorkspaceCrashProof, observeRootSellerCrashAccess, retireRootSellerCrashAccess,
+  captureSellerCrashSession, getSellerWorkspaceCrashProof, mountSellerWorkspaceCrashVisit,
+  observeRootSellerCrashAccess, retireRootSellerCrashAccess,
 } from '@/lib/seller-workspace-crash-access';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
@@ -40,7 +41,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const owner = user?.id;
   const request = useRef(0);
-  const dashboardMount = useRef({});
   const [snapshot, setSnapshot] = useState<CapabilitySnapshot | null>(null);
 
   const refreshCapabilities = useCallback(async () => {
@@ -148,10 +148,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ownerAdmission?.generation === ownerGeneration ? ownerAdmission.result : undefined;
   const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
   const routeReady = authenticated && (allowsSignedInUsers || isSeller || ownerAccess === 'allowed');
-  const visitSession = routeReady ? current?.session ?? null : null;
+  const visitOwner = routeReady ? owner ?? null : null;
+  useLayoutEffect(() => mountSellerWorkspaceCrashVisit(pathname, visitOwner, ownerGeneration),
+    [pathname, visitOwner, ownerGeneration]);
+
+  const crashSession = routeReady && isSellerActive ? current.session : null;
   useLayoutEffect(() => {
-    observeRootSellerCrashAccess(pathname, dashboardMount.current, visitSession, crashVersion === request.current);
-  }, [crashVersion, pathname, visitSession]);
+    observeRootSellerCrashAccess(crashVersion === request.current ? crashSession : null);
+  }, [crashSession, crashVersion, pathname, visitOwner, ownerGeneration]);
 
   useEffect(() => {
     if (isLoading || !hydrated) return;

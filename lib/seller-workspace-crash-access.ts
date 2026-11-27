@@ -15,10 +15,10 @@ export function captureSellerCrashSession(owner: string, token: string): SellerS
         next.isAuthenticated !== previous.isAuthenticated || next.hydrated !== previous.hydrated ||
         next.isLoading !== previous.isLoading || next.pendingTwoFactor !== previous.pendingTwoFactor) {
         credentialRevision++;
-        clearRootSellerCrashAccess();
+        invalidateSellerCrashSession();
       }
     });
-    subscribeAuthSessionOwner(clearRootSellerCrashAccess);
+    subscribeAuthSessionOwner(invalidateSellerCrashSession);
     trackingCredentials = true;
   }
   return { owner, token, generation: authSessionOwner(), credentialRevision };
@@ -34,19 +34,29 @@ function getCurrentSellerSessionToken(session: SellerSession): string | null {
 
 type WorkspaceVisit = {
   pathname: string;
-  dashboardMount: object;
+  owner: string;
+  generation: number;
+  sourceReads?: SourceReadEpoch;
+};
+type SourceReadEpoch = {
   session: SellerSession;
-  pendingSourceReads: number;
+  pending: number;
 };
 type CrashObservation = {
+  pathname: string;
   session: SellerSession;
-  visit: WorkspaceVisit;
+  sourceReads: SourceReadEpoch;
   getProof: SellerWorkspaceCrashProof;
   draftRevision: number;
   draft?: { uuid: string };
 };
 let rootAccess: CrashObservation | undefined;
 let workspaceVisit: WorkspaceVisit | undefined;
+
+function invalidateSellerCrashSession() {
+  retireRootSellerCrashAccess();
+  if (workspaceVisit) workspaceVisit.sourceReads = undefined;
+}
 
 // Capability revalidation retires the draft proof and keeps outstanding reads for this visit.
 export function retireRootSellerCrashAccess() {
@@ -64,10 +74,33 @@ export function discardRootSellerCrashAccessOutside(pathname: string | null) {
   if (!isSellerWorkspacePath(pathname)) clearRootSellerCrashAccess();
 }
 
+export function mountSellerWorkspaceCrashVisit(pathname: string, owner: string | null, generation: number) {
+  clearRootSellerCrashAccess();
+  if (!owner || !isSellerWorkspacePath(pathname)) return;
+  const visit: WorkspaceVisit = { pathname, owner, generation };
+  workspaceVisit = visit;
+  return () => {
+    // End read admission at teardown. Next's root fallback still needs the last observation.
+    if (workspaceVisit === visit) workspaceVisit = undefined;
+  };
+}
+
+function currentSourceReadEpoch() {
+  const visit = workspaceVisit;
+  if (!visit || !isSellerWorkspacePath(visit.pathname) || !isAuthSessionOwner(visit.generation)) return;
+  const token = useAuthStore.getState().token;
+  if (!token) return;
+  const session = visit.sourceReads?.session ?? captureSellerCrashSession(visit.owner, token);
+  if (!getCurrentSellerSessionToken(session)) return;
+  // Use live credentials so a normal read can register before React commits
+  // the rotation or the replacement capability request has even started.
+  return (visit.sourceReads ??= { session, pending: 0 });
+}
+
 export function getSellerWorkspaceCrashProof(session: SellerSession) {
   const token = getCurrentSellerSessionToken(session);
   if (!token) return null;
-  const draft = rootAccess?.session === session && rootAccess.visit.pendingSourceReads === 0 && isSellerWorkspacePath(rootAccess.visit.pathname)
+  const draft = rootAccess?.session === session && rootAccess.sourceReads.pending === 0 && isSellerWorkspacePath(rootAccess.pathname)
     ? rootAccess.draft : undefined;
   return { token, draft };
 }
@@ -100,15 +133,16 @@ export function checkSellerWorkspaceCrashDraft() {
 }
 
 export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | null) {
-  const visit = workspaceVisit;
-  if (!visit || !isSellerWorkspacePath(visit.pathname) || !getCurrentSellerSessionToken(visit.session)) return;
+  const sourceReads = currentSourceReadEpoch();
+  if (!sourceReads) return;
   // An outstanding source read can contradict a later draft read in this visit,
   // even when it starts while capability revalidation has retired crash proof.
-  visit.pendingSourceReads++;
+  sourceReads.pending++;
   return (response?: { current_draft_id: unknown }) => {
-    visit.pendingSourceReads--;
+    if (workspaceVisit?.sourceReads !== sourceReads || !isSellerWorkspacePath(workspaceVisit.pathname)) return;
+    sourceReads.pending--;
     const active = rootAccess;
-    if (!response || active?.visit !== visit || !active.getProof()) return;
+    if (!response || active?.sourceReads !== sourceReads || !active.getProof()) return;
     const current = response.current_draft_id;
     if (!active.draft || current !== active.draft.uuid || (expectedDraftId && current !== expectedDraftId)) {
       // A source read cannot prove a pointer. When it finishes before any
@@ -118,23 +152,16 @@ export function beginSellerWorkspaceCrashSourceRead(expectedDraftId?: string | n
   };
 }
 
-// Keep the mounted visit through capability refresh. Next replaces the tree on
-// a root crash, so the latest observation also survives that teardown.
-export function observeRootSellerCrashAccess(
-  pathname: string | null, dashboardMount: object, session: SellerSession | null, active: boolean,
-) {
-  if (pathname === null || !isSellerWorkspacePath(pathname) || !session || !getCurrentSellerSessionToken(session)) {
-    clearRootSellerCrashAccess();
-    return;
-  }
+export function observeRootSellerCrashAccess(session: SellerSession | null) {
   retireRootSellerCrashAccess();
-  const visit = workspaceVisit?.dashboardMount === dashboardMount
-    ? workspaceVisit : { pathname, dashboardMount, session, pendingSourceReads: 0 };
-  workspaceVisit = visit;
-  if (!active) return;
+  if (!session || !getCurrentSellerSessionToken(session)) return;
+  const visit = workspaceVisit;
+  const sourceReads = currentSourceReadEpoch();
+  if (!visit || !sourceReads) return;
+  const { pathname } = visit;
 
   const observation: CrashObservation = {
-    session, visit, draftRevision: 0,
+    pathname, session, sourceReads, draftRevision: 0,
     getProof: () => rootAccess === observation && isSellerWorkspacePath(pathname) ? getSellerWorkspaceCrashProof(session) : null,
   };
   rootAccess = observation;
