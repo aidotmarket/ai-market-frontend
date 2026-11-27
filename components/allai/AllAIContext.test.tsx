@@ -1160,8 +1160,8 @@ describe('static Pricing recovery', () => {
 
   it.each(recoveryOutcomes.flatMap(outcome =>
     ANONYMOUS_ALLAI_LOCALES.map(locale => ({ outcome, locale }))
-  ))('renders $locale advice on signed-out Pricing after $outcome', async ({ outcome, locale }) => {
-    await mountRecovery('/pricing', sseEvents({ type: 'safe_failure', outcome, text: 'Older server copy.' }));
+  ))('renders $locale advice on signed-out Pricing after $outcome until a token arrives', async ({ outcome, locale }) => {
+    const view = await mountRecovery('/pricing', sseEvents({ type: 'safe_failure', outcome, text: 'Older server copy.' }));
     act(() => context().setLocale(locale));
     await send(outcome === 'answer_unverified' ? question : 'Hello');
 
@@ -1177,6 +1177,19 @@ describe('static Pricing recovery', () => {
     expect(messagePayload(messageCalls()[0]).context).toEqual({ page: '/pricing' });
     expect(context().messages.at(-1)?.content).toBe('Older server copy.');
     expect(safeCopy.closest('[data-safe-outcome]')?.contains(screen.getByText(adviceCopy[locale]))).toBe(true);
+
+    mocks.auth.token = 'signed-in-token';
+    view.rerenderProvider();
+
+    expect(mocks.auth.user).toBeNull();
+    expect(screen.queryByText(adviceCopy[locale])).toBeNull();
+    expect(screen.getByText(resources.safeOutcomes[outcome]).closest('[data-safe-outcome]')?.getAttribute('data-safe-outcome'))
+      .toBe(outcome);
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.searchListings }).getAttribute('href')).toBe('/find-data');
+    expect(screen.getByText(resources.accountRequired)).toBeTruthy();
+    expect(screen.getByRole('link', { name: resources.recoveryLinks.postRequestWithSellers }).getAttribute('href'))
+      .toBe('/register?redirect=%2Frequests%2Fnew');
+    expect(fetchMock.mock.calls.map(requestUrl)).toEqual([`${SESSION_URL}/stale-session`, MESSAGE_URL]);
   });
 
   it.each(recoveryOutcomes.flatMap(outcome => [

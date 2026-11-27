@@ -29,7 +29,7 @@ export default function AllAIMessage({
   isStreaming: boolean;
 }) {
   const { locale, anonymousSurfaceActive, page } = useAllAI();
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const resources = anonymousAllAIResources(locale);
   if (message.role === 'system') {
     return (
@@ -53,7 +53,7 @@ export default function AllAIMessage({
   const hasRecoveryLinks = !message.fallbackDestinations && (message.safeOutcome === 'answer_unverified' ||
     message.safeOutcome === 'retrieval_unavailable' ||
     message.safeOutcome === 'no_matches' || message.safeOutcome === 'rate_limited');
-  const showPricingRecovery = message.pricingRecoveryEligible && hasRecoveryLinks && !user && page === '/pricing';
+  const showPricingRecovery = message.pricingRecoveryEligible && hasRecoveryLinks && !user && !token && page === '/pricing';
   // Use the maintained customer copy even when a safe-failure event supplies older wording.
   // Re-localise length errors too, without adding recovery links.
   // Rate-limit copy is account-neutral: signing in does not lift limits.
