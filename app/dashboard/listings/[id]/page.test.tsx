@@ -3,12 +3,15 @@ import React, { Suspense } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ListingPage from './page';
-import { getMyListings, getSellerListing, getListingOwnership } from '@/api/listings';
+import { getMyListings, getSellerListing, getListingOwnership, getPendingSellerTermsListings } from '@/api/listings';
+import { getConnectStatus } from '@/api/connect';
+import licenceFixture from '@/tests/fixtures/s1931-listing-license-display.json';
 import { getGatewayListingSource } from '@/api/sellerGateways';
 import { getCloudflareVerifierStatus, getAwsVerifierStatus, setupAwsVerifier, type AWSVerifierStatus } from '@/api/dataVerificationGateway';
 const auth = vi.hoisted(() => ({ user: { id: 'seller' }, isAuthenticated: true, hydrated: true }));
 vi.mock('@/store/auth', () => ({ useAuthStore: () => auth }));
-vi.mock('@/api/listings', () => ({ getMyListings: vi.fn(), getSellerListing: vi.fn(), getListingOwnership: vi.fn() }));
+vi.mock('@/api/listings', () => ({ getMyListings: vi.fn(), getSellerListing: vi.fn(), getListingOwnership: vi.fn(), getPendingSellerTermsListings: vi.fn() }));
+vi.mock('@/api/connect', () => ({ getConnectStatus: vi.fn() }));
 vi.mock('@/api/sellerGateways', () => ({ getGatewayListingSource: vi.fn() }));
 vi.mock('@/api/dataVerificationGateway', async importOriginal => ({ ...await importOriginal<typeof import('@/api/dataVerificationGateway')>(), getCloudflareVerifierStatus: vi.fn(), getAwsVerifierStatus: vi.fn(), setupAwsVerifier: vi.fn() }));
 const originalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
@@ -33,6 +36,18 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const optionalOptions = { timeout: 10_000, signal: expect.any(AbortSignal) };
+const pendingTermsResponse = (...ids: string[]) => ({ status: 200, data: {
+  count: ids.length,
+  listings: ids.map(id => ({ id, slug: id, title: 'My data', status: 'published', license_status: 'pending_seller_terms' })),
+} } as Awaited<ReturnType<typeof getPendingSellerTermsListings>>);
+const payoutsResponse = (enabled: boolean, status = 200) =>
+  ({ status, data: { payouts_enabled: enabled } } as Awaited<ReturnType<typeof getConnectStatus>>);
+
+function expectOwnerActions() {
+  expect(screen.getByRole('link', { name: 'Edit listing' }).getAttribute('href')).toBe('/dashboard/listings/listing/edit');
+  expect(screen.getByRole('link', { name: 'Back to listings' }).getAttribute('href')).toBe('/dashboard/listings');
+}
+
 describe('seller listing verification entry', () => {
   it.each(['published', 'unlisted'] as const)('uses the same owner overview for a %s listing', async status => {
     const title = `Synthetic dataset ${'longUnbrokenTitle'.repeat(20)}`;
@@ -52,6 +67,90 @@ describe('seller listing verification entry', () => {
     expect(screen.getByRole('link', { name: 'Edit listing' }).getAttribute('href')).toBe('/dashboard/listings/listing/edit');
   });
 
+  it.each([
+    ['verified', licenceFixture.license_display, licenceFixture.license_display.license_label],
+    ['unverified label', { ...licenceFixture.license_display, license_label: 'Unverified licence' }, 'Licence unavailable'],
+    ['bad digest', { ...licenceFixture.license_display, correction_digest: 'invalid' }, 'Licence unavailable'],
+    ['extra field', { ...licenceFixture.license_display, unexpected: true }, 'Licence unavailable'],
+  ])('keeps the owner overview with a %s licence display', async (_case, licenseDisplay, expected) => {
+    vi.mocked(getSellerListing).mockResolvedValue({
+      id: 'listing', title: 'My data', status: 'published',
+      license_display: licenseDisplay as Awaited<ReturnType<typeof getSellerListing>>['license_display'],
+    });
+    await page();
+    expect(screen.getByRole('heading', { name: 'My data' })).toBeTruthy();
+    expect(screen.getByText('Live', { exact: true })).toBeTruthy();
+    expect(screen.getByText(expected, { exact: true })).toBeTruthy();
+    expect(screen.queryByText('Unverified licence')).toBeNull();
+    expectOwnerActions();
+  });
+
+  it('uses the existing summary licence when the display fails verification', async () => {
+    vi.mocked(getSellerListing).mockResolvedValue({
+      id: 'listing', title: 'My data', status: 'published',
+      license_display: { ...licenceFixture.license_display, correction_id: 'invalid' } as Awaited<ReturnType<typeof getSellerListing>>['license_display'],
+      at_a_glance: licenceFixture.at_a_glance as Awaited<ReturnType<typeof getSellerListing>>['at_a_glance'],
+    });
+    await page();
+    expect(screen.getByText(licenceFixture.at_a_glance.license.value)).toBeTruthy();
+    expect(screen.queryByText(licenceFixture.license_display.license_label)).toBeNull();
+    expectOwnerActions();
+  });
+
+  it.each([
+    ['listing', 'Seller Terms need to be accepted.', 'Fix seller Terms', '/legal/terms/accept?context=seller&redirect=%2Fdashboard%2Flistings'],
+    ['another-listing', 'Payout setup is incomplete.', 'Fix payout setup', '/dashboard'],
+  ])('shows one held reason when the Terms response contains %s and payouts are disabled', async (pendingId, reason, fix, href) => {
+    vi.mocked(getPendingSellerTermsListings).mockResolvedValue(pendingTermsResponse(pendingId));
+    vi.mocked(getConnectStatus).mockResolvedValue(payoutsResponse(false));
+    await page();
+    expect(screen.getByText('Live — not buyable yet')).toBeTruthy();
+    expect(screen.getByText(reason)).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: /^Fix / })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: fix }).getAttribute('href')).toBe(href);
+    expect(screen.queryByText(pendingId === 'listing' ? 'Payout setup is incomplete.' : 'Seller Terms need to be accepted.')).toBeNull();
+    expectOwnerActions();
+  });
+
+  it('uses the existing public-reference presentation and skips readiness reads', async () => {
+    vi.mocked(getSellerListing).mockResolvedValue({
+      id: 'listing', title: 'My data', status: 'published', structured_metadata: { public_reference: null },
+    });
+    await page();
+    expect(screen.getByText('Live', { exact: true })).toBeTruthy();
+    expect(screen.getByText('Public source reference — no checkout.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Fix / })).toBeNull();
+    expect(getPendingSellerTermsListings).not.toHaveBeenCalled();
+    expect(getConnectStatus).not.toHaveBeenCalled();
+    expectOwnerActions();
+  });
+
+  it('keeps the overview visible while readiness is pending and after both reads fail', async () => {
+    vi.useFakeTimers();
+    vi.mocked(getPendingSellerTermsListings).mockReturnValue(new Promise(() => {}));
+    vi.mocked(getConnectStatus).mockRejectedValue(new Error('Private readiness error'));
+    await page();
+    expectOwnerActions();
+    const readinessOptions = { ...optionalOptions, validateStatus: expect.any(Function) };
+    expect(getPendingSellerTermsListings).toHaveBeenCalledWith(readinessOptions);
+    expect(getConnectStatus).toHaveBeenCalledWith(readinessOptions);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(screen.getByRole('heading', { name: 'My data' })).toBeTruthy();
+    expect(screen.getByText('Live', { exact: true })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Fix / })).toBeNull();
+    expect(screen.queryByText(/Private readiness error/)).toBeNull();
+    expectOwnerActions();
+  });
+
+  it('ignores error response bodies from the optional readiness reads', async () => {
+    vi.mocked(getPendingSellerTermsListings).mockResolvedValue({ ...pendingTermsResponse('listing'), status: 403 });
+    vi.mocked(getConnectStatus).mockResolvedValue(payoutsResponse(false, 401));
+    await page();
+    expect(screen.getByText('Live', { exact: true })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Fix / })).toBeNull();
+    expectOwnerActions();
+  });
+
   it.each(['unlisted', 'hidden', 'withdrawn', 'held', 'suspended'])('retains the authenticated owner view for %s listings', async status => {
     vi.mocked(getSellerListing).mockResolvedValue({ id: 'listing', title: 'My retained listing', status } as Awaited<ReturnType<typeof getSellerListing>>);
     await page();
@@ -68,6 +167,8 @@ describe('seller listing verification entry', () => {
     Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: () => null } });
     vi.mocked(getMyListings).mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof getMyListings>>);
     vi.mocked(getListingOwnership).mockResolvedValue(true);
+    vi.mocked(getPendingSellerTermsListings).mockResolvedValue(pendingTermsResponse());
+    vi.mocked(getConnectStatus).mockResolvedValue(payoutsResponse(true));
     vi.mocked(getSellerListing).mockResolvedValue({ id: 'listing', title: 'My data', status: 'published' } as Awaited<ReturnType<typeof getSellerListing>>);
     vi.mocked(getGatewayListingSource).mockResolvedValue({ type: 'gateway', gateway_id: 'gateway', file_ids: ['a'.repeat(32)] });
     vi.mocked(getCloudflareVerifierStatus).mockResolvedValue({ eligible: false, connection_id: null } as Awaited<ReturnType<typeof getCloudflareVerifierStatus>>);
@@ -93,11 +194,13 @@ describe('seller listing verification entry', () => {
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
     expect(screen.queryByText(/Verify this data/)).toBeNull();
   });
-  it('handles a core listing 404 without exposing cross-seller details', async () => {
-    vi.mocked(getSellerListing).mockRejectedValue({ response: { status: 404, data: { detail: 'unowned' } } });
+  it.each([403, 404])('handles a core listing %s without exposing cross-seller details', async status => {
+    vi.mocked(getSellerListing).mockRejectedValue({ response: { status, data: { detail: 'unowned' } } });
     await page(); await screen.findByText("We could not find a listing you can manage here. Open Your listings to choose another listing.");
     expect(screen.queryByText(/Verify this data/)).toBeNull();
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
+    expect(getPendingSellerTermsListings).not.toHaveBeenCalled();
+    expect(getConnectStatus).not.toHaveBeenCalled();
   });
   it('makes no seller calls while signed out', async () => {
     auth.isAuthenticated = false; await page(); await screen.findByRole('link', { name: 'Sign in' });
@@ -345,8 +448,12 @@ describe('seller listing verification entry', () => {
     expect(getGatewayListingSource).not.toHaveBeenCalled();
     expect(getAwsVerifierStatus).not.toHaveBeenCalled();
     expect(getCloudflareVerifierStatus).not.toHaveBeenCalled();
+    expect(getPendingSellerTermsListings).not.toHaveBeenCalled();
+    expect(getConnectStatus).not.toHaveBeenCalled();
     await act(async () => { ownership.resolve(false); });
     expect(screen.getByText("We could not find a listing you can manage here. Open Your listings to choose another listing.")).toBeTruthy();
     expect(getSellerListing).not.toHaveBeenCalled();
+    expect(getPendingSellerTermsListings).not.toHaveBeenCalled();
+    expect(getConnectStatus).not.toHaveBeenCalled();
   });
 });

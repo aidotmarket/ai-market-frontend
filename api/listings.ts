@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from './client';
+import type { AxiosRequestConfig } from 'axios';
 import { privateReadOptions } from './privateReads';
 import type {LicenseSelection} from './listingLicenses';
 import type { ListingAuthorityReferences } from './listingAuthority';
@@ -14,6 +15,7 @@ export type SellerListingSummary = Pick<SellerListingItem, 'id' | 'title'> & Lis
   updated_at?: ListingDetail['updated_at'];
   license_display?: ListingDetail['license_display'];
   at_a_glance?: ListingDetail['at_a_glance'];
+  structured_metadata?: unknown;
   raw_metadata?: { object_count?: number | null; file_size_bytes?: number | null } | null;
 };
 export type ListingWithAuthority = ListingDetail & ListingAuthorityReferences;
@@ -147,8 +149,9 @@ export interface PendingSellerTermsListing extends ListingAuthorityReferences {
   license_status: 'pending_seller_terms';
 }
 
-export const getPendingSellerTermsListings = () =>
+export const getPendingSellerTermsListings = (options?: Pick<AxiosRequestConfig, 'timeout' | 'signal' | 'validateStatus'>) =>
   api.get<{ count: number; listings: PendingSellerTermsListing[] }>('/sellers/me/listings', {
+    ...options,
     params: { license_status: 'pending_seller_terms' },
   });
 export const updateListing = (id: string, data: any) => api.patch(`/listings/${id}`, data);

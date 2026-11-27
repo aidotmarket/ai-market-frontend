@@ -16,25 +16,9 @@ import { formatPrice, formatDate } from '@/lib/format';
 import { formatListingActionError } from '@/lib/listing-action-error';
 import { dangerSecondaryButtonClass, secondaryButtonClass } from '@/components/ui/button-styles';
 import type { SellerListingItem } from '@/types';
-import { heldStatus, listingStatus, sellerTermsHref } from './listing-status';
+import { heldStatus, ListingReadinessNote, listingReadiness, listingStatus, readPayoutsStatus, sellerTermsHref, type PayoutsStatus } from './listing-status';
 
 type ListingRow = SellerListingItem & { structured_metadata?: unknown };
-type PayoutsStatus = 'unknown' | 'enabled' | 'disabled';
-
-function listingReadiness(listing: ListingRow, pendingTerms: boolean, payoutsStatus: PayoutsStatus) {
-  if (listing.status !== 'published') return null;
-  if (isPublicReference(listing.structured_metadata)) {
-    return { reason: 'Public source reference — no checkout.' };
-  }
-  if (pendingTerms) return { reason: 'Seller Terms need to be accepted.', href: sellerTermsHref, fix: 'Fix seller Terms' };
-  if (payoutsStatus === 'disabled') return { reason: 'Payout setup is incomplete.', href: '/dashboard', fix: 'Fix payout setup' };
-  return null;
-}
-
-function isPublicReference(metadata: unknown): boolean {
-  return metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
-    && Object.prototype.hasOwnProperty.call(metadata, 'public_reference');
-}
 
 const PAGE_SIZE = 20;
 const rowButtonClass = `min-h-11 w-auto! ${secondaryButtonClass}`;
@@ -100,7 +84,7 @@ function OwnerListings({ userId }: { userId: string }) {
       setError(customerLoadError("listings"));
     }
     const payoutsEnabled = connectRes.status === 'fulfilled' ? connectRes.value.data?.payouts_enabled : undefined;
-    setPayoutsStatus(payoutsEnabled === true ? 'enabled' : payoutsEnabled === false ? 'disabled' : 'unknown');
+    setPayoutsStatus(readPayoutsStatus(payoutsEnabled));
     const terms = pendingRes.status === 'fulfilled' ? pendingRes.value.data : null;
     setPendingTerms({
       count: terms?.count ?? 0,
@@ -179,7 +163,7 @@ function OwnerListings({ userId }: { userId: string }) {
       {workspaceHref && <p role="status" className="text-sm text-gray-700">
         <Link href={workspaceHref} className="font-semibold text-indigo-700 underline">Manage this listing in Seller Workspace.</Link>
       </p>}
-      {remainingPendingTerms > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+      {!loading && remainingPendingTerms > 0 && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
         <p className="font-semibold">{remainingPendingTerms} inherited {remainingPendingTerms === 1 ? 'listing needs' : 'listings need'} seller Terms.</p>
         <p className="mt-1">Review and accept Terms {termsVersion || '1.1'} to make eligible listings available for purchase.</p>
         <Link href={sellerTermsHref} className="mt-2 inline-block font-semibold underline">Review and accept Terms {termsVersion || '1.1'}</Link>
@@ -229,11 +213,7 @@ function OwnerListings({ userId }: { userId: string }) {
                   </div>
                   <div className="min-w-0 flex-[1_1_15rem] text-sm [overflow-wrap:anywhere]">
                     <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${status.style}`}>{status.label}</span>
-                    {readiness && (
-                      <p className="mt-1.5 text-gray-700">
-                        {readiness.reason}{readiness.href && <> <Link href={readiness.href} className="font-semibold text-indigo-700 underline">{readiness.fix}</Link></>}
-                      </p>
-                    )}
+                    {readiness && <ListingReadinessNote readiness={readiness} className="mt-1.5 text-gray-700" />}
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap items-start gap-2">

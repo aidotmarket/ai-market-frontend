@@ -201,6 +201,19 @@ function deferred<T>() {
 }
 const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
 
+it('waits for the new page before showing a Terms banner based on its rows', async () => {
+  const nextPage = deferred<{ data: ReturnType<typeof rows> }>();
+  api.getMyListings.mockResolvedValueOnce({ data: rows(1, 21) }).mockReturnValueOnce(nextPage.promise);
+  api.getPendingSellerTermsListings.mockResolvedValue({ data: { count: 1, listings: [{ id: 'id-1' }] } });
+  render(<ListingsPage />);
+  await screen.findByRole('link', { name: 'Fix seller Terms' });
+  fireEvent.click(button('Next'));
+  expect(screen.getByText('Loading listings...')).toBeTruthy();
+  expect(screen.queryByText('1 inherited listing needs seller Terms.')).toBeNull();
+  await act(async () => { nextPage.resolve({ data: rows(21, 1) }); });
+  expect(screen.getByText('1 inherited listing needs seller Terms.')).toBeTruthy();
+});
+
 it('reaches older rows in backend order, hides each sentinel, and returns from the last page', async () => {
   api.getMyListings.mockResolvedValueOnce({ data: rows(1, 21) })
     .mockResolvedValueOnce({ data: rows(21, 21) })
