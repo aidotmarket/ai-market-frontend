@@ -100,12 +100,24 @@ describe('homepage listing grid', () => {
       .toEqual(['/listings/first', '/listings/second']);
   });
 
+  it('leaves out the held-back APEX pair and shows at most four cards', async () => {
+    const items = [
+      listing('a4d5cff6-fb1c-4906-8450-e719a5048b13', 'APEX ENTERPRISE', 'APEX Enterprise'),
+      listing('801f3189-ba34-4397-be11-c02c9952c731', 'APEX ENTERPRISE', 'APEX Enterprise (team)'),
+      ...['one', 'two', 'three', 'four', 'five'].map((slug) => listing(slug, 'Publisher A', `Dataset ${slug}`)),
+    ];
+
+    expect(await featuredCardLinks(items)).toEqual([
+      '/listings/one', '/listings/two', '/listings/three', '/listings/four',
+    ]);
+  });
+
   it('keeps distinct pairs that would collide when joined with a delimiter', async () => {
     expect(await featuredCardLinks([listing('first', 'A:B', 'C'), listing('second', 'A', 'B:C')]))
       .toEqual(['/listings/first', '/listings/second']);
   });
 
-  it('requests newest data listings and displays a public source reference', async () => {
+  it('requests newest data listings and leaves unlabelled public source references off the homepage', async () => {
     const listing = {
       ...browseResponse.items[0], slug: 'synthetic-reference', title: 'Synthetic public source dataset',
       fulfillment_type: 'reference', price: 0,
@@ -124,10 +136,9 @@ describe('homepage listing grid', () => {
       const { default: LandingPage } = await import('./page');
       render(await LandingPage());
       expect(fetchMock).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(
-        /\/api\/v1\/public\/listings\?per_page=4&sort=newest&fulfillment_type=ai_queryable&fulfillment_type=file_download&fulfillment_type=reference$/,
+        /\/api\/v1\/public\/listings\?per_page=12&sort=newest&fulfillment_type=ai_queryable&fulfillment_type=file_download&fulfillment_type=reference$/,
       ), { cache: 'no-store' });
-      const link = screen.getByRole('heading', { name: listing.title }).closest('a');
-      expect(link?.getAttribute('href')).toBe(`/listings/${listing.slug}`);
+      expect(screen.queryByRole('heading', { name: listing.title })).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }
@@ -283,7 +294,10 @@ it.each(['1.1', '1.2'])('renders the cloud-first homepage copy under terms %s', 
   expect(nonCustodial.getByText(version === '1.2'
     ? 'We deduct 5% and the card processing fee from the seller; the buyer pays the price shown plus any applicable tax.'
     : 'We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout.')).toBeTruthy();
-  expect(nonCustodial.getAllByRole('paragraph')).toHaveLength(3);
+  expect(nonCustodial.getByRole('heading', { level: 3, name: "Your listing is marketing you don't pay for." })).toBeTruthy();
+  expect(nonCustodial.getByText('Data stays on your infrastructure.')).toBeTruthy();
+  expect(nonCustodial.getByText('Direct buyer downloads.')).toBeTruthy();
+  expect(nonCustodial.getByText('Found in AI search.')).toBeTruthy();
 
   const steps = within(screen.getByRole('heading', { name: 'Three steps to get discovered' }).closest('section')!);
   expect(steps.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
@@ -303,14 +317,7 @@ it.each(['1.1', '1.2'])('renders the cloud-first homepage copy under terms %s', 
   expect(connect.parentElement?.textContent).toBe('Prefer your own AI? Connect Claude or ChatGPT and list from the chat.');
   expect(connect.parentElement?.className).toBe('mt-2 text-sm leading-6 text-[#666666]');
 
-  const sellData = within(screen.getByRole('heading', { name: 'Sell Data' }).parentElement!);
-  expect(sellData.getByText('List from your own cloud storage or servers')).toBeTruthy();
-  for (const tag of ['S3 or R2', 'AIM Data gateway', 'Direct download']) {
-    expect(sellData.getByText(tag)).toBeTruthy();
-  }
-  expect(sellData.queryByText('Your infrastructure')).toBeNull();
-  expect(sellData.queryByText('You confirm each file')).toBeNull();
-  expect(sellData.getByText('Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.')).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: 'Two ways to participate' })).toBeNull();
 });
 
 describe('homepage hero and descriptions', () => {
@@ -331,9 +338,10 @@ describe('homepage hero and descriptions', () => {
     expect(hero.getByRole('heading', { level: 1, name: 'SEO for data.' }).textContent).toBe('SEO for data.');
     expect(hero.getByText('Where AI search finds data.')).toBeTruthy();
     expect(hero.getByText('Free to list; 5% only when it sells.')).toBeTruthy();
-    expect(hero.getByText('Your listings are published in formats AI agents and AI search can read, so buyers can find you.')).toBeTruthy();
-    expect(hero.getByText('Found in AI search.')).toBeTruthy();
-    expect(hero.getByText("Listings are open to AI search and agents. A buyer's agent can find data and start a purchase; the buyer confirms and pays in the browser.")).toBeTruthy();
+    expect(hero.queryByText('Found in AI search.')).toBeNull();
+    const sellers = within(screen.getByRole('heading', { name: 'How non-custodial actually works' }).closest('section')!);
+    expect(sellers.getByText('Your listings are published in formats AI agents and AI search can read, so buyers can find you.')).toBeTruthy();
+    expect(sellers.getByText("Listings are open to AI search and agents. A buyer's agent can find data and start a purchase; the buyer confirms and pays in the browser.")).toBeTruthy();
 
     const structuredData = container.querySelector('script[type="application/ld+json"]')!;
     expect(JSON.parse(structuredData.textContent!)).toEqual([
@@ -388,6 +396,25 @@ describe('homepage hero and descriptions', () => {
     expect(hero.getByRole('link', { name: 'Browse Data' }).getAttribute('href')).toBe('/listings');
     expect(hero.getByRole('link', { name: 'Post a Request' }).getAttribute('href')).toBe('/requests');
     expect(screen.getByRole('link', { name: 'Post a Buyer Request' }).getAttribute('href')).toBe('/requests/new');
-    expect(screen.getByRole('link', { name: 'Sell Data' }).getAttribute('href')).toBe('/sell-data');
+    expect(screen.getByRole('link', { name: 'Be the first to publish.' }).getAttribute('href')).toBe('/sell-data');
+  });
+});
+
+describe('homepage block order', () => {
+  it('shows listings and buyer demand before the seller story and the steps', async () => {
+    fetchPublicListings.mockResolvedValue({ items: [] });
+    fetchFeaturedFeed.mockResolvedValue(null);
+    fetchDataRequests.mockResolvedValue({ items: [request('1'), request('2'), request('3')] });
+    const { default: LandingPage } = await import('./page');
+
+    const html = renderToStaticMarkup(await LandingPage());
+    const order = [
+      'SEO', 'Browse Data', 'Live on the marketplace', 'Buyer demand, live now',
+      'How non-custodial actually works', 'Three steps to get discovered', 'Ready to get started?',
+    ].map((text) => html.indexOf(text));
+
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
+    expect(html).not.toContain('Two ways to participate');
   });
 });
