@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { acceptPolish, reviewAvailable, reviewError, reviewFields, reviewStatus, streamPolishReview,
   type AcceptPolishBody, type CompletedReview, type Provenance, type ReviewLanguage, type ReviewRun, type ReviewTarget } from "@/api/listingPolish";
 import type { SavedListingDraft } from "@/api/sellerListingDraft";
@@ -161,7 +161,7 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
     queuePolishAccept(runId, body, options.publishedTitle);
   };
 
-  const executeAccept = useEffectEvent((entry: NonNullable<typeof pending>) => {
+  function executeAccept(entry: NonNullable<typeof pending>) {
     if (!options || !entry.sameSession()) return;
     void action.run(copy.applying, async signal => {
       const { runId, body, sent: replaying } = entry;
@@ -204,9 +204,14 @@ export function useListingPolish(options: ListingPolishOptions | undefined, acti
         if (!signal.aborted) setSettledAccept(entry);
       }
     });
+  }
+  const executeAcceptRef = useRef(executeAccept);
+  // Refresh the callback after each commit, before the pending accept effect runs.
+  useLayoutEffect(() => {
+    executeAcceptRef.current = executeAccept;
   });
   useEffect(() => {
-    if (pending && active) executeAccept(pending);
+    if (pending && active) executeAcceptRef.current(pending);
   }, [active, pending]);
 
   function end() {
