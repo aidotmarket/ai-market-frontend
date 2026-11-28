@@ -21,6 +21,7 @@ import SavedLicenseStep from '@/components/seller-workspace/SavedLicenseStep';
 import GuidedPublishStep from '@/components/seller-workspace/GuidedPublishStep';
 import { WorkspaceConfirmation, WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
 import { createListingAssistant } from '@/api/sellerListingAssistant';
+import { denySellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash-access';
 import {
   type AWSAuthorization,
   type ConnectionVerifyRequest,
@@ -215,6 +216,12 @@ export default function SellerWorkspacePage() {
     setWholeBucketConfirmed(false);
   }, []);
 
+  const gateForActiveSeller = useCallback(() => {
+    if (!mountedRef.current) return;
+    denySellerWorkspaceCrashAccess();
+    setPageState('gated');
+  }, []);
+
   const showAuthorization = useCallback((session: AuthorizationSession | null) => {
     if (!mountedRef.current) return;
     authorizationRef.current = session;
@@ -285,7 +292,7 @@ export default function SellerWorkspacePage() {
       } catch (error) {
         if (cancelled) return;
         const code = errorCode(error);
-        if (code === 'active_seller_required') setPageState('gated');
+        if (code === 'active_seller_required') gateForActiveSeller();
         else if (code === 'unavailable') setPageState('unavailable');
         else setPageState('error');
       }
@@ -298,7 +305,7 @@ export default function SellerWorkspacePage() {
       authorizationRef.current = null;
       mutationKeysRef.current.clear();
     };
-  }, [clearSensitive, retryKey]);
+  }, [clearSensitive, gateForActiveSeller, retryKey]);
 
   const trustPolicyJSON = useMemo(
     () =>
@@ -333,7 +340,7 @@ export default function SellerWorkspacePage() {
     const code = errorCode(error);
     if (code === 'active_seller_required') {
       clearSensitive();
-      setPageState('gated');
+      gateForActiveSeller();
       return true;
     }
     if (code === 'unavailable') {
@@ -611,6 +618,9 @@ export default function SellerWorkspacePage() {
     );
   }
 
+  const showSavedData = capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available';
+  const showSavedListing = capabilities?.master.enabled && capabilities.drafts?.enabled && capabilities.drafts.status === 'available';
+
   return (
     <div className="space-y-6">
     {workspaceFallback ?? (
@@ -621,10 +631,10 @@ export default function SellerWorkspacePage() {
     <GuidedListingFlow connections={currentConnections} capabilities={capabilities} view={view} navigate={navigate}>
     <div className="space-y-6">
       <WorkspaceOverview connections={currentConnections} view={view} onViewChange={navigate} />
-      <WorkspacePanel active={view === 'data'} showReloadOnError>{capabilities?.master.enabled && capabilities.sources?.enabled && capabilities.sources.status === 'available' ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
-      <WorkspacePanel active={view === 'license'} showReloadOnError><SavedLicenseStep /></WorkspacePanel>
+      <WorkspacePanel active={view === 'data'} showReloadOnError crashPanel={showSavedData ? 'SavedWorkspaceData' : 'WorkspaceData'}>{showSavedData ? <SavedWorkspaceData connections={connections} enabled={isStorageDiscoveryAvailable(capabilities)} sampleLimits={DEFAULT_SAMPLE_LIMITS} /> : <WorkspaceData connections={connections} enabled={capabilities !== null && isStorageDiscoveryAvailable(capabilities)} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'license'} showReloadOnError crashPanel="SavedLicenseStep"><SavedLicenseStep /></WorkspacePanel>
       <WorkspacePanel active={view === 'publish'}><GuidedPublishStep active={view === 'publish'} /></WorkspacePanel>
-      <WorkspacePanel active={view === 'listing'} showReloadOnError>{capabilities?.master.enabled && capabilities?.drafts?.enabled && capabilities.drafts.status === 'available' ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'} showReloadOnError crashPanel={showSavedListing ? 'SavedListingEditor' : 'SellerListingEditor'}>{showSavedListing ? <SavedListingEditor active={view === 'listing'} assistant={capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} /> : <SellerListingEditor active={view === 'listing'} assistant={capabilities?.master.enabled && capabilities.listing_assistant?.enabled && capabilities.listing_assistant.status === 'available' ? listingAssistant : undefined} />}</WorkspacePanel>
       <WorkspacePanel active={view === 'manage'}><SellerPublications active={view === 'manage'} refresh={publicationsRefresh}
         onRefreshOwnerListings={() => setOwnerListingsRefresh(value => value + 1)}
         enabled={capabilities?.master.enabled === true && capabilities.review?.enabled === true && capabilities.review.status === 'available'} /></WorkspacePanel>

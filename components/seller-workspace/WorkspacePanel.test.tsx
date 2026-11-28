@@ -4,9 +4,11 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceOverview, type WorkspaceView } from './WorkspaceOverview';
 import { WorkspacePanel } from './WorkspacePanel';
+import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   cleanup();
   vi.restoreAllMocks();
 });
@@ -105,4 +107,50 @@ it('contains a render failure and keeps the fallback through navigation and a re
   expect(save).not.toHaveBeenCalled();
   expect(suggest).not.toHaveBeenCalled();
   expect(logError).not.toHaveBeenCalled();
+});
+
+it('reports all three boundary identities, including an error in a hidden panel, once each', async () => {
+  vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
+  vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMock);
+  window.history.replaceState(null, '', '/dashboard/seller-workspace');
+
+  // Simulate a renamed component and a production-shaped JavaScript stack.
+  function a({ broken }: { broken: boolean }) {
+    if (broken) {
+      const error = new TypeError('synthetic is not a function');
+      error.stack = '    at a (https://ai.market/_next/static/chunks/app/dashboard/seller-workspace/page-012abc.js:1:360)';
+      throw error;
+    }
+    return <p>Data panel</p>;
+  }
+  const MinifiedPanel = a;
+
+  const panels = (view: 'data' | 'license' | 'listing', broken: boolean) => (
+    <SellerWorkspaceCrashAccess.Provider value={() => ({ token: 'test-token' })}>
+      <WorkspacePanel active={view === 'data'} showReloadOnError crashPanel="SavedWorkspaceData"><MinifiedPanel broken={broken} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'license'} showReloadOnError crashPanel="SavedLicenseStep"><MinifiedPanel broken={broken} /></WorkspacePanel>
+      <WorkspacePanel active={view === 'listing'} showReloadOnError crashPanel="SavedListingEditor"><MinifiedPanel broken={broken} /></WorkspacePanel>
+    </SellerWorkspaceCrashAccess.Provider>
+  );
+
+  const onCaughtError = vi.fn();
+  const { rerender } = render(panels('data', false), { onCaughtError });
+  rerender(panels('license', false));
+  rerender(panels('listing', true));
+  expect(screen.getByRole('alert').textContent).toContain('Reload the page');
+  await Promise.resolve();
+
+  expect(fetchMock.mock.calls.map(([, request]) => JSON.parse(request!.body as string))).toEqual(
+    Object.entries({ data: 'SavedWorkspaceData', license: 'SavedLicenseStep', listing: 'SavedListingEditor' }).map(([step, panel]) => expect.objectContaining({
+      step, error_name: 'TypeError', error_code: 'not_callable',
+      component_frames: ['WorkspacePanel', panel],
+    })),
+  );
+  rerender(panels('data', true));
+  rerender(panels('license', true));
+  await Promise.resolve();
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(onCaughtError).toHaveBeenCalledTimes(3);
 });

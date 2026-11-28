@@ -2,11 +2,15 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@/types';
 import { sellerLicenseRecordPath } from '@/lib/licenseRecordRoutes';
 import DashboardLayout from './layout';
 import { useAuthStore } from '@/store/auth';
+import { advanceAuthSessionOwner } from '@/lib/auth-session-owner';
+import { reportSellerWorkspaceCrash, SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
+import { WorkspacePanel } from '@/components/seller-workspace/WorkspacePanel';
+import { SellerListingDraftProvider, useSellerListingDraft } from '@/components/seller-workspace/SellerListingDraftStore';
 
 const navigation = vi.hoisted(() => ({
   push: vi.fn(),
@@ -49,6 +53,8 @@ vi.mock('@/api/sellerWorkspace', async (importOriginal) => ({
   getSellerWorkspaceCapabilities: sellerWorkspaceApi.getSellerWorkspaceCapabilities,
 }));
 vi.mock('@/api/sellerGateways', () => ({ listSellerGateways: gatewaysApi.listSellerGateways }));
+const draftApi = vi.hoisted(() => ({ readListingDraft: vi.fn() }));
+vi.mock('@/api/sellerListingDraft', () => draftApi);
 
 vi.mock('@/components/onboarding/SellerSetupProgressBar', () => ({
   default: () => <div>seller setup progress</div>,
@@ -657,6 +663,112 @@ describe('DashboardLayout canonical capability ownership', () => {
         expect(navigation.push).not.toHaveBeenCalled();
         mounted.unmount();
       }
+    }
+  });
+
+  it.each(['buyer', 'pending'] as const)('reports once for an active seller with the legacy %s label', async role => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    window.history.replaceState(null, '', navigation.pathname);
+    signIn({ role: role as User['role'] });
+    capabilitiesApi.getCapabilities.mockResolvedValue(capability('active'));
+    vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const draftUuid = '11111111-aaaa-4333-8444-555555555555';
+    draftApi.readListingDraft.mockReset().mockResolvedValue(role === 'buyer' ? {
+      draft_id: draftUuid, version: 1, content: { title: 'synthetic private draft content' },
+      authority_version_id: '22222222-aaaa-4333-8444-555555555555',
+    } : null);
+    function Panel() {
+      const { loaded } = useSellerListingDraft();
+      if (loaded) throw new Error('synthetic detail');
+      return null;
+    }
+    try {
+      render(
+        <DashboardLayout>
+          <SellerListingDraftProvider enabled sampleCapability={false}>
+            <WorkspacePanel active showReloadOnError crashPanel="SavedLicenseStep"><Panel /></WorkspacePanel>
+          </SellerListingDraftProvider>
+        </DashboardLayout>,
+        { onCaughtError: vi.fn() },
+      );
+      expect((await screen.findByRole('alert')).textContent).toContain('Reload the page');
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
+      expect(draftApi.readListingDraft).toHaveBeenCalledOnce();
+      const [target, request] = fetchMock.mock.calls[0];
+      expect(target).toBe('https://api.ai.market/api/v1/seller-workspace/client-crash');
+      expect(request?.headers).toMatchObject({ Authorization: 'Bearer access-token' });
+      expect(JSON.parse(request!.body as string)).toEqual({
+        schema_version: 1, route: 'seller_workspace', step: 'license', error_name: 'Error',
+        error_code: 'unknown', react_code: null, component_frames: ['WorkspacePanel', 'SavedLicenseStep'],
+        build_revision: 'a'.repeat(40), browser_family: expect.any(String), browser_major: null,
+        ...(role === 'buyer' ? { draft_uuid: draftUuid } : {}),
+      });
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(['session generation', 'user', 'token', 'capability'] as const)(
+    'invalidates captured crash proof when %s changes before dispatch',
+    async replacement => {
+      navigation.pathname = '/dashboard/seller-workspace';
+      window.history.replaceState(null, '', navigation.pathname);
+      capabilitiesApi.getCapabilities.mockResolvedValueOnce(capability('active'));
+      vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
+      vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
+      const fetchMock = vi.fn<typeof fetch>();
+      vi.stubGlobal('fetch', fetchMock);
+      function CaptureProof() {
+        const getCrashToken = useContext(SellerWorkspaceCrashAccess);
+        return <button type="button" onClick={() => {
+          expect(getCrashToken?.()?.token).toBe('access-token');
+          void reportSellerWorkspaceCrash('WorkspaceData', new Error('synthetic detail'), getCrashToken);
+          if (replacement === 'session generation') advanceAuthSessionOwner(false);
+          if (replacement === 'user') signIn({ id: 'user-2' });
+          if (replacement === 'token') useAuthStore.setState({ token: 'replacement-token' });
+          if (replacement === 'capability') changed();
+        }}>Simulate error</button>;
+      }
+      try {
+        render(<DashboardLayout><CaptureProof /></DashboardLayout>);
+        fireEvent.click(await screen.findByRole('button', { name: 'Simulate error' }));
+        await act(async () => {});
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it('keeps a provisioning seller panel usable without starting a crash report', async () => {
+    navigation.pathname = '/dashboard/seller-workspace';
+    window.history.replaceState(null, '', navigation.pathname);
+    signIn({ role: 'seller' });
+    capabilitiesApi.getCapabilities.mockResolvedValue(capability('provisioning'));
+    vi.stubEnv('FRONTEND_BUILD_REVISION', 'a'.repeat(40));
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.ai.market');
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    function BrokenPanel(): never { throw new Error('synthetic detail'); }
+    try {
+      render(
+        <DashboardLayout>
+          <WorkspacePanel active showReloadOnError crashPanel="WorkspaceData"><BrokenPanel /></WorkspacePanel>
+        </DashboardLayout>,
+        { onCaughtError: vi.fn() },
+      );
+      expect((await screen.findByRole('alert')).textContent).toContain('Reload the page');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(capabilitiesApi.getCapabilities).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
     }
   });
 

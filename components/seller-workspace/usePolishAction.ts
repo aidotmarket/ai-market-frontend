@@ -5,6 +5,7 @@ import { sessionLifecycle } from "@/api/connector-seller-settings";
 import { reviewError, reviewStatus, retryReviewRequest, uncertainReviewMutation } from "@/api/listingPolish";
 import type { SavedListingDraft } from "@/api/sellerListingDraft";
 import { listingPolish as copy } from "@/lib/i18n/listing-polish";
+import { clearSellerWorkspaceCrashDraft } from "@/lib/seller-workspace-crash-access";
 
 export type ReloadDraft = (signal: AbortSignal, onLoaded?: () => void,
   verify?: (draft: SavedListingDraft | null) => void) => Promise<SavedListingDraft | null>;
@@ -52,6 +53,7 @@ export function usePolishAction(editorLock?: RefObject<boolean>, onBusy?: (busy:
       accept?: boolean; replaying?: boolean; confirmDraftId?: string | null;
     } = {},
   ) => {
+    clearSellerWorkspaceCrashDraft();
     let unknown = replaying;
     let retries = 0;
     let result: T;

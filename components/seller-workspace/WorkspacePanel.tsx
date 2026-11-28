@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useContext, useState, type ReactNode } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { reportSellerWorkspaceCrash, SellerWorkspaceCrashAccess, type WorkspaceCrashPanel } from '@/lib/seller-workspace-crash';
 
 function PanelReloadFallback() {
   return (
@@ -20,15 +21,20 @@ function PanelReloadFallback() {
 
 // Mount only on first visit, then preserve edits while other sections are shown.
 // Unmounting the workspace still discards its temporary state.
-export function WorkspacePanel({ active, children, showReloadOnError = false }: {
+export function WorkspacePanel({ active, children, showReloadOnError = false, crashPanel }: {
   active: boolean;
   children: ReactNode;
   showReloadOnError?: boolean;
+  crashPanel?: WorkspaceCrashPanel;
 }) {
+  const getCrashProof = useContext(SellerWorkspaceCrashAccess);
   const [visited, setVisited] = useState(active);
   if (active && !visited) setVisited(true);
   const content = showReloadOnError ? (
-    <ErrorBoundary fallback={<PanelReloadFallback />} logErrors={false}>
+    <ErrorBoundary fallback={<PanelReloadFallback />} logErrors={false}
+      onError={crashPanel ? (error) => {
+        void reportSellerWorkspaceCrash(crashPanel, error, getCrashProof);
+      } : undefined}>
       {children}
     </ErrorBoundary>
   ) : children;

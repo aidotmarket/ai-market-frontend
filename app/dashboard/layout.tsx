@@ -1,10 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { authSessionOwner, subscribeAuthSessionOwner } from '@/lib/auth-session-owner';
+import { SellerWorkspaceCrashAccess } from '@/lib/seller-workspace-crash';
+import {
+  captureSellerCrashSession, getSellerWorkspaceCrashProof, mountSellerWorkspaceCrashVisit,
+  observeRootSellerCrashAccess, retireRootSellerCrashAccess,
+} from '@/lib/seller-workspace-crash-access';
 import { getCapabilities, type CapabilityStatus } from '@/api/capabilities';
 import {
   getSellerWorkspaceCapabilities,
@@ -19,8 +24,8 @@ const isBuyerActivityRoute = (pathname: string) =>
   pathname === '/dashboard/requests' || pathname.startsWith('/dashboard/requests/');
 
 type CapabilitySnapshot = {
-  owner: string;
-  token: string | null;
+  session: ReturnType<typeof captureSellerCrashSession>;
+  version: number;
   phase: 'loading' | 'ready' | 'error';
   sellerStatus: CapabilityStatus | null;
   sellerPersistedStatus: CapabilityStatus | null;
@@ -41,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const refreshCapabilities = useCallback(async () => {
     // Invalidate in-flight reads even when authentication is no longer usable.
     const version = ++request.current;
+    retireRootSellerCrashAccess();
     if (isLoading || !hydrated || !isAuthenticated || !owner || !token) {
       setSnapshot(null);
       return;
@@ -48,6 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // Check the live store as well as request ownership: auth may change before
     // React has run the previous effect's cleanup.
+    const session = captureSellerCrashSession(owner, token);
     const isCurrent = () => {
       const auth = useAuthStore.getState();
       return request.current === version && auth.user?.id === owner &&
@@ -55,11 +62,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
     if (!isCurrent()) return;
     const pending: CapabilitySnapshot = {
-      owner, token, phase: 'loading', sellerStatus: null, sellerPersistedStatus: null, workspace: false, gateways: false,
+      session, version, phase: 'loading',
+      sellerStatus: null, sellerPersistedStatus: null, workspace: false, gateways: false,
     };
     // Credentials own requests; a ready view belongs to the stable action owner.
     // Revalidation must not remount the seller page and discard unsaved state.
-    setSnapshot((previous) => previous?.owner === owner && previous.phase === 'ready'
+    setSnapshot((previous) => previous?.session.owner === owner && previous.phase === 'ready'
       ? previous : pending);
     try {
       // The shared API client already refreshes and retries a 401 once.
@@ -99,11 +107,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Derive access during render so a previous owner's ready state can never
   // render seller navigation or children while an identity change is pending.
   const current = !isLoading && hydrated && isAuthenticated && !!token &&
-    snapshot?.owner === owner ? snapshot : null;
+    snapshot?.session.owner === owner ? snapshot : null;
   const capabilitiesResolved = current?.phase === 'ready';
   const isSeller = capabilitiesResolved &&
     (current.sellerPersistedStatus === 'active' || current.sellerPersistedStatus === 'provisioning');
   const isSellerActive = capabilitiesResolved && current.sellerStatus === 'active';
+  // Navigation may keep a ready view during revalidation to preserve edits.
+  // Reporting requires proof from the current request and authenticated session.
+  const getCrashProof = pathname === '/dashboard/seller-workspace' && isSellerActive
+    ? () => request.current === current.version ? getSellerWorkspaceCrashProof(current.session) : null
+    : null;
+  const crashVersion = isSellerActive ? current.version : null;
   const sellerWorkspaceAvailable = current?.workspace === true;
   const gatewaysAvailable = current?.gateways === true;
   // The licence-record endpoint authorizes the recorded buyer and seller.
@@ -134,6 +148,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ownerAdmission?.generation === ownerGeneration ? ownerAdmission.result : undefined;
   const checkingOwnerAccess = checkOwnerListings && ownerAccess === undefined;
   const routeReady = authenticated && (allowsSignedInUsers || isSeller || ownerAccess === 'allowed');
+  const visitOwner = routeReady ? owner ?? null : null;
+  useLayoutEffect(() => mountSellerWorkspaceCrashVisit(pathname, visitOwner, ownerGeneration),
+    [pathname, visitOwner, ownerGeneration]);
+
+  const crashSession = routeReady && isSellerActive ? current.session : null;
+  useLayoutEffect(() => {
+    observeRootSellerCrashAccess(crashVersion === request.current ? crashSession : null);
+  }, [crashSession, crashVersion, pathname, visitOwner, ownerGeneration]);
 
   useEffect(() => {
     if (isLoading || !hydrated) return;
@@ -251,7 +273,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-6xl mx-auto">
-            {children}
+            <SellerWorkspaceCrashAccess.Provider value={getCrashProof}>
+              {children}
+            </SellerWorkspaceCrashAccess.Provider>
           </div>
         </div>
       </main>

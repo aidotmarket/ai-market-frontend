@@ -248,6 +248,30 @@ describe('refreshAccessToken', () => {
 });
 
 describe('api client response handling', () => {
+  it('observes a listing source dispatch once, without serializing the hook or affecting transport', async () => {
+    const { api, observeListingSourceDispatch } = await import('./client');
+    const observe = vi.fn(() => { throw new Error('Synthetic observer failure'); });
+    const transport = vi.fn(async (config: InternalAxiosRequestConfig) => ({
+      config, status: 200, statusText: 'OK', headers: {}, data: null,
+    }));
+    api.defaults.adapter = transport;
+    const config = { params: { draft_id: 'synthetic-draft' }, adapter: observeListingSourceDispatch(observe) };
+    const path = '/seller-workspace/listing-source';
+    const response = await api.get(path, config);
+    expect(observe.mock.calls).toEqual([[true]]);
+    expect(observe.mock.invocationCallOrder[0]).toBeLessThan(transport.mock.invocationCallOrder[0]);
+    expect(JSON.parse(JSON.stringify(config))).toEqual({ params: { draft_id: 'synthetic-draft' } });
+    expect(response.config.params).toEqual(config.params);
+
+    await api.get('/seller-workspace/listing-draft', config);
+    await api.put(path, {}, config);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(api.get(path, { ...config, signal: controller.signal })).rejects.toMatchObject({ code: 'ERR_CANCELED' });
+    expect(transport).toHaveBeenCalledTimes(3);
+    expect(observe).toHaveBeenCalledOnce();
+  });
+
   it('rejects the transient refresh error without redirecting', async () => {
     const refreshError = new AxiosError('offline', 'ERR_NETWORK');
     vi.spyOn(axios, 'post').mockRejectedValueOnce(refreshError);
