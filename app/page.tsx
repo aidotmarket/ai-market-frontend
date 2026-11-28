@@ -70,67 +70,14 @@ const LANDING_JSONLD = [
   },
 ];
 
-const ArrowIcon = ({ className = 'ml-2 h-4 w-4' }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-  </svg>
-);
-
-type Offering = {
-  name: string;
-  subtitle: string;
-  description: string[];
-  tags: string[];
-  cta: string;
-  href: string;
-  accent: 'indigo' | 'teal' | 'orange';
-  iconPath: string;
-};
-
-const offerings: Offering[] = [
-  {
-    name: 'Find Data',
-    subtitle: 'Search the catalog or post a request',
-    description: [
-      'Search listings or describe what you need and let providers respond.',
-    ],
-    tags: ['Semantic search', 'Data Requests', 'Live'],
-    cta: 'Find Data',
-    href: '/find-data',
-    accent: 'orange',
-    iconPath: 'M12 4.5v15m7.5-7.5h-15',
-  },
-  {
-    name: 'Sell Data',
-    subtitle: 'List from your own cloud storage or servers',
-    description: [
-      'Connect your S3 or R2 bucket, or run the open-source AIM Data gateway. Buyers download directly from your storage.',
-    ],
-    tags: ['S3 or R2', 'AIM Data gateway', 'Direct download'],
-    cta: 'Sell Data',
-    href: '/sell-data',
-    accent: 'teal',
-    iconPath: 'M4 7v10c0 2 3.5 3 8 3s8-1 8-3V7M4 7c0-2 3.5-3 8-3s8 1 8 3M4 7c0 2 3.5 3 8 3s8-1 8-3m0 5c0 2-3.5 3-8 3s-8-1-8-3',
-  },
-];
-
-const accentStyles = {
-  indigo: {
-    icon: 'bg-[#E8EAF6] text-[#3F51B5]',
-    tag: 'bg-[#E8EAF6] text-[#3F51B5]',
-    btn: 'bg-[#3F51B5] hover:bg-[#3545a0] text-white',
-  },
-  teal: {
-    icon: 'bg-[#E1F5EE] text-[#0F6E56]',
-    tag: 'bg-[#E1F5EE] text-[#0F6E56]',
-    btn: 'bg-[#0F6E56] hover:bg-[#0c5a47] text-white',
-  },
-  orange: {
-    icon: 'bg-[#FFF0E0] text-[#BF5C00]',
-    tag: 'bg-[#FFF0E0] text-[#BF5C00]',
-    btn: 'bg-[#BF5C00] hover:bg-[#9f4c00] text-white',
-  },
-} as const;
+const FEATURED_CARDS = 4;
+// Over-fetch so exclusions and duplicate removal still leave a full row.
+const FEATURED_CANDIDATES = 12;
+// Held back from the homepage until Mars clears them (T-2026-001227 duplicate pair).
+const FEATURED_EXCLUDED_LISTING_IDS = new Set([
+  'a4d5cff6-fb1c-4906-8450-e719a5048b13',
+  '801f3189-ba34-4397-be11-c02c9952c731',
+]);
 
 const categoryBadge: Record<string, string> = {
   dataset: 'bg-[#E1F5EE] text-[#0F6E56]',
@@ -282,14 +229,18 @@ export default async function LandingPage() {
   ] =
     await Promise.all([
       fetchPublicListings({
-        per_page: 4,
+        per_page: FEATURED_CANDIDATES,
         sort: 'newest',
       }),
       fetchFeaturedFeed(),
       fetchDataRequests({ per_page: 3 }).catch(() => null),
     ]);
   const seenFeaturedPairs = new Set<string>();
-  const featuredListings = (listingsData?.items ?? []).filter(({ publisher, title }) => {
+  const featuredListings = (listingsData?.items ?? []).filter((listing) => {
+    if (FEATURED_EXCLUDED_LISTING_IDS.has(listing.id)) return false;
+    // Public-source references have no label on this card; the catalog shows them.
+    if (listing.fulfillment_type === 'reference' || listing.purchase_hold_reason === 'public_source_reference') return false;
+    const { publisher, title } = listing;
     const displayName = publisher?.display_name;
     if (!displayName?.trim() || !title?.trim()) return true;
 
@@ -297,9 +248,12 @@ export default async function LandingPage() {
     if (seenFeaturedPairs.has(pair)) return false;
     seenFeaturedPairs.add(pair);
     return true;
-  });
-  const activityItems = featuredFeed?.items ?? [];
-  const activityItemList = featuredFeed?.item_list ?? null;
+  }).slice(0, FEATURED_CARDS);
+  const catalogHasListings = (listingsData?.items ?? []).length > 0;
+  const feedItems = featuredFeed?.items ?? [];
+  const activityItems = feedItems.filter((item) => !FEATURED_EXCLUDED_LISTING_IDS.has(item.listing_id));
+  // The ItemList describes the whole feed; publish it only when nothing was held back.
+  const activityItemList = activityItems.length === feedItems.length ? featuredFeed?.item_list ?? null : null;
   const buyerRequests: DataRequestListItem[] = Array.isArray(requestData)
     ? requestData
     : requestData?.items ?? [];
@@ -312,13 +266,10 @@ export default async function LandingPage() {
         <script type="application/ld+json">{JSON.stringify(activityItemList)}</script>
       ) : null}
       <div className="overflow-hidden">
-        <ActivityTicker items={activityItems} locale={featuredFeed?.locale ?? 'en'} />
-
         {/* HERO */}
         <section className="relative isolate bg-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 pb-20 sm:pt-24 sm:pb-28">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-              {/* Left */}
+            <div className="max-w-3xl">
               <div>
                 <span className="inline-flex items-center rounded-full bg-[#E1F5EE] px-3 py-1 text-xs font-semibold text-[#0F6E56]">
                   Data marketplace for businesses
@@ -334,162 +285,83 @@ export default async function LandingPage() {
                   {heroFee}
                 </p>
                 <HeroSearch />
-                <div className="mt-5 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4">
-                  <p className="text-sm leading-6 text-[#4A4A4A]">
-                    Buying? Search the catalog or tell us what you need and let providers come to you.
-                  </p>
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <Link
-                      href="/listings"
-                      className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]"
-                    >
-                      Browse Data
-                    </Link>
-                    <Link
-                      href="/requests"
-                      className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6]"
-                    >
-                      Post a Request
-                    </Link>
-                  </div>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <Link
+                    href="/listings"
+                    className="inline-flex items-center justify-center rounded-lg bg-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#3545a0]"
+                  >
+                    Browse Data
+                  </Link>
+                  <Link
+                    href="/requests"
+                    className="inline-flex items-center justify-center rounded-lg border border-[#3F51B5] px-4 py-2.5 text-sm font-semibold text-[#3F51B5] transition-colors hover:bg-[#E8EAF6]"
+                  >
+                    Post a Request
+                  </Link>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
 
-              {/* Right - trust visual card */}
-              <div className="card-texture rounded-2xl border border-[#E8E8E8] bg-[#FAFAFA] p-8">
-                <p className="text-base leading-7 text-[#1A1A1A]">
-                  Your listings are published in formats AI agents and AI search can read, so buyers can find you.
-                </p>
-                <div className="my-6 h-px bg-[#E8E8E8]" />
-                <ul className="space-y-5">
-                  <li className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#0F6E56]" />
-                    <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Data stays on your infrastructure.</p>
-                      <p className="text-sm text-[#666666]">You can separately choose to publish a public sample.</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#3F51B5]" />
-                    <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Direct buyer downloads.</p>
-                      <p className="text-sm text-[#666666]">Purchased files go straight from the seller to the buyer.</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
-                    <div>
-                      <p className="text-sm font-semibold text-[#1A1A1A]">Found in AI search.</p>
-                      <p className="text-sm text-[#666666]">
-                        Listings are open to AI search and agents. A buyer&apos;s agent can find data and start a purchase;
-                        the buyer confirms and pays in the browser.
-                      </p>
-                    </div>
-                  </li>
-                </ul>
+        <ActivityTicker items={activityItems} locale={featuredFeed?.locale ?? 'en'} />
+
+        {/* FEATURED LISTINGS */}
+        <section className="border-t border-[#E8E8E8] bg-white pt-20 pb-10 sm:pt-24 sm:pb-12">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex items-end justify-between flex-wrap gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">Featured</p>
+                <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
+                  Live on the marketplace
+                </h2>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* HOW NON-CUSTODIAL WORKS */}
-        <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-20 sm:py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">How it works</p>
-              <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-                How non-custodial actually works
-              </h2>
+              <Link href="/listings" className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]">View All →</Link>
             </div>
 
-            <div className="mt-14">
-              <p className="text-sm leading-6 text-[#666666]">
-                allAI does the work, your files never leave your storage, and you get paid.
-              </p>
-              <p className="mt-4 text-sm leading-6 text-[#666666]">
-                <VersionedTermsCopy legacy="We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout." terms12={CARD_HOME_FEES} />
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* LISTING MARKETING */}
-        <section className="bg-white py-20 sm:py-24">
-          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-              Your listing is marketing you don&apos;t pay for.
-            </h2>
-            <div className="mt-6 space-y-5 text-lg leading-8 text-[#4A4A4A]">
-              <p>
-                Every listing is published in the formats AI assistants and search engines read. Structured metadata, machine-readable manifests, all of it, on every listing, automatically.
-              </p>
-              <p>
-                So when a buyer anywhere in the world asks their AI for data like yours, your listing is built to be the answer. They don&apos;t need to know ai.market exists. They don&apos;t need to visit us. Your data shows up where buyers already ask.
-              </p>
-              <p>
-                Companies pay real money for that kind of reach. Here it comes with the listing. Free.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* OFFERINGS */}
-        <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-20 sm:py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-2xl">
-              <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">Products</p>
-              <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-                Two ways to participate
-              </h2>
-              <p className="mt-3 text-lg text-[#666666]">
-                Find data or sell data without moving raw datasets.
-              </p>
-            </div>
-
-            <div className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-2">
-              {offerings.map((o) => {
-                const styles = accentStyles[o.accent];
-                return (
-                  <div
-                    key={o.name}
-                    className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-7 flex flex-col"
+            <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {featuredListings.length > 0 ? (
+                featuredListings.map((l) => generatedSampleState(l) !== 'ordinary' ? (
+                  <GeneratedSampleCard key={l.id} listing={l} />
+                ) : (
+                  <Link
+                    key={l.id}
+                    href={`/listings/${l.slug}`}
+                    prefetch={false}
+                    className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
                   >
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${styles.icon}`}>
-                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d={o.iconPath} />
-                      </svg>
-                    </div>
-                    <h3 className="mt-5 text-xl font-bold text-[#1A1A1A]">{o.name}</h3>
-                    <p className="text-sm font-semibold text-[#666666]">{o.subtitle}</p>
-                    <div className="mt-3 space-y-3 text-sm leading-6 text-[#4A4A4A]">
-                      {o.description.map((paragraph) => (
-                        <p key={paragraph} className={paragraph === 'Private beta. Request access.' ? 'italic' : undefined}>
-                          {paragraph}
-                        </p>
-                      ))}
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {o.tags.map((t) => (
-                        <span key={t} className={`rounded-md px-2.5 py-1 text-xs font-medium ${styles.tag}`}>{t}</span>
-                      ))}
-                    </div>
+                    <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}>
+                      {formatMarketplaceCategoryName(l.category)}
+                    </span>
+                    <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">{l.title ?? 'Untitled'}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">
+                      {'summary' in l ? l.summary ?? '' : l.short_description ?? ''}
+                    </p>
                     <div className="flex-1" />
-                    <Link
-                      href={o.href}
-                      className={`mt-7 inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors ${styles.btn}`}
-                    >
-                      {o.cta}
-                      <ArrowIcon />
-                    </Link>
-                  </div>
-                );
-              })}
+                    <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
+                      <span className="text-[#888888]">{formatMarketplaceCategoryName(l.category)}</span>
+                      {l.price != null && (
+                        <span className="font-semibold text-[#1A1A1A]">
+                          {l.price === 0 ? 'Free' : formatPrice(l.price, { omitTrailingZeros: true })}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))
+              ) : catalogHasListings ? null : (
+                <p className="col-span-full text-center text-sm text-[#888888]">
+                  No listings yet.{' '}
+                  <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">
+                    Be the first to publish.
+                  </Link>
+                </p>
+              )}
             </div>
           </div>
         </section>
 
         {/* BUYER REQUESTS */}
-        <section className="border-t border-[#E8E8E8] bg-white py-20 sm:py-24">
+        <section className="bg-white pt-10 pb-20 sm:pt-12 sm:pb-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {showLiveDemand ? (
               <>
@@ -565,56 +437,65 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* FEATURED LISTINGS */}
-        <section className="bg-white py-20 sm:py-24">
+        {/* SELLERS: benefits, non-custodial delivery, listing marketing */}
+        <section className="border-t border-[#E8E8E8] bg-[#FAFAFA] py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex items-end justify-between flex-wrap gap-4">
+            <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-2 lg:gap-16">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-[#3F51B5]">Featured</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#0F6E56]">Sell Data</p>
                 <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#1A1A1A] sm:text-4xl">
-                  Live on the marketplace
+                  How non-custodial actually works
                 </h2>
-              </div>
-              <Link href="/listings" className="text-sm font-semibold text-[#3F51B5] hover:text-[#3545a0]">View All →</Link>
-            </div>
-
-            <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {featuredListings.length > 0 ? (
-                featuredListings.map((l) => generatedSampleState(l) !== 'ordinary' ? (
-                  <GeneratedSampleCard key={l.id} listing={l} />
-                ) : (
-                  <Link
-                    key={l.id}
-                    href={`/listings/${l.slug}`}
-                    prefetch={false}
-                    className="card-texture rounded-2xl border border-[#E8E8E8] bg-white p-5 flex flex-col hover:border-[#3F51B5] hover:shadow-sm transition-all"
-                  >
-                    <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${categoryBadge[l.category] ?? defaultBadge}`}>
-                      {formatMarketplaceCategoryName(l.category)}
-                    </span>
-                    <h3 className="mt-4 text-base font-bold leading-snug text-[#1A1A1A]">{l.title ?? 'Untitled'}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[#666666] line-clamp-2">
-                      {'summary' in l ? l.summary ?? '' : l.short_description ?? ''}
-                    </p>
-                    <div className="flex-1" />
-                    <div className="mt-5 pt-4 border-t border-[#F0F0F0] flex items-center justify-between text-xs">
-                      <span className="text-[#888888]">{formatMarketplaceCategoryName(l.category)}</span>
-                      {l.price != null && (
-                        <span className="font-semibold text-[#1A1A1A]">
-                          {l.price === 0 ? 'Free' : formatPrice(l.price, { omitTrailingZeros: true })}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <p className="col-span-full text-center text-sm text-[#888888]">
-                  No listings yet.{' '}
-                  <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">
-                    Be the first to publish.
-                  </Link>
+                <div className="mt-8">
+                  <p className="text-sm leading-6 text-[#666666]">
+                    allAI does the work, your files never leave your storage, and you get paid.
+                  </p>
+                  <p className="mt-4 text-sm leading-6 text-[#666666]">
+                    <VersionedTermsCopy legacy="We deduct 5% from the seller; the buyer pays any payment-provider costs and applicable tax shown at checkout." terms12={CARD_HOME_FEES} />
+                  </p>
+                </div>
+                <h3 className="mt-10 text-xl font-bold text-[#1A1A1A]">
+                  Your listing is marketing you don&apos;t pay for.
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-[#4A4A4A]">
+                  Every listing is published in the formats AI assistants and search engines read. Structured metadata, machine-readable manifests, all of it, on every listing, automatically.
                 </p>
-              )}
+                <p className="mt-3 text-sm leading-6 text-[#4A4A4A]">
+                  Companies pay real money for that kind of reach. Here it comes with the listing. Free.
+                </p>
+              </div>
+              <div className="card-texture rounded-2xl bg-white border border-[#E8E8E8] p-8">
+                <p className="text-base leading-7 text-[#1A1A1A]">
+                  Your listings are published in formats AI agents and AI search can read, so buyers can find you.
+                </p>
+                <div className="my-6 h-px bg-[#E8E8E8]" />
+                <ul className="space-y-5">
+                  <li className="flex items-start gap-3">
+                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#0F6E56]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Data stays on your infrastructure.</p>
+                      <p className="text-sm text-[#666666]">You can separately choose to publish a public sample.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#3F51B5]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Direct buyer downloads.</p>
+                      <p className="text-sm text-[#666666]">Purchased files go straight from the seller to the buyer.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">Found in AI search.</p>
+                      <p className="text-sm text-[#666666]">
+                        Listings are open to AI search and agents. A buyer&apos;s agent can find data and start a purchase;
+                        the buyer confirms and pays in the browser.
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </section>
