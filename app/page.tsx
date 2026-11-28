@@ -249,8 +249,11 @@ export default async function LandingPage() {
     seenFeaturedPairs.add(pair);
     return true;
   }).slice(0, FEATURED_CARDS);
-  const activityItems = featuredFeed?.items ?? [];
-  const activityItemList = featuredFeed?.item_list ?? null;
+  const catalogHasListings = (listingsData?.items ?? []).length > 0;
+  const feedItems = featuredFeed?.items ?? [];
+  const activityItems = feedItems.filter((item) => !FEATURED_EXCLUDED_LISTING_IDS.has(item.listing_id));
+  // The ItemList describes the whole feed; publish it only when nothing was held back.
+  const activityItemList = activityItems.length === feedItems.length ? featuredFeed?.item_list ?? null : null;
   const buyerRequests: DataRequestListItem[] = Array.isArray(requestData)
     ? requestData
     : requestData?.items ?? [];
@@ -263,8 +266,6 @@ export default async function LandingPage() {
         <script type="application/ld+json">{JSON.stringify(activityItemList)}</script>
       ) : null}
       <div className="overflow-hidden">
-        <ActivityTicker items={activityItems} locale={featuredFeed?.locale ?? 'en'} />
-
         {/* HERO */}
         <section className="relative isolate bg-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 pb-20 sm:pt-24 sm:pb-28">
@@ -302,6 +303,8 @@ export default async function LandingPage() {
             </div>
           </div>
         </section>
+
+        <ActivityTicker items={activityItems} locale={featuredFeed?.locale ?? 'en'} />
 
         {/* FEATURED LISTINGS */}
         <section className="border-t border-[#E8E8E8] bg-white pt-20 pb-10 sm:pt-24 sm:pb-12">
@@ -345,7 +348,7 @@ export default async function LandingPage() {
                     </div>
                   </Link>
                 ))
-              ) : (
+              ) : catalogHasListings ? null : (
                 <p className="col-span-full text-center text-sm text-[#888888]">
                   No listings yet.{' '}
                   <Link href="/sell-data" className="font-semibold text-[#3F51B5] hover:text-[#3545a0]">

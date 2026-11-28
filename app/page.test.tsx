@@ -418,3 +418,49 @@ describe('homepage block order', () => {
     expect(html).not.toContain('Two ways to participate');
   });
 });
+
+describe('homepage featured holdback', () => {
+  const held = ['a4d5cff6-fb1c-4906-8450-e719a5048b13', '801f3189-ba34-4397-be11-c02c9952c731'];
+
+  function feedItem(listingId: string, slug: string) {
+    return {
+      listing_id: listingId, seller_id: 'seller', slug, title: `Feed ${slug}`,
+      canonical_url: `https://ai.market/listings/${slug}`, source: 'just_listed', slot: 1,
+      placement_id: null, price: { label: 'firm', amount: 10, currency: 'USD', on_request: false },
+    };
+  }
+
+  beforeEach(() => {
+    fetchDataRequests.mockResolvedValue({ items: [] });
+  });
+
+  it('keeps held listings out of the activity ticker and its structured data, after the hero', async () => {
+    fetchPublicListings.mockResolvedValue({ items: [] });
+    fetchFeaturedFeed.mockResolvedValue({
+      locale: 'en',
+      items: [feedItem(held[0], 'apex-a'), feedItem(held[1], 'apex-b'), feedItem('ordinary', 'ordinary')],
+      item_list: { '@type': 'ItemList', itemListElement: [{ url: 'https://ai.market/listings/apex-a' }] },
+    });
+    const { default: LandingPage } = await import('./page');
+
+    const html = renderToStaticMarkup(await LandingPage());
+    expect(html).not.toContain('apex-a');
+    expect(html).not.toContain('apex-b');
+    expect(html).not.toContain('"ItemList"');
+    expect(html).toContain('href="https://ai.market/listings/ordinary"');
+    expect(html.indexOf('SEO')).toBeLessThan(html.indexOf('Marketplace activity'));
+  });
+
+  it('leaves held-for-reference listings off the homepage', async () => {
+    const listing = { ...browseResponse.items[0], slug: 'held-reference', title: 'Held reference', purchase_hold_reason: 'public_source_reference' };
+    fetchPublicListings.mockResolvedValue({ ...browseResponse, items: [listing] });
+    fetchFeaturedFeed.mockResolvedValue(null);
+    const { default: LandingPage } = await import('./page');
+
+    const html = renderToStaticMarkup(await LandingPage());
+    expect(html).not.toContain('Held reference');
+    expect(html).not.toContain('No listings yet.');
+    expect(html).toContain('View All');
+  });
+});
+
