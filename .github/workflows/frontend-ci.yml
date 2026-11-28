@@ -33,5 +33,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Check Sell Data pricing in Chromium
         run: npx playwright test --config playwright.navigation.config.ts
+      - name: Check Seller Workspace on the production Next runtime
+        run: npx playwright test --config playwright.workspace-runtime.config.ts
       - run: npm run test
       - run: npm run test:ssm-startup
